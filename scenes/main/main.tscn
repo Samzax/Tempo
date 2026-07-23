@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/main/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -8,6 +9,10 @@ script = ExtResource("1_main")
 [node name="World" type="Node2D" parent="."]
 
 [node name="Camera2D" type="Camera2D" parent="World"]
+position = Vector2(240, 135)
+
+[node name="Player" parent="World" instance=ExtResource("2_player")]
+position = Vector2(240, 135)
 
 [node name="Directors" type="Node" parent="."]
 

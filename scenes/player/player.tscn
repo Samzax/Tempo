@@ -1,0 +1,105 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/ship.png" id="1_ship"]
+[ext_resource type="Script" path="res://scripts/player/player.gd" id="2_player"]
+
+[sub_resource type="AtlasTexture" id="At_hl0"]
+atlas = ExtResource("1_ship")
+region = Rect2(0, 0, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_hl1"]
+atlas = ExtResource("1_ship")
+region = Rect2(0, 24, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_sl0"]
+atlas = ExtResource("1_ship")
+region = Rect2(16, 0, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_sl1"]
+atlas = ExtResource("1_ship")
+region = Rect2(16, 24, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_n0"]
+atlas = ExtResource("1_ship")
+region = Rect2(32, 0, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_n1"]
+atlas = ExtResource("1_ship")
+region = Rect2(32, 24, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_sr0"]
+atlas = ExtResource("1_ship")
+region = Rect2(48, 0, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_sr1"]
+atlas = ExtResource("1_ship")
+region = Rect2(48, 24, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_hr0"]
+atlas = ExtResource("1_ship")
+region = Rect2(64, 0, 16, 24)
+
+[sub_resource type="AtlasTexture" id="At_hr1"]
+atlas = ExtResource("1_ship")
+region = Rect2(64, 24, 16, 24)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_player"]
+animations = [{
+"frames": [{"duration": 1.0, "texture": SubResource("At_hl0")}, {"duration": 1.0, "texture": SubResource("At_hl1")}],
+"loop": true,
+"name": &"hard_left",
+"speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("At_sl0")}, {"duration": 1.0, "texture": SubResource("At_sl1")}],
+"loop": true,
+"name": &"soft_left",
+"speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("At_n0")}, {"duration": 1.0, "texture": SubResource("At_n1")}],
+"loop": true,
+"name": &"neutral",
+"speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("At_sr0")}, {"duration": 1.0, "texture": SubResource("At_sr1")}],
+"loop": true,
+"name": &"soft_right",
+"speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("At_hr0")}, {"duration": 1.0, "texture": SubResource("At_hr1")}],
+"loop": true,
+"name": &"hard_right",
+"speed": 12.0
+}]
+
+[sub_resource type="Gradient" id="Gradient_thrust"]
+offsets = PackedFloat32Array(0, 0.4, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0.5, 0.9, 1, 0.9, 0.2, 0.45, 1, 0)
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_player"]
+radius = 5.0
+height = 20.0
+
+[node name="Player" type="CharacterBody2D" groups=["player"]]
+script = ExtResource("2_player")
+
+[node name="Thruster" type="CPUParticles2D" parent="."]
+position = Vector2(0, 10)
+amount = 22
+lifetime = 0.35
+local_coords = false
+direction = Vector2(0, 1)
+spread = 15.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 20.0
+initial_velocity_max = 60.0
+scale_amount_min = 0.8
+scale_amount_max = 1.6
+color_ramp = SubResource("Gradient_thrust")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_player")
+animation = &"neutral"
+autoplay = "neutral"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CapsuleShape2D_player")
