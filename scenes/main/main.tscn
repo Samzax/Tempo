@@ -1,12 +1,18 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
 [ext_resource type="Script" path="res://scripts/directors/spawn_director.gd" id="3_spawn"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="4_hud"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/phase_1_space.png" id="5_background"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
+
+[node name="PhaseBackground" type="Sprite2D" parent="."]
+z_index = -100
+position = Vector2(240, 135)
+texture = ExtResource("5_background")
 
 [node name="World" type="Node2D" parent="."]
 
