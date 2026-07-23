@@ -40,8 +40,9 @@ func _physics_process(delta: float) -> void:
 			or global_position.x < -m or global_position.x > _bounds.x + m:
 		_despawn()
 
-func _on_hit(_other: Node) -> void:
-	# TODO(T4/T8): aplicar `damage` ao componente de vida do alvo.
+func _on_hit(other: Node) -> void:
+	if other.has_method("take_damage"):
+		other.take_damage(damage)
 	_despawn()
 
 func _despawn() -> void:

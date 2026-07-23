@@ -2,7 +2,8 @@ extends CharacterBody2D
 ## Nave do jogador.
 ## Movimento X,Y com aceleração/atrito, inclinação progressiva (5 poses),
 ## propulsor reativo, disparo primário (Espaço) e blink (Shift): teleporte
-## instantâneo com i-frames, recarga e um efeito de colapso nas duas pontas.
+## instantâneo com i-frames. Recebe dano por contato com inimigos (respeitando
+## os i-frames) e renasce no centro ao morrer.
 
 @export var max_speed: float = 150.0
 @export var acceleration: float = 1000.0
@@ -19,17 +20,26 @@ extends CharacterBody2D
 ## Duração dos i-frames concedidos pelo blink.
 @export var blink_invuln: float = 0.25
 
+@export_group("Vida")
+## I-frames concedidos ao levar dano por contato.
+@export var hit_invuln: float = 0.8
+## I-frames concedidos ao renascer.
+@export var respawn_invuln: float = 1.5
+
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var thruster: CPUParticles2D = $Thruster
 @onready var muzzle: Marker2D = $Muzzle
+@onready var health: HealthComponent = $HealthComponent
+@onready var hurtbox: Area2D = $Hurtbox
 
 var _bank: float = 0.0
 var _fire_cooldown: float = 0.0
 var _blink_cd: float = 0.0
 var _invuln_timer: float = 0.0
+var _spawn_point: Vector2 = Vector2.ZERO
 var _projectiles: Node = null
 var _effects: Node = null
 var _bounds: Vector2 = Vector2(
@@ -40,6 +50,8 @@ var _bounds: Vector2 = Vector2(
 func _ready() -> void:
 	_projectiles = get_tree().get_first_node_in_group("projectiles")
 	_effects = get_tree().get_first_node_in_group("effects")
+	_spawn_point = global_position
+	health.died.connect(_on_died)
 
 func _physics_process(delta: float) -> void:
 	_tick_timers(delta)
@@ -53,12 +65,13 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_clamp_to_bounds()
+	_check_contact()
 	_update_bank(dir.x, delta)
 	_update_thruster()
 	_update_invuln_visual()
 	_handle_fire(delta)
 
-## Verdadeiro enquanto a nave está em i-frames (consumido pelo dano em T4).
+## Verdadeiro enquanto a nave está em i-frames (blink, dano ou renascimento).
 func is_invulnerable() -> bool:
 	return _invuln_timer > 0.0
 
@@ -82,9 +95,28 @@ func _handle_blink_input(dir: Vector2) -> void:
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
 	_blink_cd = blink_cooldown
-	_invuln_timer = blink_invuln
+	_invuln_timer = maxf(_invuln_timer, blink_invuln)
 	_spawn_teleport_fx(origin)
 	_spawn_teleport_fx(dest)
+
+## Leva dano por contato enquanto um inimigo estiver sobreposto e não houver i-frames.
+func _check_contact() -> void:
+	if is_invulnerable():
+		return
+	for body in hurtbox.get_overlapping_bodies():
+		if body.is_in_group("enemies"):
+			health.apply_damage(body.contact_damage)
+			_invuln_timer = hit_invuln
+			return
+
+func _on_died() -> void:
+	GameState.player_lives = maxi(0, GameState.player_lives - 1)
+	_spawn_teleport_fx(global_position)
+	global_position = _spawn_point
+	velocity = Vector2.ZERO
+	health.reset()
+	_invuln_timer = respawn_invuln
+	_spawn_teleport_fx(_spawn_point)
 
 ## Mantém a nave dentro da área visível (arena de tela única).
 func _clamp_to_bounds() -> void:
