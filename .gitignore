@@ -1,0 +1,22 @@
+# Godot 4+ — pasta de cache/importados gerada pelo editor
+.godot/
+
+# Exportações
+/build/
+/export/
+export.cfg
+export_presets.cfg
+
+# Traduções geradas a partir de CSV
+*.translation
+
+# Mono / C# (caso venha a ser usado)
+.mono/
+data_*/
+mono_crash.*.json
+
+# Ruído de SO / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
