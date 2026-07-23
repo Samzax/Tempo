@@ -1,0 +1,55 @@
+extends Area2D
+## Projétil do jogador. Viaja em linha reta, some por tempo de vida ou ao sair
+## da tela, e retorna ao pool. O dano será aplicado ao componente de vida do
+## alvo quando os inimigos existirem (T4/T8).
+
+@export var speed: float = 320.0
+@export var damage: int = 1
+@export var lifetime: float = 2.0
+
+var _velocity: Vector2 = Vector2.UP * speed
+var _life: float = 0.0
+var _active: bool = false
+var _bounds: Vector2 = Vector2(
+	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
+	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
+)
+
+func _ready() -> void:
+	body_entered.connect(_on_hit)
+	area_entered.connect(_on_hit)
+
+## (Re)inicializa o projétil ao ser tirado do pool.
+func activate(pos: Vector2, dir: Vector2) -> void:
+	global_position = pos
+	_velocity = dir.normalized() * speed
+	rotation = dir.angle() + PI / 2.0
+	_life = lifetime
+	_active = true
+	show()
+	monitoring = true
+	monitorable = true
+	set_physics_process(true)
+
+func _physics_process(delta: float) -> void:
+	global_position += _velocity * delta
+	_life -= delta
+	var m := 16.0
+	if _life <= 0.0 \
+			or global_position.y < -m or global_position.y > _bounds.y + m \
+			or global_position.x < -m or global_position.x > _bounds.x + m:
+		_despawn()
+
+func _on_hit(_other: Node) -> void:
+	# TODO(T4/T8): aplicar `damage` ao componente de vida do alvo.
+	_despawn()
+
+func _despawn() -> void:
+	if not _active:
+		return
+	_active = false
+	hide()
+	set_physics_process(false)
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
+	Pools.release.call_deferred(self)

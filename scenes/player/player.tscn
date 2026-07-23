@@ -80,6 +80,8 @@ radius = 5.0
 height = 20.0
 
 [node name="Player" type="CharacterBody2D" groups=["player"]]
+collision_layer = 2
+collision_mask = 1
 script = ExtResource("2_player")
 
 [node name="Thruster" type="CPUParticles2D" parent="."]
@@ -103,3 +105,6 @@ autoplay = "neutral"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CapsuleShape2D_player")
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(0, -12)
