@@ -3,39 +3,59 @@ extends Control
 class BlinkCooldownIcon:
 	extends Control
 
+	const CORE_TEXTURE := preload("res://assets/ui/blink_core.png")
+	const ICON_SIZE := 32
 	var cooldown_ratio: float = 0.0
+	var _pulse_step: int = -1
+
+	func _ready() -> void:
+		set_process(cooldown_ratio <= 0.0)
+		if cooldown_ratio <= 0.0:
+			_update_pulse_step()
 
 	func set_cooldown_ratio(value: float) -> void:
 		var next_ratio := clampf(value, 0.0, 1.0)
-		if is_equal_approx(next_ratio, cooldown_ratio):
-			return
+		var was_ready := cooldown_ratio <= 0.0
+		var is_ready := next_ratio <= 0.0
+		var ratio_changed := not is_equal_approx(next_ratio, cooldown_ratio)
 		cooldown_ratio = next_ratio
-		queue_redraw()
+		if is_ready:
+			set_process(true)
+			if not was_ready:
+				_pulse_step = -1
+			_update_pulse_step()
+		else:
+			set_process(false)
+			if was_ready:
+				_pulse_step = -1
+			if was_ready or ratio_changed:
+				queue_redraw()
+
+	func _process(_delta: float) -> void:
+		if cooldown_ratio <= 0.0:
+			_update_pulse_step()
+
+	func _update_pulse_step() -> void:
+		var next_step := int(Time.get_ticks_msec() / 180) % 4
+		if next_step != _pulse_step:
+			_pulse_step = next_step
+			queue_redraw()
 
 	func _draw() -> void:
-		var progress := 1.0 - cooldown_ratio
-		var glyph := Rect2(3, 2, 10, 12)
-		var trails := Color(0.2, 0.55, 0.62, 0.55)
-		var base := Color(0.04, 0.14, 0.18, 0.82)
-		var ready := Color(0.25, 0.95, 1.0)
-		var arrow := PackedVector2Array([
-			Vector2(5, 4), Vector2(9, 4), Vector2(9, 2),
-			Vector2(13, 8), Vector2(9, 14), Vector2(9, 12), Vector2(5, 12)
-		])
-
-		draw_rect(glyph, Color(0.02, 0.07, 0.09, 0.5))
-		draw_line(Vector2(3, 5), Vector2(6, 5), trails, 1.0)
-		draw_line(Vector2(3, 8), Vector2(6, 8), trails, 1.0)
-		draw_polygon(arrow, PackedColorArray([base]))
-
+		var full_rect := Rect2(Vector2.ZERO, Vector2.ONE * ICON_SIZE)
 		if cooldown_ratio <= 0.0:
-			draw_line(Vector2(3, 5), Vector2(6, 5), ready, 1.0)
-			draw_line(Vector2(3, 8), Vector2(6, 8), ready, 1.0)
-			draw_polygon(arrow, PackedColorArray([ready]))
-		elif progress > 0.0:
-			var fill_height := glyph.size.y * progress
-			var fill_rect := Rect2(glyph.position.x, glyph.end.y - fill_height, glyph.size.x, fill_height)
-			draw_rect(fill_rect, Color(0.25, 0.95, 1.0, 0.58))
+			# Alterna apenas a cor: o pulso mantém pixels inteiros e sem blur.
+			var ready_tint := Color(0.76, 1.0, 1.0) if _pulse_step < 2 else Color(0.96, 1.0, 1.0)
+			draw_texture_rect(CORE_TEXTURE, full_rect, false, ready_tint)
+			return
+
+		var covered_height := ceili(ICON_SIZE * cooldown_ratio)
+		var covered_rect := Rect2(0, 0, ICON_SIZE, covered_height)
+		# A própria alpha da textura recorta a máscara e conserva o fundo transparente.
+		draw_texture_rect_region(CORE_TEXTURE, covered_rect, covered_rect, Color(0.04, 0.18, 0.22, 0.92))
+		if covered_height < ICON_SIZE:
+			var revealed_rect := Rect2(0, covered_height, ICON_SIZE, ICON_SIZE - covered_height)
+			draw_texture_rect_region(CORE_TEXTURE, revealed_rect, revealed_rect, Color.WHITE)
 ## HUD: pontuação, vidas, vida (pips) e estado do blink, com tela de fim de jogo.
 ## Lê os valores por polling a cada quadro — simples e suficiente para esta UI.
 
@@ -80,10 +100,13 @@ func _build() -> void:
 		_pips.append(pip)
 
 	_blink_icon = BlinkCooldownIcon.new()
-	_blink_icon.custom_minimum_size = Vector2(16, 16)
-	_blink_icon.size = Vector2(16, 16)
+	_blink_icon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_blink_icon.offset_left = -44
+	_blink_icon.offset_top = -44
+	_blink_icon.offset_right = -12
+	_blink_icon.offset_bottom = -12
 	_blink_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(_blink_icon)
+	add_child(_blink_icon)
 
 	_game_over = _make_label(22, Color(1, 0.85, 0.4))
 	_game_over.set_anchors_preset(Control.PRESET_FULL_RECT)
