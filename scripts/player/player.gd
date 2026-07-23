@@ -75,6 +75,12 @@ func _physics_process(delta: float) -> void:
 func is_invulnerable() -> bool:
 	return _invuln_timer > 0.0
 
+## Fração de recarga do blink (0 = pronto, 1 = acabou de usar). Usado pelo HUD.
+func blink_cooldown_ratio() -> float:
+	if blink_cooldown <= 0.0:
+		return 0.0
+	return clampf(_blink_cd / blink_cooldown, 0.0, 1.0)
+
 func _tick_timers(delta: float) -> void:
 	_fire_cooldown -= delta
 	_blink_cd = maxf(0.0, _blink_cd - delta)
@@ -112,6 +118,10 @@ func _check_contact() -> void:
 func _on_died() -> void:
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
 	_spawn_teleport_fx(global_position)
+	if GameState.player_lives <= 0:
+		hide()
+		set_physics_process(false)
+		return  # sem renascer: o HUD assume o fim de jogo
 	global_position = _spawn_point
 	velocity = Vector2.ZERO
 	health.reset()
