@@ -111,11 +111,25 @@ func _check_contact() -> void:
 		return
 	for body in hurtbox.get_overlapping_bodies():
 		if body.is_in_group("enemies"):
-			health.apply_damage(body.contact_damage)
-			_invuln_timer = hit_invuln
+			var info := DamageInfo.new()
+			info.amount = body.contact_damage
+			info.source = body
+			info.tags = [&"contact"]
+			info.position = global_position
+			take_damage(info)
 			return
 
-func _on_died() -> void:
+## Recebe dano respeitando a profundidade maxima de efeitos e os i-frames.
+func take_damage(info: DamageInfo) -> void:
+	if info.trigger_depth > 3:
+		return
+	if is_invulnerable():
+		return
+	health.apply_damage(info)
+	_invuln_timer = hit_invuln
+	EventBus.player_hit.emit(info)
+
+func _on_died(_fatal_info: DamageInfo) -> void:
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
 	_spawn_teleport_fx(global_position)
 	if GameState.player_lives <= 0:
@@ -187,4 +201,4 @@ func _fire() -> void:
 	var b := Pools.acquire(BULLET)
 	if b.get_parent() == null:
 		_projectiles.add_child(b)
-	b.activate(muzzle.global_position, Vector2.UP)
+	b.activate(muzzle.global_position, Vector2.UP, self)

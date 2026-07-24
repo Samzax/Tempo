@@ -4,12 +4,13 @@ extends Area2D
 ## alvo quando os inimigos existirem (T4/T8).
 
 @export var speed: float = 320.0
-@export var damage: int = 1
+@export var damage: float = 1.0
 @export var lifetime: float = 2.0
 
 var _velocity: Vector2 = Vector2.UP * speed
 var _life: float = 0.0
 var _active: bool = false
+var _shooter: Node = null
 var _bounds: Vector2 = Vector2(
 	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
 	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
@@ -20,8 +21,9 @@ func _ready() -> void:
 	area_entered.connect(_on_hit)
 
 ## (Re)inicializa o projétil ao ser tirado do pool.
-func activate(pos: Vector2, dir: Vector2) -> void:
+func activate(pos: Vector2, dir: Vector2, shooter: Node) -> void:
 	global_position = pos
+	_shooter = shooter
 	_velocity = dir.normalized() * speed
 	rotation = dir.angle() + PI / 2.0
 	_life = lifetime
@@ -42,7 +44,12 @@ func _physics_process(delta: float) -> void:
 
 func _on_hit(other: Node) -> void:
 	if other.has_method("take_damage"):
-		other.take_damage(damage)
+		var info := DamageInfo.new()
+		info.amount = damage
+		info.source = _shooter
+		info.tags = [&"projectile"]
+		info.position = global_position
+		other.take_damage(info)
 	_despawn()
 
 func _despawn() -> void:

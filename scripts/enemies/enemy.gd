@@ -6,9 +6,9 @@ extends CharacterBody2D
 
 enum Movement { CHASE, DESCEND, SINE }
 
-@export var max_health: int = 3
+@export var max_health: float = 3.0
 @export var speed: float = 60.0
-@export var contact_damage: int = 1
+@export var contact_damage: float = 1.0
 @export var movement: Movement = Movement.CHASE
 @export var score_value: int = 10
 @export var tint: Color = Color.WHITE
@@ -52,12 +52,14 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 ## Recebe dano dos projéteis do jogador.
-func take_damage(amount: int) -> void:
-	health.apply_damage(amount)
+func take_damage(info: DamageInfo) -> void:
+	if info.trigger_depth > 3:
+		return
+	health.apply_damage(info)
 
-func _on_died() -> void:
+func _on_died(fatal_info: DamageInfo) -> void:
 	GameState.score += score_value
-	EventBus.enemy_died.emit(self)
+	EventBus.enemy_died.emit(self, fatal_info)
 	_spawn_burst()
 	queue_free()
 

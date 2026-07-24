@@ -2,23 +2,29 @@ class_name HealthComponent
 extends Node
 ## Componente reutilizável de vida. Usado pelo jogador e pelos inimigos.
 
-signal died
-signal damaged(amount: int, current: int)
+signal died(fatal_info: DamageInfo)
+signal damaged(info: DamageInfo, actual_drop: float)
 
-@export var max_health: int = 3
+@export var max_health: float = 3.0
 
-var health: int
+var health: float
 
 func _ready() -> void:
 	health = max_health
 
-func apply_damage(amount: int) -> void:
-	if health <= 0:
+func apply_damage(info: DamageInfo) -> void:
+	## Ignora dano nulo ou negativo para preservar os limites de vida.
+	if info.amount <= 0.0:
 		return
-	health = maxi(0, health - amount)
-	damaged.emit(amount, health)
-	if health <= 0:
-		died.emit()
+	if health <= 0.0:
+		return
+	var previous_health := health
+	health = clampf(health - info.amount, 0.0, max_health)
+	var actual_drop := previous_health - health
+	if actual_drop > 0.0:
+		damaged.emit(info, actual_drop)
+	if health <= 0.0:
+		died.emit(info)
 
 func reset() -> void:
 	health = max_health

@@ -92,7 +92,7 @@ func _build() -> void:
 	box.add_child(row)
 	var maxhp := 5
 	if _player != null and _player.health != null:
-		maxhp = _player.health.max_health
+		maxhp = floori(_player.health.max_health)
 	for i in maxhp:
 		var pip := ColorRect.new()
 		pip.custom_minimum_size = Vector2(7, 7)
@@ -129,7 +129,7 @@ func _process(_dt: float) -> void:
 		_lives.text = "VIDAS  %d" % _gs.player_lives
 	var blink_ratio := 0.0
 	if _player != null and is_instance_valid(_player) and _player.health != null and is_instance_valid(_player.health):
-		var hp: int = _player.health.health
+		var hp: int = floori(_player.health.health)
 		for i in _pips.size():
 			_pips[i].color = Color(1.0, 0.3, 0.35) if i < hp else Color(0.25, 0.25, 0.3)
 		blink_ratio = clampf(_player.blink_cooldown_ratio(), 0.0, 1.0)
