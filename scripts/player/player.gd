@@ -12,6 +12,8 @@ extends CharacterBody2D
 @export var bank_rate: float = 6.0
 ## Cadência de tiro em disparos por segundo (segure Espaço para atirar).
 @export var fire_rate: float = 6.0
+## Nível provisório de assistência de mira (substituído pelo StatBlock na T22).
+@export var aim_tier: int = 1
 
 @export_group("Blink")
 ## Distância do teleporte instantâneo.
@@ -28,6 +30,8 @@ extends CharacterBody2D
 
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
+## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
+const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var thruster: CPUParticles2D = $Thruster
@@ -35,10 +39,15 @@ const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 @onready var health: HealthComponent = $HealthComponent
 @onready var hurtbox: Area2D = $Hurtbox
 
+enum AimSource { NONE, MOUSE, JOYPAD }
+
 var _bank: float = 0.0
 var _fire_cooldown: float = 0.0
 var _blink_cd: float = 0.0
 var _invuln_timer: float = 0.0
+var _aim_vector: Vector2 = Vector2.UP
+var _last_aim_source: AimSource = AimSource.NONE
+var _joypad_aim_was_active: bool = false
 var _spawn_point: Vector2 = Vector2.ZERO
 var _projectiles: Node = null
 var _effects: Node = null
@@ -55,6 +64,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_tick_timers(delta)
+	_update_aim()
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	_handle_blink_input(dir)
 
@@ -65,11 +75,38 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_clamp_to_bounds()
+	_refresh_mouse_aim()
 	_check_contact()
 	_update_bank(dir.x, delta)
 	_update_thruster()
 	_update_invuln_visual()
+	muzzle.position = _aim_vector * 12.0
+	muzzle.rotation = _aim_vector.angle() + PI / 2.0
 	_handle_fire(delta)
+
+## Detecta o mouse antes da interface para preservar a troca de fonte da mira.
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_last_aim_source = AimSource.MOUSE
+
+## Atualiza a última direção válida de mira conforme a fonte de entrada ativa.
+func _update_aim() -> void:
+	var joypad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
+	var joypad_active := joypad_aim.length() > 0.2
+	if joypad_active and not _joypad_aim_was_active:
+		_last_aim_source = AimSource.JOYPAD
+	if _last_aim_source == AimSource.JOYPAD and joypad_active:
+		_aim_vector = joypad_aim.normalized()
+	elif _last_aim_source == AimSource.MOUSE:
+		_refresh_mouse_aim()
+	_joypad_aim_was_active = joypad_active
+
+## Recalcula a mira do mouse usando a posição final da nave no quadro.
+func _refresh_mouse_aim() -> void:
+	if _last_aim_source == AimSource.MOUSE:
+		var mouse_aim := get_global_mouse_position() - global_position
+		if mouse_aim.length() >= 0.001:
+			_aim_vector = mouse_aim.normalized()
 
 ## Verdadeiro enquanto a nave está em i-frames (blink, dano ou renascimento).
 func is_invulnerable() -> bool:
@@ -86,12 +123,12 @@ func _tick_timers(delta: float) -> void:
 	_blink_cd = maxf(0.0, _blink_cd - delta)
 	_invuln_timer = maxf(0.0, _invuln_timer - delta)
 
-## Blink: teleporte instantâneo na direção do movimento (ou para cima se parado),
+## Blink: teleporte instantâneo na direção do movimento (ou da mira se parado),
 ## com efeito de colapso na origem e no destino, i-frames e recarga.
 func _handle_blink_input(dir: Vector2) -> void:
 	if _blink_cd > 0.0 or not Input.is_action_just_pressed("blink"):
 		return
-	var bdir := dir.normalized() if dir != Vector2.ZERO else Vector2.UP
+	var bdir := dir.normalized() if dir != Vector2.ZERO else _aim_vector
 	var origin := global_position
 	var m := 10.0
 	var dest := origin + bdir * blink_distance
@@ -198,7 +235,35 @@ func _handle_fire(delta: float) -> void:
 func _fire() -> void:
 	if _projectiles == null:
 		return
+	var tier := clampi(aim_tier, 0, 3)
+	var fire_dir := _aim_vector
+	if tier > 0:
+		var target_dir := _select_aim_target(tier)
+		if target_dir != Vector2.ZERO:
+			fire_dir = target_dir
 	var b := Pools.acquire(BULLET)
 	if b.get_parent() == null:
 		_projectiles.add_child(b)
-	b.activate(muzzle.global_position, Vector2.UP, self)
+	b.activate(muzzle.global_position, fire_dir, self)
+
+## Escolhe o inimigo vivo mais alinhado à mira dentro do cone do tier atual.
+func _select_aim_target(tier: int) -> Vector2:
+	var max_angle := AIM_CONE_ANGLES[tier]
+	var best_angle := INF
+	var best_direction := Vector2.ZERO
+	for node in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(node) or node.is_queued_for_deletion():
+			continue
+		var enemy := node as Node2D
+		if enemy == null:
+			continue
+		var to_enemy := enemy.global_position - global_position
+		if to_enemy.length() > 400.0 or to_enemy.length() < 0.001:
+			continue
+		var enemy_direction := to_enemy.normalized()
+		var angle_difference := absf(_aim_vector.angle_to(enemy_direction))
+		if angle_difference > max_angle or angle_difference >= best_angle:
+			continue
+		best_angle = angle_difference
+		best_direction = enemy_direction
+	return best_direction
