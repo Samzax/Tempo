@@ -6,5 +6,6 @@ extends Resource
 @export var op: StatDef.Op = StatDef.Op.FLAT
 @export var value: float = 0.0
 @export var duration: float = -1.0
+@export var condition: ConditionDef
 @export var source_id: StringName
 @export var priority: int = 0

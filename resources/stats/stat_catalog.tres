@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="StatCatalogDef" load_steps=22 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/stat_catalog_def.gd" id="1_catalog"]
+[ext_resource type="Resource" path="res://resources/stats/acceleration.tres" id="2_acceleration"]
+[ext_resource type="Resource" path="res://resources/stats/aim_tier.tres" id="3_aim_tier"]
+[ext_resource type="Resource" path="res://resources/stats/blink_distance.tres" id="4_blink_distance"]
+[ext_resource type="Resource" path="res://resources/stats/blink_haste.tres" id="5_blink_haste"]
+[ext_resource type="Resource" path="res://resources/stats/blink_invuln.tres" id="6_blink_invuln"]
+[ext_resource type="Resource" path="res://resources/stats/crit_chance.tres" id="7_crit_chance"]
+[ext_resource type="Resource" path="res://resources/stats/damage.tres" id="8_damage"]
+[ext_resource type="Resource" path="res://resources/stats/fire_rate.tres" id="9_fire_rate"]
+[ext_resource type="Resource" path="res://resources/stats/friction.tres" id="10_friction"]
+[ext_resource type="Resource" path="res://resources/stats/hit_invuln.tres" id="11_hit_invuln"]
+[ext_resource type="Resource" path="res://resources/stats/luck.tres" id="12_luck"]
+[ext_resource type="Resource" path="res://resources/stats/max_health.tres" id="13_max_health"]
+[ext_resource type="Resource" path="res://resources/stats/max_speed.tres" id="14_max_speed"]
+[ext_resource type="Resource" path="res://resources/stats/pickup_radius.tres" id="15_pickup_radius"]
+[ext_resource type="Resource" path="res://resources/stats/pierce.tres" id="16_pierce"]
+[ext_resource type="Resource" path="res://resources/stats/projectile_count.tres" id="17_projectile_count"]
+[ext_resource type="Resource" path="res://resources/stats/projectile_lifetime.tres" id="18_projectile_lifetime"]
+[ext_resource type="Resource" path="res://resources/stats/projectile_speed.tres" id="19_projectile_speed"]
+[ext_resource type="Resource" path="res://resources/stats/respawn_invuln.tres" id="20_respawn_invuln"]
+[ext_resource type="Resource" path="res://resources/stats/spread.tres" id="21_spread"]
+
+[resource]
+script = ExtResource("1_catalog")
+stats = Array[ExtResource("1_catalog")]([
+	ExtResource("2_acceleration"),
+	ExtResource("3_aim_tier"),
+	ExtResource("4_blink_distance"),
+	ExtResource("5_blink_haste"),
+	ExtResource("6_blink_invuln"),
+	ExtResource("7_crit_chance"),
+	ExtResource("8_damage"),
+	ExtResource("9_fire_rate"),
+	ExtResource("10_friction"),
+	ExtResource("11_hit_invuln"),
+	ExtResource("12_luck"),
+	ExtResource("13_max_health"),
+	ExtResource("14_max_speed"),
+	ExtResource("15_pickup_radius"),
+	ExtResource("16_pierce"),
+	ExtResource("17_projectile_count"),
+	ExtResource("18_projectile_lifetime"),
+	ExtResource("19_projectile_speed"),
+	ExtResource("20_respawn_invuln"),
+	ExtResource("21_spread"),
+])

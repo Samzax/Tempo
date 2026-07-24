@@ -21,6 +21,7 @@ GameState="*res://scripts/autoload/game_state.gd"
 EventBus="*res://scripts/autoload/event_bus.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
 Pools="*res://scripts/autoload/pools.gd"
+StatCatalog="*res://scripts/autoload/stat_catalog.gd"
 
 [display]
 
