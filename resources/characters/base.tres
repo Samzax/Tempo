@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CharacterDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/character_def.gd" id="1_character_def"]
+
+[resource]
+script = ExtResource("1_character_def")
+id = &"piloto_base"
+display_name = "Piloto Novato"
+description = "O graduado padrao da academia espacial."
+ability_e = &"escudo"

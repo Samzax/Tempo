@@ -4,9 +4,11 @@ extends CharacterBody2D
 ## propulsor reativo, disparo primário (Espaço) e blink (Shift): teleporte
 ## instantâneo com i-frames. Recebe dano por contato com inimigos (respeitando
 ## os i-frames) e renasce no centro ao morrer.
-
+	
 ## Quão rápido a inclinação acompanha a entrada horizontal (poses por segundo).
 @export var bank_rate: float = 6.0
+@export var ship: ShipDef
+@export var character: CharacterDef
 
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
@@ -40,7 +42,13 @@ var _bounds: Vector2 = Vector2(
 )
 
 func _ready() -> void:
+	if ship == null:
+		ship = preload("res://resources/ships/base.tres")
+	if character == null:
+		character = preload("res://resources/characters/base.tres")
+
 	_stats = StatBlock.new(StatCatalog.get_all())
+	Loadout.apply(_stats, ship, character)
 	health.max_health = _stats.get_stat(&"max_health")
 	health.health = health.max_health
 	_projectiles = get_tree().get_first_node_in_group("projectiles")
