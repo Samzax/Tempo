@@ -42,6 +42,7 @@ var _spawn_point: Vector2 = Vector2.ZERO
 var _projectiles: Node = null
 var _effects: Node = null
 var _stats: StatBlock
+var _dispatcher: EffectDispatcher
 var _bounds: Vector2 = Vector2(
 	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
 	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
@@ -59,6 +60,9 @@ func _ready() -> void:
 		_ability_q = AbilityCatalog.get_ability(ship.ability_q)
 	if character != null and not character.ability_e.is_empty():
 		_ability_e = AbilityCatalog.get_ability(character.ability_e)
+	_dispatcher = EffectDispatcher.new(self, _gather_effects())
+	EventBus.enemy_died.connect(_on_enemy_died)
+	health.damaged.connect(_on_health_damaged)
 	health.max_health = _stats.get_stat(&"max_health")
 	health.health = health.max_health
 	_projectiles = get_tree().get_first_node_in_group("projectiles")
@@ -68,6 +72,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_stats.tick(delta)
+	_dispatcher.tick(delta)
 	_tick_timers(delta)
 	_update_aim()
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -161,6 +166,7 @@ func _handle_blink_input(dir: Vector2) -> void:
 
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
+	_dispatcher.dispatch(&"on_blink", null, 0)
 	var cd := BLINK_BASE_COOLDOWN / _stats.get_stat(&"blink_haste")
 	_blink_cd = cd
 	_blink_cd_duration = cd
@@ -203,7 +209,14 @@ func take_damage(info: DamageInfo) -> void:
 		return
 	_invuln_timer = _stats.get_stat(&"hit_invuln")
 	health.apply_damage(info)
+
+func _on_health_damaged(info: DamageInfo, _actual_drop: float) -> void:
 	EventBus.player_hit.emit(info)
+	_dispatcher.dispatch(&"on_damaged", info, 0)
+
+func _on_enemy_died(_enemy: Node, fatal_info: DamageInfo) -> void:
+	if fatal_info != null and fatal_info.source == self:
+		_dispatcher.dispatch(&"on_kill", fatal_info, 0)
 
 func _on_died(_fatal_info: DamageInfo) -> void:
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
@@ -291,6 +304,15 @@ func _fire() -> void:
 	if b.get_parent() == null:
 		_projectiles.add_child(b)
 	b.activate(muzzle.global_position, fire_dir, self)
+	_dispatcher.dispatch(&"on_fire", null, 0)
+
+func _gather_effects() -> Array[EffectDef]:
+	var effects: Array[EffectDef] = []
+	if ship != null:
+		effects.append_array(ship.effects)
+	if character != null:
+		effects.append_array(character.effects)
+	return effects
 
 ## Escolhe o inimigo vivo mais alinhado à mira dentro do cone do tier atual.
 func _select_aim_target(tier: int) -> Vector2:
