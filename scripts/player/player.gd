@@ -151,8 +151,8 @@ func take_damage(info: DamageInfo) -> void:
 		return
 	if is_invulnerable():
 		return
-	health.apply_damage(info)
 	_invuln_timer = _stats.get_stat(&"hit_invuln")
+	health.apply_damage(info)
 	EventBus.player_hit.emit(info)
 
 func _on_died(_fatal_info: DamageInfo) -> void:
