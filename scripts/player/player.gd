@@ -237,7 +237,7 @@ func _fire() -> void:
 
 ## Escolhe o inimigo vivo mais alinhado à mira dentro do cone do tier atual.
 func _select_aim_target(tier: int) -> Vector2:
-	var max_angle := AIM_CONE_ANGLES[tier]
+	var max_angle: float = AIM_CONE_ANGLES[tier]
 	var best_angle := INF
 	var best_direction := Vector2.ZERO
 	for node in get_tree().get_nodes_in_group("enemies"):

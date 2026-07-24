@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="StatCatalogDef" load_steps=22 format=3]
+[gd_resource type="Resource" script_class="StatCatalogDef" format=3 uid="uid://bv6wwhp2hd1qs"]
 
-[ext_resource type="Script" path="res://scripts/stats/stat_catalog_def.gd" id="1_catalog"]
+[ext_resource type="Script" uid="uid://ovypa46r3vyi" path="res://scripts/stats/stat_catalog_def.gd" id="1_catalog"]
 [ext_resource type="Resource" path="res://resources/stats/acceleration.tres" id="2_acceleration"]
+[ext_resource type="Script" uid="uid://dcidplcnwb5cf" path="res://scripts/stats/stat_def.gd" id="2_stat_def"]
 [ext_resource type="Resource" path="res://resources/stats/aim_tier.tres" id="3_aim_tier"]
 [ext_resource type="Resource" path="res://resources/stats/blink_distance.tres" id="4_blink_distance"]
 [ext_resource type="Resource" path="res://resources/stats/blink_haste.tres" id="5_blink_haste"]
@@ -24,25 +25,4 @@
 
 [resource]
 script = ExtResource("1_catalog")
-stats = Array[ExtResource("1_catalog")]([
-	ExtResource("2_acceleration"),
-	ExtResource("3_aim_tier"),
-	ExtResource("4_blink_distance"),
-	ExtResource("5_blink_haste"),
-	ExtResource("6_blink_invuln"),
-	ExtResource("7_crit_chance"),
-	ExtResource("8_damage"),
-	ExtResource("9_fire_rate"),
-	ExtResource("10_friction"),
-	ExtResource("11_hit_invuln"),
-	ExtResource("12_luck"),
-	ExtResource("13_max_health"),
-	ExtResource("14_max_speed"),
-	ExtResource("15_pickup_radius"),
-	ExtResource("16_pierce"),
-	ExtResource("17_projectile_count"),
-	ExtResource("18_projectile_lifetime"),
-	ExtResource("19_projectile_speed"),
-	ExtResource("20_respawn_invuln"),
-	ExtResource("21_spread"),
-])
+stats = Array[ExtResource("2_stat_def")]([ExtResource("2_acceleration"), ExtResource("3_aim_tier"), ExtResource("4_blink_distance"), ExtResource("5_blink_haste"), ExtResource("6_blink_invuln"), ExtResource("7_crit_chance"), ExtResource("8_damage"), ExtResource("9_fire_rate"), ExtResource("10_friction"), ExtResource("11_hit_invuln"), ExtResource("12_luck"), ExtResource("13_max_health"), ExtResource("14_max_speed"), ExtResource("15_pickup_radius"), ExtResource("16_pierce"), ExtResource("17_projectile_count"), ExtResource("18_projectile_lifetime"), ExtResource("19_projectile_speed"), ExtResource("20_respawn_invuln"), ExtResource("21_spread")])

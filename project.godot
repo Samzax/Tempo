@@ -23,6 +23,10 @@ AudioManager="*res://scripts/autoload/audio_manager.gd"
 Pools="*res://scripts/autoload/pools.gd"
 StatCatalog="*res://scripts/autoload/stat_catalog.gd"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
+
 [display]
 
 window/size/viewport_width=480
