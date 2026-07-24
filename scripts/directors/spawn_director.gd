@@ -17,7 +17,7 @@ var _bounds: Vector2 = Vector2(
 func _ready() -> void:
 	_container = get_tree().get_first_node_in_group("enemies_container")
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	_t -= delta
 	if _t <= 0.0:
 		_spawn()
@@ -44,5 +44,5 @@ func _spawn() -> void:
 			e.max_health = 3
 			e.tint = Color(0.75, 0.5, 1.0)
 	_spawn_index += 1
-	e.global_position = Vector2(randf_range(24.0, _bounds.x - 24.0), -16.0)
+	e.global_position = Vector2(RunManager.rng.randf_range(24.0, _bounds.x - 24.0), -16.0)
 	_container.add_child(e)

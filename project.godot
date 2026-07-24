@@ -22,6 +22,7 @@ EventBus="*res://scripts/autoload/event_bus.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
 Pools="*res://scripts/autoload/pools.gd"
 StatCatalog="*res://scripts/autoload/stat_catalog.gd"
+RunManager="*res://scripts/autoload/run_manager.gd"
 
 [editor_plugins]
 

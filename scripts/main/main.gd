@@ -3,4 +3,4 @@ extends Node2D
 ## A montagem de mundo, jogador e diretores acontece nas tarefas seguintes.
 
 func _ready() -> void:
-	pass
+	RunManager.start_run(RunManager.DEFAULT_SEED)
