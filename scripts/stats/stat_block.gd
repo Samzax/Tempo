@@ -88,6 +88,16 @@ func remove_modifiers_by_source(source_id: StringName) -> void:
 	for id in affected_stats:
 		_dirty[id] = true
 
+## Remove todos os modificadores temporários, preservando os permanentes.
+func clear_temporary() -> void:
+	var affected_stats: Dictionary = {}
+	for index in range(_modifiers.size() - 1, -1, -1):
+		if _modifiers[index].def.duration >= 0.0:
+			affected_stats[_modifiers[index].def.stat] = true
+			_modifiers.remove_at(index)
+	for id in affected_stats:
+		_dirty[id] = true
+
 ## Avança modificadores temporários e remove somente os que expiraram.
 func tick(delta: float) -> void:
 	var affected_stats: Dictionary = {}

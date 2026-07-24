@@ -28,6 +28,12 @@ var _bank: float = 0.0
 var _fire_cooldown: float = 0.0
 var _blink_cd: float = 0.0
 var _blink_cd_duration: float = 0.0
+var _ability_q: AbilityDef
+var _ability_e: AbilityDef
+var _ability_q_cd: float = 0.0
+var _ability_q_cd_duration: float = 0.0
+var _ability_e_cd: float = 0.0
+var _ability_e_cd_duration: float = 0.0
 var _invuln_timer: float = 0.0
 var _aim_vector: Vector2 = Vector2.UP
 var _last_aim_source: AimSource = AimSource.NONE
@@ -49,6 +55,10 @@ func _ready() -> void:
 
 	_stats = StatBlock.new(StatCatalog.get_all())
 	Loadout.apply(_stats, ship, character)
+	if ship != null and not ship.ability_q.is_empty():
+		_ability_q = AbilityCatalog.get_ability(ship.ability_q)
+	if character != null and not character.ability_e.is_empty():
+		_ability_e = AbilityCatalog.get_ability(character.ability_e)
 	health.max_health = _stats.get_stat(&"max_health")
 	health.health = health.max_health
 	_projectiles = get_tree().get_first_node_in_group("projectiles")
@@ -62,6 +72,7 @@ func _physics_process(delta: float) -> void:
 	_update_aim()
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	_handle_blink_input(dir)
+	_handle_ability_input()
 
 	if dir != Vector2.ZERO:
 		velocity = velocity.move_toward(dir * _stats.get_stat(&"max_speed"), _stats.get_stat(&"acceleration") * delta)
@@ -107,15 +118,33 @@ func _refresh_mouse_aim() -> void:
 func is_invulnerable() -> bool:
 	return _invuln_timer > 0.0
 
+## Estende a invulnerabilidade atual pelo tempo informado.
+func grant_invuln(duration: float) -> void:
+	_invuln_timer = maxf(_invuln_timer, duration)
+
 ## Fração de recarga do blink (0 = pronto, 1 = acabou de usar). Usado pelo HUD.
 func blink_cooldown_ratio() -> float:
 	if _blink_cd <= 0.0 or _blink_cd_duration <= 0.0:
 		return 0.0
 	return clampf(_blink_cd / _blink_cd_duration, 0.0, 1.0)
 
+## Fracao de recarga da habilidade da nave (0 = pronta, 1 = acabou de usar).
+func ability_q_cooldown_ratio() -> float:
+	if _ability_q_cd <= 0.0 or _ability_q_cd_duration <= 0.0:
+		return 0.0
+	return clampf(_ability_q_cd / _ability_q_cd_duration, 0.0, 1.0)
+
+## Fracao de recarga da habilidade do personagem (0 = pronta, 1 = acabou de usar).
+func ability_e_cooldown_ratio() -> float:
+	if _ability_e_cd <= 0.0 or _ability_e_cd_duration <= 0.0:
+		return 0.0
+	return clampf(_ability_e_cd / _ability_e_cd_duration, 0.0, 1.0)
+
 func _tick_timers(delta: float) -> void:
 	_fire_cooldown -= delta
 	_blink_cd = maxf(0.0, _blink_cd - delta)
+	_ability_q_cd = maxf(0.0, _ability_q_cd - delta)
+	_ability_e_cd = maxf(0.0, _ability_e_cd - delta)
 	_invuln_timer = maxf(0.0, _invuln_timer - delta)
 
 ## Blink: teleporte instantâneo na direção do movimento (ou da mira se parado),
@@ -138,6 +167,19 @@ func _handle_blink_input(dir: Vector2) -> void:
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))
 	_spawn_teleport_fx(origin)
 	_spawn_teleport_fx(dest)
+
+## Ativa as habilidades equipadas quando seus slots estao prontos.
+func _handle_ability_input() -> void:
+	if Input.is_action_just_pressed("ability_q") and _ability_q != null and _ability_q_cd <= 0.0:
+		_ability_q.activate(self)
+		_ability_q_cd = _ability_q.cooldown
+		_ability_q_cd_duration = _ability_q.cooldown
+		EventBus.ability_used.emit(&"ability_q")
+	if Input.is_action_just_pressed("ability_e") and _ability_e != null and _ability_e_cd <= 0.0:
+		_ability_e.activate(self)
+		_ability_e_cd = _ability_e.cooldown
+		_ability_e_cd_duration = _ability_e.cooldown
+		EventBus.ability_used.emit(&"ability_e")
 
 ## Leva dano por contato enquanto um inimigo estiver sobreposto e não houver i-frames.
 func _check_contact() -> void:
@@ -173,6 +215,13 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 	global_position = _spawn_point
 	velocity = Vector2.ZERO
 	health.reset()
+	_blink_cd = 0.0
+	_blink_cd_duration = 0.0
+	_ability_q_cd = 0.0
+	_ability_q_cd_duration = 0.0
+	_ability_e_cd = 0.0
+	_ability_e_cd_duration = 0.0
+	_stats.clear_temporary()
 	_invuln_timer = _stats.get_stat(&"respawn_invuln")
 	_spawn_teleport_fx(_spawn_point)
 

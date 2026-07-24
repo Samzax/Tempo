@@ -22,4 +22,6 @@ func validate_content() -> Array[String]:
 			errors.append("Estatística base repetida: %s." % base_stat.stat)
 		else:
 			seen_stats[base_stat.stat] = true
+	if not ability_q.is_empty() and not AbilityCatalog.is_valid(ability_q):
+		errors.append("Habilidade da nave desconhecida: %s." % ability_q)
 	return errors
