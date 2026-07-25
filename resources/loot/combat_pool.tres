@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="ItemPoolDef" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot/item_pool_def.gd" id="1_pool"]
+[ext_resource type="Script" path="res://scripts/loot/item_pool_entry.gd" id="2_entry"]
+[ext_resource type="Resource" path="res://resources/items/nucleo_superaquecido.tres" id="3_nucleo"]
+[ext_resource type="Resource" path="res://resources/items/casco_reforcado.tres" id="4_casco"]
+[ext_resource type="Resource" path="res://resources/items/recarga_fria.tres" id="5_recarga"]
+[ext_resource type="Resource" path="res://resources/items/eco_temporal.tres" id="6_eco"]
+[ext_resource type="Resource" path="res://resources/items/frenesi.tres" id="7_frenesi"]
+
+[sub_resource type="Resource" id="Entry_nucleo"]
+script = ExtResource("2_entry")
+item = ExtResource("3_nucleo")
+base_weight = 12.0
+[sub_resource type="Resource" id="Entry_casco"]
+script = ExtResource("2_entry")
+item = ExtResource("4_casco")
+base_weight = 12.0
+[sub_resource type="Resource" id="Entry_recarga"]
+script = ExtResource("2_entry")
+item = ExtResource("5_recarga")
+base_weight = 12.0
+[sub_resource type="Resource" id="Entry_eco"]
+script = ExtResource("2_entry")
+item = ExtResource("6_eco")
+base_weight = 5.0
+[sub_resource type="Resource" id="Entry_frenesi"]
+script = ExtResource("2_entry")
+item = ExtResource("7_frenesi")
+base_weight = 5.0
+
+[resource]
+script = ExtResource("1_pool")
+id = &"combat"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry_nucleo"), SubResource("Entry_casco"), SubResource("Entry_recarga"), SubResource("Entry_eco"), SubResource("Entry_frenesi")])

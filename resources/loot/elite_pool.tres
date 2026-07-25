@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="ItemPoolDef" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot/item_pool_def.gd" id="1_pool"]
+[ext_resource type="Script" path="res://scripts/loot/item_pool_entry.gd" id="2_entry"]
+[ext_resource type="Resource" path="res://resources/items/reator_instavel.tres" id="3_reator"]
+[ext_resource type="Resource" path="res://resources/items/lente_de_foco.tres" id="4_lente"]
+[ext_resource type="Resource" path="res://resources/items/vinganca.tres" id="5_vinganca"]
+[ext_resource type="Resource" path="res://resources/items/sanguessuga.tres" id="6_sanguessuga"]
+[ext_resource type="Resource" path="res://resources/items/estilhaco.tres" id="7_estilhaco"]
+
+[sub_resource type="Resource" id="Entry_reator"]
+script = ExtResource("2_entry")
+item = ExtResource("3_reator")
+base_weight = 8.0
+[sub_resource type="Resource" id="Entry_lente"]
+script = ExtResource("2_entry")
+item = ExtResource("4_lente")
+base_weight = 8.0
+[sub_resource type="Resource" id="Entry_vinganca"]
+script = ExtResource("2_entry")
+item = ExtResource("5_vinganca")
+base_weight = 7.0
+[sub_resource type="Resource" id="Entry_sanguessuga"]
+script = ExtResource("2_entry")
+item = ExtResource("6_sanguessuga")
+base_weight = 7.0
+[sub_resource type="Resource" id="Entry_estilhaco"]
+script = ExtResource("2_entry")
+item = ExtResource("7_estilhaco")
+base_weight = 7.0
+
+[resource]
+script = ExtResource("1_pool")
+id = &"elite"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry_reator"), SubResource("Entry_lente"), SubResource("Entry_vinganca"), SubResource("Entry_sanguessuga"), SubResource("Entry_estilhaco")])

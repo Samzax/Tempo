@@ -13,6 +13,7 @@ var state: State:
 var _active_enemies: Dictionary = {}
 var _spawns_finished: bool = false
 var _clear_emitted: bool = false
+var reward_offer: RewardOffer
 
 func start() -> void:
 	if _state != State.CREATED:

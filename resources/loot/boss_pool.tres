@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="ItemPoolDef" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot/item_pool_def.gd" id="1_pool"]
+[ext_resource type="Script" path="res://scripts/loot/item_pool_entry.gd" id="2_entry"]
+[ext_resource type="Resource" path="res://resources/items/convergencia.tres" id="3_convergencia"]
+[ext_resource type="Resource" path="res://resources/items/cronometro_perfeito.tres" id="4_cronometro"]
+[ext_resource type="Resource" path="res://resources/items/estilhaco.tres" id="5_estilhaco"]
+
+[sub_resource type="Resource" id="Entry_convergencia"]
+script = ExtResource("2_entry")
+item = ExtResource("3_convergencia")
+base_weight = 10.0
+[sub_resource type="Resource" id="Entry_cronometro"]
+script = ExtResource("2_entry")
+item = ExtResource("4_cronometro")
+base_weight = 10.0
+[sub_resource type="Resource" id="Entry_estilhaco"]
+script = ExtResource("2_entry")
+item = ExtResource("5_estilhaco")
+base_weight = 4.0
+
+[resource]
+script = ExtResource("1_pool")
+id = &"boss"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry_convergencia"), SubResource("Entry_cronometro"), SubResource("Entry_estilhaco")])

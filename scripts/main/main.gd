@@ -4,3 +4,4 @@ extends Node2D
 
 func _ready() -> void:
 	RunManager.start_run(RunManager.DEFAULT_SEED)
+	$RewardChest.offer_requested.connect($UI/ItemChoice.open_offer)

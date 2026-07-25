@@ -5,9 +5,11 @@ extends Node
 const DEFAULT_SEED := 1
 
 var rng: RunRng
+var seed_value: int = DEFAULT_SEED
 
 func _ready() -> void:
 	start_run(DEFAULT_SEED)
 
 func start_run(seed_value: int) -> void:
+	self.seed_value = seed_value
 	rng = RunRng.new(seed_value)

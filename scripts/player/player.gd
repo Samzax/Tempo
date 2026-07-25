@@ -76,6 +76,12 @@ func _ready() -> void:
 func acquire_item(item: ItemDef) -> bool:
 	return _inventory.acquire(item)
 
+func can_acquire_item(item: ItemDef) -> bool:
+	return item != null and _inventory != null and _inventory.count(item.id) < item.max_stacks
+
+func get_luck() -> float:
+	return _stats.get_stat(&"luck") if _stats != null else 0.0
+
 func _physics_process(delta: float) -> void:
 	_stats.tick(delta)
 	_dispatcher.tick(delta)
