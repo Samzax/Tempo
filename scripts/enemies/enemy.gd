@@ -66,6 +66,8 @@ func _on_died(fatal_info: DamageInfo) -> void:
 func _spawn_burst() -> void:
 	if _effects == null:
 		return
-	var fx := BURST_FX.instantiate()
+	var fx := BURST_FX.instantiate() as BurstFx
+	if fx == null:
+		return
 	_effects.add_child(fx)
-	fx.global_position = global_position
+	fx.burst_at(global_position)
