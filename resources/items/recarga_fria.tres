@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier_def.gd" id="2_modifier"]
+
+[sub_resource type="Resource" id="StatModifierDef_blink_haste"]
+script = ExtResource("2_modifier")
+stat = &"blink_haste"
+op = 1
+value = 0.3
+
+[resource]
+script = ExtResource("1_item")
+id = &"recarga_fria"
+display_name = "Recarga Fria"
+description = "O frio comprime o tempo entre os saltos."
+rarity = 0
+pools = Array[StringName]([&"treasure"])
+max_stacks = 3
+tags = Array[StringName]([&"blink"])
+modifiers = Array[ExtResource("2_modifier")]([SubResource("StatModifierDef_blink_haste")])

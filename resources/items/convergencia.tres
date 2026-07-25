@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier_def.gd" id="2_modifier"]
+
+[sub_resource type="Resource" id="StatModifierDef_fire_rate"]
+script = ExtResource("2_modifier")
+stat = &"fire_rate"
+op = 2
+value = 1.0
+
+[resource]
+script = ExtResource("1_item")
+id = &"convergencia"
+display_name = "Convergencia"
+description = "Todas as linhas do tempo disparam juntas."
+rarity = 2
+pools = Array[StringName]([&"boss"])
+max_stacks = 1
+modifiers = Array[ExtResource("2_modifier")]([SubResource("StatModifierDef_fire_rate")])

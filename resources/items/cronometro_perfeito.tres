@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier_def.gd" id="2_modifier"]
+
+[sub_resource type="Resource" id="StatModifierDef_blink_haste"]
+script = ExtResource("2_modifier")
+stat = &"blink_haste"
+op = 3
+value = 5.0
+
+[resource]
+script = ExtResource("1_item")
+id = &"cronometro_perfeito"
+display_name = "Cronometro Perfeito"
+description = "Cada segundo se dobra ao ritmo do seu blink."
+rarity = 2
+pools = Array[StringName]([&"boss"])
+max_stacks = 1
+tags = Array[StringName]([&"time"])
+modifiers = Array[ExtResource("2_modifier")]([SubResource("StatModifierDef_blink_haste")])

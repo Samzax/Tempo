@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/items/effect_def.gd" id="2_effect"]
+[ext_resource type="Script" path="res://scripts/items/damage_action.gd" id="3_action"]
+
+[sub_resource type="Resource" id="DamageAction_explosion"]
+script = ExtResource("3_action")
+amount = 1.0
+radius = 48.0
+tags = Array[StringName]([&"explosion"])
+
+[sub_resource type="Resource" id="EffectDef_on_kill"]
+script = ExtResource("2_effect")
+event = &"on_kill"
+chance = 1.0
+action = SubResource("DamageAction_explosion")
+
+[resource]
+script = ExtResource("1_item")
+id = &"estilhaco"
+display_name = "Estilhaco"
+description = "Inimigos derrotados deixam um adeus explosivo."
+rarity = 1
+pools = Array[StringName]([&"treasure"])
+max_stacks = 3
+tags = Array[StringName]([&"explosion"])
+effects = Array[ExtResource("2_effect")]([SubResource("EffectDef_on_kill")])

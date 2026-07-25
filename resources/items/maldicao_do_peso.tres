@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier_def.gd" id="2_modifier"]
+
+[sub_resource type="Resource" id="StatModifierDef_max_speed"]
+script = ExtResource("2_modifier")
+stat = &"max_speed"
+op = 1
+value = -0.2
+
+[resource]
+script = ExtResource("1_item")
+id = &"maldicao_do_peso"
+display_name = "Maldicao do Peso"
+description = "Uma forca antiga prende seus passos ao chao."
+rarity = 1
+pools = Array[StringName]([&"risk"])
+max_stacks = 3
+tags = Array[StringName]([&"curse"])
+modifiers = Array[ExtResource("2_modifier")]([SubResource("StatModifierDef_max_speed")])

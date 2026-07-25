@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemCatalogDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_catalog_def.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="2_item_def"]
+[ext_resource type="Resource" path="res://resources/items/nucleo_superaquecido.tres" id="3_nucleo"]
+[ext_resource type="Resource" path="res://resources/items/casco_reforcado.tres" id="4_casco"]
+[ext_resource type="Resource" path="res://resources/items/recarga_fria.tres" id="5_recarga"]
+[ext_resource type="Resource" path="res://resources/items/reator_instavel.tres" id="6_reator"]
+[ext_resource type="Resource" path="res://resources/items/lente_de_foco.tres" id="7_lente"]
+[ext_resource type="Resource" path="res://resources/items/maldicao_do_peso.tres" id="8_maldicao"]
+[ext_resource type="Resource" path="res://resources/items/convergencia.tres" id="9_convergencia"]
+[ext_resource type="Resource" path="res://resources/items/cronometro_perfeito.tres" id="10_cronometro"]
+[ext_resource type="Resource" path="res://resources/items/eco_temporal.tres" id="11_eco"]
+[ext_resource type="Resource" path="res://resources/items/frenesi.tres" id="12_frenesi"]
+[ext_resource type="Resource" path="res://resources/items/vinganca.tres" id="13_vinganca"]
+[ext_resource type="Resource" path="res://resources/items/sanguessuga.tres" id="14_sanguessuga"]
+[ext_resource type="Resource" path="res://resources/items/estilhaco.tres" id="15_estilhaco"]
+
+[resource]
+script = ExtResource("1_catalog")
+items = Array[ExtResource("2_item_def")]([ExtResource("3_nucleo"), ExtResource("4_casco"), ExtResource("5_recarga"), ExtResource("6_reator"), ExtResource("7_lente"), ExtResource("8_maldicao"), ExtResource("9_convergencia"), ExtResource("10_cronometro"), ExtResource("11_eco"), ExtResource("12_frenesi"), ExtResource("13_vinganca"), ExtResource("14_sanguessuga"), ExtResource("15_estilhaco")])

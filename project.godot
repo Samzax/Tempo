@@ -23,6 +23,7 @@ AudioManager="*res://scripts/autoload/audio_manager.gd"
 Pools="*res://scripts/autoload/pools.gd"
 StatCatalog="*res://scripts/autoload/stat_catalog.gd"
 RunManager="*res://scripts/autoload/run_manager.gd"
+ItemCatalog="*res://scripts/autoload/item_catalog.gd"
 
 [editor_plugins]
 
