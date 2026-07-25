@@ -222,7 +222,7 @@ func _on_health_damaged(info: DamageInfo, _actual_drop: float) -> void:
 
 func _on_enemy_died(_enemy: Node, fatal_info: DamageInfo) -> void:
 	if fatal_info != null and fatal_info.source == self:
-		_dispatcher.dispatch(&"on_kill", fatal_info, 0)
+		_dispatcher.dispatch(&"on_kill", fatal_info, fatal_info.trigger_depth)
 
 func _on_died(_fatal_info: DamageInfo) -> void:
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)

@@ -26,5 +26,11 @@ func apply_damage(info: DamageInfo) -> void:
 	if health <= 0.0:
 		died.emit(info)
 
+## Recupera vida ate o maximo. Ignora valores nao-positivos.
+func heal(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	health = clampf(health + amount, 0.0, max_health)
+
 func reset() -> void:
 	health = max_health
