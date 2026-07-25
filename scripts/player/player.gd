@@ -43,6 +43,7 @@ var _projectiles: Node = null
 var _effects: Node = null
 var _stats: StatBlock
 var _dispatcher: EffectDispatcher
+var _inventory: Inventory
 var _bounds: Vector2 = Vector2(
 	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
 	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
@@ -61,6 +62,7 @@ func _ready() -> void:
 	if character != null and not character.ability_e.is_empty():
 		_ability_e = AbilityCatalog.get_ability(character.ability_e)
 	_dispatcher = EffectDispatcher.new(self, _gather_effects())
+	_inventory = Inventory.new(_stats, _dispatcher)
 	EventBus.enemy_died.connect(_on_enemy_died)
 	health.damaged.connect(_on_health_damaged)
 	health.max_health = _stats.get_stat(&"max_health")
@@ -69,6 +71,10 @@ func _ready() -> void:
 	_effects = get_tree().get_first_node_in_group("effects")
 	_spawn_point = global_position
 	health.died.connect(_on_died)
+
+## Adquire um item e aplica seus efeitos e modificadores.
+func acquire_item(item: ItemDef) -> bool:
+	return _inventory.acquire(item)
 
 func _physics_process(delta: float) -> void:
 	_stats.tick(delta)

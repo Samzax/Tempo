@@ -12,10 +12,22 @@ func _init(owner: Node, effects: Array[EffectDef]) -> void:
 		if effect != null:
 			_effects.append(effect)
 
+## Adiciona efeitos em tempo de execucao ao dispatcher.
+func add_effects(effects: Array[EffectDef]) -> void:
+	for effect in effects:
+		if effect != null:
+			_effects.append(effect)
+
+## Remove efeitos em tempo de execucao e suas recargas associadas.
+func remove_effects(effects: Array[EffectDef]) -> void:
+	for effect in effects:
+		_effects.erase(effect)
+		_cooldowns.erase(effect)
+
 func dispatch(event: StringName, payload: Variant, depth: int) -> void:
 	if depth > 3:
 		return
-	for effect in _effects:
+	for effect in _effects.duplicate():
 		if effect.event != event:
 			continue
 		if _cooldowns.get(effect, 0.0) > 0.0:
