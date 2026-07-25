@@ -5,6 +5,9 @@ extends CharacterBody2D
 ## diferentes (perseguidor, serpente, descida reta...).
 
 enum Movement { CHASE, DESCEND, SINE }
+enum ResolveReason { DIED, CULLED }
+
+signal resolved(enemy: Enemy, reason: int)
 
 @export var max_health: float = 3.0
 @export var speed: float = 60.0
@@ -21,6 +24,8 @@ const BURST_FX := preload("res://scenes/effects/burst_fx.tscn")
 var _player: Node2D = null
 var _effects: Node = null
 var _phase: float = 0.0
+var _resolved: bool = false
+var _room_cull_policy: int = RoomDef.CullPolicy.DESPAWN_BOTTOM
 var _bounds: Vector2 = Vector2(
 	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
 	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
@@ -48,8 +53,12 @@ func _physics_process(delta: float) -> void:
 		Movement.SINE:
 			velocity = Vector2(sin(_phase * 3.0) * speed, speed * 0.6)
 	move_and_slide()
-	if global_position.y > _bounds.y + 40.0:
+	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM and global_position.y > _bounds.y + 40.0:
+		_resolve(ResolveReason.CULLED)
 		queue_free()
+
+func set_room_cull_policy(policy: int) -> void:
+	_room_cull_policy = policy
 
 ## Recebe dano dos projéteis do jogador.
 func take_damage(info: DamageInfo) -> void:
@@ -58,10 +67,19 @@ func take_damage(info: DamageInfo) -> void:
 	health.apply_damage(info)
 
 func _on_died(fatal_info: DamageInfo) -> void:
+	if _resolved:
+		return
 	GameState.score += score_value
 	EventBus.enemy_died.emit(self, fatal_info)
 	_spawn_burst()
+	_resolve(ResolveReason.DIED)
 	queue_free()
+
+func _resolve(reason: int) -> void:
+	if _resolved:
+		return
+	_resolved = true
+	resolved.emit(self, reason)
 
 func _spawn_burst() -> void:
 	if _effects == null:

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="RoomDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/rooms/room_def.gd" id="1_room_def"]
+
+[resource]
+script = ExtResource("1_room_def")
+id = &"opening"
+room_type = 0
+camera_policy = 0
+cull_policy = 0
+clear_policy = 0
+finite_spawn_count = 5
