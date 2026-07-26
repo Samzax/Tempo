@@ -3,5 +3,4 @@ extends Node2D
 ## A montagem de mundo, jogador e diretores acontece nas tarefas seguintes.
 
 func _ready() -> void:
-	RunManager.start_run(RunManager.DEFAULT_SEED)
-	$RewardChest.offer_requested.connect($UI/ItemChoice.open_offer)
+	pass

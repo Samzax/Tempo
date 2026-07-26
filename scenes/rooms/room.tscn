@@ -1,0 +1,24 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/directors/spawn_director.gd" id="1_director"]
+[ext_resource type="Script" path="res://scripts/rooms/room_controller.gd" id="2_controller"]
+[ext_resource type="Script" path="res://scripts/loot/reward_chest.gd" id="3_chest"]
+
+[node name="Room" type="Node2D"]
+
+[node name="Enemies" type="Node2D" parent="." groups=["enemies_container"]]
+
+[node name="Directors" type="Node" parent="."]
+
+[node name="SpawnDirector" type="Node" parent="Directors"]
+script = ExtResource("1_director")
+
+[node name="RoomController" type="Node" parent="."]
+script = ExtResource("2_controller")
+director_path = NodePath("../Directors/SpawnDirector")
+room_root_path = NodePath("..")
+
+[node name="RewardChest" type="Node2D" parent="."]
+position = Vector2(240, 218)
+script = ExtResource("3_chest")
+room_controller_path = NodePath("../RoomController")
