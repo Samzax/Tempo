@@ -7,9 +7,9 @@ extends Control
 
 var _controller: SandboxController
 var _status: Label
-var _stat_id: LineEdit
+var _stat_id: OptionButton
 var _stat_value: LineEdit
-var _item_id: LineEdit
+var _item_id: OptionButton
 var _amount: SpinBox
 var _god_mode: CheckButton
 var _seed: LineEdit
@@ -54,14 +54,32 @@ func _build_ui() -> void:
 	title.text = "Sandbox (F10)"
 	box.add_child(title)
 	var stats := HBoxContainer.new()
-	_stat_id = _line("stat id", "max_health")
+	_stat_id = OptionButton.new()
+	_stat_id.custom_minimum_size.x = 70
+	var stat_ids: Array[String] = []
+	for stat: StatDef in StatCatalog.get_all():
+		stat_ids.append(String(stat.id))
+	stat_ids.sort()
+	for stat_id: String in stat_ids:
+		_stat_id.add_item(stat_id)
+	if not stat_ids.is_empty():
+		_stat_id.select(0)
 	_stat_value = _line("valor", "10")
 	stats.add_child(_stat_id)
 	stats.add_child(_stat_value)
 	stats.add_child(_button("Definir stat", _on_set_stat))
 	box.add_child(stats)
 	var items := HBoxContainer.new()
-	_item_id = _line("item id", "")
+	_item_id = OptionButton.new()
+	_item_id.custom_minimum_size.x = 70
+	var item_ids: Array[String] = []
+	for item: ItemDef in ItemCatalog.get_all():
+		item_ids.append(String(item.id))
+	item_ids.sort()
+	for item_id: String in item_ids:
+		_item_id.add_item(item_id)
+	if not item_ids.is_empty():
+		_item_id.select(0)
 	_amount = SpinBox.new()
 	_amount.min_value = 1
 	_amount.max_value = 99
@@ -119,16 +137,28 @@ func _button(label: String, callback: Callable) -> Button:
 	return button
 
 func _on_set_stat() -> void:
+	if _stat_id.item_count == 0 or _stat_id.selected < 0:
+		_status.text = "Nenhuma stat disponivel."
+		return
 	if not _stat_value.text.is_valid_float():
 		_status.text = "Valor invalido."
 		return
-	_status.text = "Stat atualizado." if _controller.set_stat_override(StringName(_stat_id.text), _stat_value.text.to_float()) else "Stat invalido."
+	var stat_id := StringName(_stat_id.get_item_text(_stat_id.selected))
+	_status.text = "Stat atualizado." if _controller.set_stat_override(stat_id, _stat_value.text.to_float()) else "Stat invalido."
 
 func _on_grant_item() -> void:
-	_status.text = "%d item(ns) adicionados." % _controller.grant_item(StringName(_item_id.text), int(_amount.value))
+	if _item_id.item_count == 0 or _item_id.selected < 0:
+		_status.text = "Nenhum item disponivel."
+		return
+	var item_id := StringName(_item_id.get_item_text(_item_id.selected))
+	_status.text = "%d item(ns) adicionados." % _controller.grant_item(item_id, int(_amount.value))
 
 func _on_remove_item() -> void:
-	_status.text = "%d item(ns) removidos." % _controller.remove_item(StringName(_item_id.text), int(_amount.value))
+	if _item_id.item_count == 0 or _item_id.selected < 0:
+		_status.text = "Nenhum item disponivel."
+		return
+	var item_id := StringName(_item_id.get_item_text(_item_id.selected))
+	_status.text = "%d item(ns) removidos." % _controller.remove_item(item_id, int(_amount.value))
 
 func _on_heal() -> void:
 	_status.text = "Vida restaurada." if _controller.heal_player() else "Jogador indisponivel."

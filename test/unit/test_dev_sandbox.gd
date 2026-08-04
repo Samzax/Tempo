@@ -73,14 +73,15 @@ func test_invalid_stat_and_seed_inputs_do_not_call_controller_or_mutate_state() 
 	add_child_autofree(sandbox_ui)
 	sandbox_ui._controller = SandboxController.new(player, session)
 	sandbox_ui._status = Label.new()
-	sandbox_ui._stat_id = LineEdit.new()
+	sandbox_ui._stat_id = OptionButton.new()
 	sandbox_ui._stat_value = LineEdit.new()
 	sandbox_ui._seed = LineEdit.new()
 	add_child_autofree(sandbox_ui._status)
 	add_child_autofree(sandbox_ui._stat_id)
 	add_child_autofree(sandbox_ui._stat_value)
 	add_child_autofree(sandbox_ui._seed)
-	sandbox_ui._stat_id.text = "max_health"
+	sandbox_ui._stat_id.add_item("max_health")
+	sandbox_ui._stat_id.select(0)
 	sandbox_ui._stat_value.text = "not-a-float"
 	sandbox_ui._seed.text = "not-an-int"
 	sandbox_ui._on_set_stat()
@@ -90,6 +91,100 @@ func test_invalid_stat_and_seed_inputs_do_not_call_controller_or_mutate_state() 
 	assert_false(session.warp_called)
 	assert_eq(player.stat_override_value, 0.0)
 	assert_eq(session.warp_args, [])
+
+func test_build_ui_populates_sorted_stat_and_item_dropdowns() -> void:
+	var sandbox_ui := SandboxUI.new()
+	add_child_autofree(sandbox_ui)
+	sandbox_ui._build_ui()
+	var expected_stats: Array[String] = []
+	for stat: StatDef in StatCatalog.get_all():
+		expected_stats.append(String(stat.id))
+	expected_stats.sort()
+	var actual_stats: Array[String] = []
+	for index in sandbox_ui._stat_id.item_count:
+		actual_stats.append(sandbox_ui._stat_id.get_item_text(index))
+	assert_eq(actual_stats, expected_stats)
+	assert_eq(sandbox_ui._stat_id.selected, 0 if not expected_stats.is_empty() else -1)
+	var expected_items: Array[String] = []
+	for item: ItemDef in ItemCatalog.get_all():
+		expected_items.append(String(item.id))
+	expected_items.sort()
+	var actual_items: Array[String] = []
+	for index in sandbox_ui._item_id.item_count:
+		actual_items.append(sandbox_ui._item_id.get_item_text(index))
+	assert_eq(actual_items, expected_items)
+	assert_eq(sandbox_ui._item_id.selected, 0 if not expected_items.is_empty() else -1)
+
+func test_valid_stat_selection_sends_selected_id_and_value() -> void:
+	var stats := StatBlock.new(StatCatalog.get_all())
+	var player := SandboxPlayerDouble.new(stats, null)
+	var sandbox_ui := SandboxUI.new()
+	add_child_autofree(player)
+	add_child_autofree(sandbox_ui)
+	sandbox_ui._controller = SandboxController.new(player, null)
+	sandbox_ui._build_ui()
+	for index in sandbox_ui._stat_id.item_count:
+		if sandbox_ui._stat_id.get_item_text(index) == "luck":
+			sandbox_ui._stat_id.select(index)
+			break
+	sandbox_ui._stat_value.text = "2.25"
+	sandbox_ui._on_set_stat()
+	assert_eq(player.stat_override_id, &"luck")
+	assert_eq(player.stat_override_value, 2.25)
+	assert_eq(sandbox_ui._status.text, "Stat atualizado.")
+
+func test_valid_item_actions_send_selected_id_and_amount() -> void:
+	var player := SandboxPlayerDouble.new(null, null)
+	var sandbox_ui := SandboxUI.new()
+	add_child_autofree(player)
+	add_child_autofree(sandbox_ui)
+	sandbox_ui._controller = SandboxController.new(player, null)
+	sandbox_ui._build_ui()
+	sandbox_ui._item_id.select(0)
+	sandbox_ui._amount.value = 3
+	var selected_id := StringName(sandbox_ui._item_id.get_item_text(0))
+	sandbox_ui._on_grant_item()
+	assert_eq(player.grant_item_id, selected_id)
+	assert_eq(player.grant_item_amount, 3)
+	sandbox_ui._on_remove_item()
+	assert_eq(player.remove_item_id, selected_id)
+	assert_eq(player.remove_item_amount, 3)
+
+func test_empty_dropdowns_do_not_call_controller_and_set_status() -> void:
+	var player := SandboxPlayerDouble.new(null, null)
+	var sandbox_ui := SandboxUI.new()
+	add_child_autofree(player)
+	add_child_autofree(sandbox_ui)
+	sandbox_ui._controller = SandboxController.new(player, null)
+	sandbox_ui._build_ui()
+	sandbox_ui._stat_id.clear()
+	sandbox_ui._item_id.clear()
+	sandbox_ui._on_set_stat()
+	assert_eq(sandbox_ui._status.text, "Nenhuma stat disponivel.")
+	assert_false(player.stat_override_called)
+	sandbox_ui._on_grant_item()
+	assert_eq(sandbox_ui._status.text, "Nenhum item disponivel.")
+	assert_eq(player.grant_item_calls, 0)
+	sandbox_ui._on_remove_item()
+	assert_eq(sandbox_ui._status.text, "Nenhum item disponivel.")
+	assert_eq(player.remove_item_calls, 0)
+
+func test_unselected_dropdowns_do_not_call_controller_and_set_status() -> void:
+	var player := SandboxPlayerDouble.new(null, null)
+	var sandbox_ui := SandboxUI.new()
+	add_child_autofree(player)
+	add_child_autofree(sandbox_ui)
+	sandbox_ui._controller = SandboxController.new(player, null)
+	sandbox_ui._build_ui()
+	sandbox_ui._stat_id.select(-1)
+	sandbox_ui._item_id.select(-1)
+	sandbox_ui._on_set_stat()
+	assert_eq(sandbox_ui._status.text, "Nenhuma stat disponivel.")
+	sandbox_ui._on_grant_item()
+	assert_eq(sandbox_ui._status.text, "Nenhum item disponivel.")
+	assert_eq(player.grant_item_calls, 0)
+	sandbox_ui._on_remove_item()
+	assert_eq(player.remove_item_calls, 0)
 
 func test_sandbox_overlay_pauses_and_restores_previous_state() -> void:
 	var sandbox_ui := SandboxUI.new()
@@ -167,13 +262,21 @@ class SandboxPlayerDouble extends Node:
 	var healed := false
 	var invulnerable := false
 	var stat_override_called := false
+	var stat_override_id: StringName
 	var stat_override_value := 0.0
+	var grant_item_id: StringName
+	var grant_item_amount := 0
+	var grant_item_calls := 0
+	var remove_item_id: StringName
+	var remove_item_amount := 0
+	var remove_item_calls := 0
 	func _init(new_stats: StatBlock, new_inventory: Inventory, new_item: ItemDef = null) -> void:
 		stats = new_stats
 		inventory = new_inventory
 		item = new_item
 	func sandbox_set_stat_override(stat_id: StringName, value: float) -> bool:
 		stat_override_called = true
+		stat_override_id = stat_id
 		stat_override_value = value
 		if not StatCatalog.has_stat(stat_id):
 			return false
@@ -184,6 +287,11 @@ class SandboxPlayerDouble extends Node:
 		stats.set_base(stat_id, normalized)
 		return true
 	func sandbox_grant_item(item_id: StringName, amount: int) -> int:
+		grant_item_id = item_id
+		grant_item_amount = amount
+		grant_item_calls += 1
+		if item == null:
+			return amount
 		if item == null or item.id != item_id:
 			return 0
 		var count := 0
@@ -193,6 +301,11 @@ class SandboxPlayerDouble extends Node:
 			count += 1
 		return count
 	func sandbox_remove_item(item_id: StringName, amount: int) -> int:
+		remove_item_id = item_id
+		remove_item_amount = amount
+		remove_item_calls += 1
+		if inventory == null:
+			return amount
 		var removed := 0
 		for _index in maxi(0, amount):
 			if inventory == null or inventory.count(item_id) <= 0:
