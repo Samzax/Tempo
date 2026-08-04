@@ -35,6 +35,7 @@ var _ability_q_cd_duration: float = 0.0
 var _ability_e_cd: float = 0.0
 var _ability_e_cd_duration: float = 0.0
 var _invuln_timer: float = 0.0
+var is_sandbox_invulnerable: bool = false
 var _aim_vector: Vector2 = Vector2.UP
 var _last_aim_source: AimSource = AimSource.NONE
 var _joypad_aim_was_active: bool = false
@@ -78,6 +79,47 @@ func acquire_item(item: ItemDef) -> bool:
 
 func can_acquire_item(item: ItemDef) -> bool:
 	return item != null and _inventory != null and _inventory.count(item.id) < item.max_stacks
+
+## APIs usadas exclusivamente pelo overlay de sandbox.
+func sandbox_set_stat_override(stat_id: StringName, value: float) -> bool:
+	if _stats == null or not StatCatalog.has_stat(stat_id):
+		return false
+	var definition := StatCatalog.get_stat(stat_id)
+	var normalized := clampf(value, definition.default_min, definition.default_max)
+	if definition.is_integer:
+		normalized = float(roundi(normalized))
+	_stats.set_base(stat_id, normalized)
+	if stat_id == &"max_health":
+		health.max_health = normalized
+		health.health = minf(health.health, health.max_health)
+	return true
+
+func sandbox_grant_item(item_id: StringName, amount: int) -> int:
+	if _inventory == null or not ItemCatalog.is_valid(item_id):
+		return 0
+	var granted := 0
+	var item := ItemCatalog.get_item(item_id)
+	for _index in maxi(0, amount):
+		if not _inventory.acquire(item):
+			break
+		granted += 1
+	return granted
+
+func sandbox_remove_item(item_id: StringName, amount: int) -> int:
+	if _inventory == null:
+		return 0
+	var removed := 0
+	for _index in maxi(0, amount):
+		if not _inventory.remove_one(item_id):
+			break
+		removed += 1
+	return removed
+
+func sandbox_heal_full() -> void:
+	health.heal(health.max_health)
+
+func sandbox_set_invulnerable(enabled: bool) -> void:
+	is_sandbox_invulnerable = enabled
 
 func get_luck() -> float:
 	return _stats.get_stat(&"luck") if _stats != null else 0.0
@@ -133,7 +175,7 @@ func _refresh_mouse_aim() -> void:
 
 ## Verdadeiro enquanto a nave está em i-frames (blink, dano ou renascimento).
 func is_invulnerable() -> bool:
-	return _invuln_timer > 0.0
+	return is_sandbox_invulnerable or _invuln_timer > 0.0
 
 ## Estende a invulnerabilidade atual pelo tempo informado.
 func grant_invuln(duration: float) -> void:

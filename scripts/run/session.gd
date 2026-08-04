@@ -20,6 +20,7 @@ var _hyperspace: HyperspaceUI
 var _active_room: Node
 var _room_active := false
 var _awaiting_boss_advance := false
+var _room_generation := 0
 
 func _ready() -> void:
 	_player = get_node_or_null(player_path) as Node2D
@@ -45,6 +46,8 @@ func start_new_run(seed_value: int) -> void:
 func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	if _room_active or sector == null or sector.get_node(node_id) == null:
 		return
+	_room_generation += 1
+	var room_generation := _room_generation
 	run_state.current_node_id = node_id
 	_room_active = true
 	_hyperspace.hide()
@@ -55,23 +58,25 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	var chest := room.get_node("RewardChest") as RewardChest
 	controller.room_def = _room_def_for(node_def, is_revisit)
 	chest.configure(_player, run_state.sector_index, node_id, 0, 0, _pool_for(node_def), run_state.get_offer(run_state.sector_index, node_id, 0, 0))
-	controller.room_cleared.connect(_on_room_cleared.bind(node_def))
+	controller.room_cleared.connect(_on_room_cleared.bind(node_def, room_generation))
 	chest.offer_created.connect(run_state.save_offer)
 	chest.offer_requested.connect(_open_offer)
 	_room_host.add_child(room)
 	_active_room = room
 	_player.global_position = Vector2(240, 135)
 
-func _on_room_cleared(node_def: SectorNode) -> void:
-	if not _room_active:
+func _on_room_cleared(node_def: SectorNode, room_generation: int) -> void:
+	if room_generation != _room_generation or not _room_active:
 		return
 	run_state.mark_completed(run_state.sector_index, node_def.id)
 	_room_active = false
 	# RewardChest is another listener of room_cleared. Finish this transition on
 	# the next idle turn so its offer is persisted before the map is populated.
-	call_deferred(&"_finish_room_clear", node_def)
+	call_deferred(&"_finish_room_clear", node_def, room_generation)
 
-func _finish_room_clear(node_def: SectorNode) -> void:
+func _finish_room_clear(node_def: SectorNode, room_generation: int) -> void:
+	if room_generation != _room_generation:
+		return
 	_persist_active_offer()
 	if node_def.node_type == SectorNode.NodeType.BOSS:
 		_awaiting_boss_advance = true
@@ -132,6 +137,7 @@ func _on_sector_advance_requested() -> void:
 	_advance_after_boss()
 
 func _dispose_active_room() -> void:
+	_room_generation += 1
 	_persist_active_offer()
 	if is_instance_valid(_active_room):
 		var director := _active_room.get_node_or_null("Directors/SpawnDirector")
@@ -139,9 +145,41 @@ func _dispose_active_room() -> void:
 			director.call(&"stop")
 		for enemy in _active_room.get_node("Enemies").get_children():
 			enemy.queue_free()
+		var controller := _active_room.get_node_or_null("RoomController") as RoomController
+		var old_runtime := controller.runtime if controller != null else null
+		if old_runtime != null:
+			for projectile in get_tree().get_nodes_in_group(&"enemy_projectiles"):
+				if projectile is Node and projectile.get_meta(&"room_runtime", null) == old_runtime:
+					projectile.queue_free()
 		_active_room.get_parent().remove_child(_active_room)
 		_active_room.queue_free()
 	_active_room = null
+
+## Entrada validada para o overlay de sandbox. A sala anterior e descartada antes da nova Runtime existir.
+func sandbox_warp(seed_value: int, sector_index: int, node_id: int, node_type: int) -> bool:
+	if sector_index < 0 or sector_index > 2:
+		return false
+	var target_sector := SectorGenerator.generate(seed_value, sector_index)
+	var target_node := target_sector.get_node(node_id)
+	if target_node == null or target_node.node_type != node_type:
+		return false
+	_dispose_active_room()
+	RunManager.start_run(seed_value)
+	run_state = RunState.new()
+	run_state.run_seed = seed_value
+	run_state.sector_index = sector_index
+	run_state.current_node_id = node_id
+	sector = target_sector
+	_room_active = false
+	_awaiting_boss_advance = false
+	_enter_node(node_id)
+	return true
+
+func sandbox_clear_room() -> bool:
+	if not _room_active or not is_instance_valid(_active_room):
+		return false
+	var controller := _active_room.get_node_or_null("RoomController") as RoomController
+	return controller != null and controller.sandbox_clear()
 
 func _persist_active_offer() -> void:
 	if not is_instance_valid(_active_room) or run_state == null:

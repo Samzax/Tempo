@@ -83,6 +83,22 @@ func register_enemy_projectile(projectile: Node) -> void:
 		return
 	projectile.set_meta(PROJECTILE_RUNTIME_META, runtime)
 
+## Encerra os spawns e elimina inimigos por dano para manter o ciclo normal da sala.
+func sandbox_clear() -> bool:
+	if _is_tearing_down or runtime == null or runtime.is_cleared():
+		return false
+	if _director != null and _director.has_method(&"stop"):
+		_director.call(&"stop")
+	runtime.mark_spawns_finished()
+	for enemy in _observed_enemies.duplicate():
+		if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
+			continue
+		var info := DamageInfo.new()
+		info.amount = enemy.health.health
+		info.tags = [&"sandbox"]
+		enemy.take_damage(info)
+	return true
+
 ## Registra projeteis hostis quando entram nesta sala, inclusive apos seu inicio.
 func _enter_tree() -> void:
 	if _room_root != null:
