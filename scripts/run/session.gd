@@ -102,6 +102,9 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 func _on_room_cleared(node_def: SectorNode, room_generation: int) -> void:
 	if room_generation != _room_generation or not _room_active:
 		return
+	var is_first_clear := not run_state.is_completed(run_state.sector_index, node_def.id)
+	if is_first_clear and _player != null and _player.has_method(&"on_room_clear"):
+		_player.call(&"on_room_clear")
 	run_state.mark_completed(run_state.sector_index, node_def.id)
 	_room_active = false
 	# RewardChest is another listener of room_cleared. Finish this transition on

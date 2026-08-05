@@ -43,6 +43,7 @@ var _effects: Node = null
 var _stats: StatBlock
 var _dispatcher: EffectDispatcher
 var _inventory: Inventory
+var _base_sprite_frames: SpriteFrames = null
 var _bounds: Vector2 = Vector2(
 	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
 	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
@@ -109,24 +110,30 @@ func _configure_loadout() -> void:
 		health.max_health = _stats.get_stat(&"max_health")
 		health.health = health.max_health
 
-## Troca somente o atlas de cada frame; regioes, animacoes e o casco sem rotacao sao preservados.
+## Restaura os frames base e, quando houver textura, troca somente o atlas de cada frame.
+## Regioes, animacoes e o casco sem rotacao sao preservados.
 func _apply_hull_texture() -> void:
-	if sprite == null or ship == null or ship.hull_texture == null:
+	if sprite == null:
+		return
+	if _base_sprite_frames == null:
+		_base_sprite_frames = sprite.sprite_frames
+	if _base_sprite_frames == null:
 		return
 	# SpriteFrames pode ser compartilhado por instancias da cena. Duplica-lo evita
 	# que a escolha de um jogador altere o casco de outro em co-op.
-	var frames := sprite.sprite_frames.duplicate(true) as SpriteFrames
+	var frames := _base_sprite_frames.duplicate(true) as SpriteFrames
 	if frames == null:
 		return
-	for animation_name in frames.get_animation_names():
-		for frame_index in frames.get_frame_count(animation_name):
-			var old_texture := frames.get_frame_texture(animation_name, frame_index)
-			var atlas_frame := old_texture as AtlasTexture
-			if atlas_frame == null:
-				continue
-			var replacement := atlas_frame.duplicate() as AtlasTexture
-			replacement.atlas = ship.hull_texture
-			frames.set_frame(animation_name, frame_index, replacement)
+	if ship != null and ship.hull_texture != null:
+		for animation_name in frames.get_animation_names():
+			for frame_index in frames.get_frame_count(animation_name):
+				var old_texture := frames.get_frame_texture(animation_name, frame_index)
+				var atlas_frame := old_texture as AtlasTexture
+				if atlas_frame == null:
+					continue
+				var replacement := atlas_frame.duplicate() as AtlasTexture
+				replacement.atlas = ship.hull_texture
+				frames.set_frame(animation_name, frame_index, replacement)
 	sprite.sprite_frames = frames
 
 ## Substitui o buff ativo da habilidade para evitar colisao de source_id e
@@ -264,8 +271,15 @@ func blink_cooldown_ratio() -> float:
 		return 0.0
 	return clampf(_blink_cd / _blink_cd_duration, 0.0, 1.0)
 
+func blink_cooldown_duration() -> float:
+	if _stats == null:
+		return BLINK_BASE_COOLDOWN
+	return BLINK_BASE_COOLDOWN / maxf(_stats.get_stat(&"blink_haste"), 0.001)
+
 ## Fracao de recarga da habilidade da nave (0 = pronta, 1 = acabou de usar).
 func ability_q_cooldown_ratio() -> float:
+	if _ability_q is InterceptorBlinkAbility:
+		return blink_cooldown_ratio()
 	if _ability_q_cd <= 0.0 or _ability_q_cd_duration <= 0.0:
 		return 0.0
 	return clampf(_ability_q_cd / _ability_q_cd_duration, 0.0, 1.0)
@@ -285,10 +299,13 @@ func _tick_timers(delta: float) -> void:
 
 ## Blink: teleporte instantâneo na direção da mira,
 ## com efeito de colapso na origem e no destino, i-frames e recarga.
-func _handle_blink_input() -> bool:
-	if _blink_cd > 0.0 or not Input.is_action_just_pressed("blink"):
+func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
+	if _stats == null or _dispatcher == null or _blink_cd > 0.0:
 		return false
-	var bdir := _aim_vector
+	var requested_direction := direction
+	if requested_direction == Vector2.ZERO:
+		requested_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var bdir := requested_direction.normalized() if requested_direction != Vector2.ZERO else _aim_vector
 	var origin := global_position
 	var m := 10.0
 	var dest := origin + bdir * _stats.get_stat(&"blink_distance")
@@ -298,26 +315,36 @@ func _handle_blink_input() -> bool:
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
 	_dispatcher.dispatch(&"on_blink", null, 0)
-	var cd := BLINK_BASE_COOLDOWN / _stats.get_stat(&"blink_haste")
-	_blink_cd = cd
-	_blink_cd_duration = cd
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))
 	_spawn_teleport_fx(origin)
 	_spawn_teleport_fx(dest)
+	var cooldown := blink_cooldown_duration()
+	_blink_cd = cooldown
+	_blink_cd_duration = cooldown
 	return true
 
 ## Ativa as habilidades equipadas quando seus slots estao prontos.
+func _handle_blink_input() -> bool:
+	return Input.is_action_just_pressed("blink") and try_blink()
+
 func _handle_ability_input() -> void:
 	if Input.is_action_just_pressed("ability_q") and _ability_q != null and _ability_q_cd <= 0.0:
 		if _ability_q.try_activate(self):
-			_ability_q_cd = _ability_q.cooldown
-			_ability_q_cd_duration = _ability_q.cooldown
+			var q_cooldown := _ability_q.get_cooldown(self)
+			_ability_q_cd = q_cooldown
+			_ability_q_cd_duration = q_cooldown
 			EventBus.ability_used.emit(&"ability_q")
 	if Input.is_action_just_pressed("ability_e") and _ability_e != null and _ability_e_cd <= 0.0:
 		if _ability_e.try_activate(self):
-			_ability_e_cd = _ability_e.cooldown
-			_ability_e_cd_duration = _ability_e.cooldown
+			var e_cooldown := _ability_e.get_cooldown(self)
+			_ability_e_cd = e_cooldown
+			_ability_e_cd_duration = e_cooldown
 			EventBus.ability_used.emit(&"ability_e")
+
+## Notifica os efeitos do jogador apos a conclusao valida de uma sala.
+func on_room_clear() -> void:
+	if _dispatcher != null:
+		_dispatcher.dispatch(&"on_room_clear", null, 0)
 
 ## Leva dano por contato enquanto um inimigo estiver sobreposto e não houver i-frames.
 func _check_contact() -> void:

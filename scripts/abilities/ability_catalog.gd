@@ -10,9 +10,11 @@ static func _ensure() -> void:
 		var overdrive := OverdriveAbility.new()
 		var shield := ShieldAbility.new()
 		var engineer_deploy := EngineerDeployAbility.new()
+		var interceptor_blink := InterceptorBlinkAbility.new()
 		_abilities[overdrive.id] = overdrive
 		_abilities[shield.id] = shield
 		_abilities[engineer_deploy.id] = engineer_deploy
+		_abilities[interceptor_blink.id] = interceptor_blink
 		var guardian_shield := GuardianShieldAbility.new()
 		var hacker_overdrive := HackerOverdriveAbility.new()
 		var time_warp := TimeWarpAbility.new()

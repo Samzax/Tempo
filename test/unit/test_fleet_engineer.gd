@@ -24,6 +24,57 @@ func test_loadout_uses_catalogued_ship_and_character_defaults() -> void:
 	assert_eq(player.character.id, &"piloto_base")
 	assert_eq(player._stats.get_stat(&"max_health"), 3.0)
 
+func test_base_ship_is_a_valid_shipdef_with_expected_loadout_contract() -> void:
+	var base_ship := load("res://resources/ships/base.tres") as ShipDef
+	assert_not_null(base_ship)
+	assert_eq(base_ship.id, &"nave_base")
+	assert_false(base_ship.ability_q.is_empty())
+	assert_eq(base_ship.validate_content(), [])
+
+func test_configure_ship_reapplies_stats_ability_and_preserves_atlas_regions() -> void:
+	var player := preload("res://scenes/player/player.tscn").instantiate() as Player
+	add_child_autofree(player)
+	var frames_before := player.sprite.sprite_frames
+	var regions_before: Array[Rect2] = []
+	for animation_name in frames_before.get_animation_names():
+		for frame_index in frames_before.get_frame_count(animation_name):
+			var atlas := frames_before.get_frame_texture(animation_name, frame_index) as AtlasTexture
+			if atlas != null:
+				regions_before.append(atlas.region)
+	var base_ship := ShipCatalog.get_ship(&"nave_base")
+	assert_true(player.configure_ship(base_ship))
+	assert_eq(player._stats.get_stat(&"max_health"), 3.0)
+	assert_eq(player._ability_q.id, base_ship.ability_q)
+	assert_eq(player.health.max_health, 3.0)
+	var regions_after: Array[Rect2] = []
+	for animation_name in player.sprite.sprite_frames.get_animation_names():
+		for frame_index in player.sprite.sprite_frames.get_frame_count(animation_name):
+			var atlas := player.sprite.sprite_frames.get_frame_texture(animation_name, frame_index) as AtlasTexture
+			if atlas != null:
+				regions_after.append(atlas.region)
+	assert_eq(regions_after, regions_before)
+
+func test_textured_ship_switch_back_restores_base_sprite_frames() -> void:
+	var player := preload("res://scenes/player/player.tscn").instantiate() as Player
+	add_child_autofree(player)
+	var base_frames := player.sprite.sprite_frames
+	var base_frame := base_frames.get_frame_texture(&"neutral", 0) as AtlasTexture
+	assert_not_null(base_frame)
+
+	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_bruta")))
+	var textured_frame := player.sprite.sprite_frames.get_frame_texture(&"neutral", 0) as AtlasTexture
+	assert_ne(player.sprite.sprite_frames, base_frames)
+	assert_not_null(textured_frame)
+	assert_eq(textured_frame.atlas.resource_path, "res://assets/sprites/bruta.png")
+	assert_eq(textured_frame.region, Rect2(0, 0, 16, 24))
+
+	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_base")))
+	var restored_frame := player.sprite.sprite_frames.get_frame_texture(&"neutral", 0) as AtlasTexture
+	assert_ne(player.sprite.sprite_frames, base_frames)
+	assert_not_null(restored_frame)
+	assert_eq(restored_frame.atlas.resource_path, base_frame.atlas.resource_path)
+	assert_eq(restored_frame.region, base_frame.region)
+
 func test_engineer_ability_has_stable_id_and_failed_activation_has_no_effect() -> void:
 	var ability := AbilityCatalog.get_ability(&"engenheira_deploy")
 	assert_true(ability is EngineerDeployAbility)
@@ -33,6 +84,17 @@ func test_engineer_ability_has_stable_id_and_failed_activation_has_no_effect() -
 	var player := Node2D.new()
 	add_child_autofree(player)
 	assert_false(ability.try_activate(player))
+
+func test_engineer_ability_try_activate_reports_success_and_deploy_failure() -> void:
+	var ability := AbilityCatalog.get_ability(&"engenheira_deploy") as EngineerDeployAbility
+	var player := DeployPlayerStub.new()
+	add_child_autofree(player)
+
+	assert_true(ability.try_activate(player))
+	assert_eq(player.deploy_calls, 1)
+	player.should_deploy = false
+	assert_false(ability.try_activate(player))
+	assert_eq(player.deploy_calls, 2)
 
 func _session_with_room() -> TestSession:
 	var host := Node2D.new()
@@ -88,6 +150,41 @@ func test_room_disposal_removes_deployables_and_active_room() -> void:
 	assert_null(session._active_room)
 	assert_true(room.is_queued_for_deletion())
 
+func test_room_clear_dispatches_once_and_not_again_on_revisit() -> void:
+	var session := _session_with_room()
+	session.run_state = RunState.new()
+	session.run_state.sector_index = 0
+	session._room_generation = 1
+	var player := RoomClearPlayerStub.new()
+	player.name = "Player"
+	session.get_node("../Player").replace_by(player)
+	session._player = player
+	var node_def := SectorNode.new()
+	node_def.id = 17
+
+	session._on_room_cleared(node_def, 1)
+	assert_eq(player.room_clear_calls, 1)
+	assert_false(session._room_active)
+
+	# Re-entry/revisit of an already completed node must not dispatch again.
+	session._room_active = true
+	session._on_room_cleared(node_def, 1)
+	assert_eq(player.room_clear_calls, 1)
+
 class TestSession extends Session:
 	func _ready() -> void:
 		add_to_group(&"session")
+
+class DeployPlayerStub extends Node2D:
+	var should_deploy := true
+	var deploy_calls := 0
+
+	func deploy_engineer_gadget() -> bool:
+		deploy_calls += 1
+		return should_deploy
+
+class RoomClearPlayerStub extends Node2D:
+	var room_clear_calls := 0
+
+	func on_room_clear() -> void:
+		room_clear_calls += 1
