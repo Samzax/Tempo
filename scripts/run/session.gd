@@ -21,6 +21,7 @@ var _active_room: Node
 var _room_active := false
 var _awaiting_boss_advance := false
 var _room_generation := 0
+var _has_started := false
 
 func _ready() -> void:
 	_player = get_node_or_null(player_path) as Node2D
@@ -31,9 +32,11 @@ func _ready() -> void:
 		return
 	_hyperspace.node_selected.connect(_on_node_selected)
 	_hyperspace.sector_advance_requested.connect(_on_sector_advance_requested)
-	start_new_run(RunManager.DEFAULT_SEED)
 
 func start_new_run(seed_value: int) -> void:
+	if _has_started:
+		return
+	_has_started = true
 	RunManager.start_run(seed_value)
 	run_state = RunState.new()
 	run_state.run_seed = seed_value
@@ -98,7 +101,7 @@ func _on_node_selected(node_id: int) -> void:
 	_enter_node(node_id, is_revisit)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _room_active or sector == null or _hyperspace.visible:
+	if not _has_started or run_state == null or _room_active or sector == null or _hyperspace.visible:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M:
 		if _awaiting_boss_advance:

@@ -19,7 +19,7 @@ func _ready() -> void:
 	position = Vector2.ZERO
 	size = Vector2(480.0, 270.0)
 	# O mapa precisa ser o alvo GUI do clique; eventos de teclado continuam no
-	# _unhandled_input para preservar Esc, M e Enter.
+	# _unhandled_input para preservar Esc e Enter.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	hide()
 
@@ -99,18 +99,13 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(18, 252), footer, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.72, 0.84))
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
 			hide()
 			get_viewport().set_input_as_handled()
 			return
-		if event.keycode == KEY_M and not visible:
-			show()
-			queue_redraw()
-			get_viewport().set_input_as_handled()
-			return
-	if not visible:
-		return
 	if event.is_action_pressed(&"ui_left") or event.is_action_pressed(&"ui_up"):
 		_cursor = posmod(_cursor - 1, maxi(1, _selectable.size()))
 		queue_redraw()

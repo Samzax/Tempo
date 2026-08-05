@@ -17,6 +17,7 @@ var _sector: SpinBox
 var _node: SpinBox
 var _node_type: OptionButton
 var _tree_was_paused := false
+var _enabled := true
 
 func _ready() -> void:
 	process_mode = PROCESS_MODE_ALWAYS
@@ -25,12 +26,19 @@ func _ready() -> void:
 	hide()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not _enabled:
+		return
 	if event.is_action_pressed(&"dev_sandbox_toggle"):
 		if visible:
 			_close()
 		else:
 			_open()
 		get_viewport().set_input_as_handled()
+
+func set_enabled(enabled: bool) -> void:
+	_enabled = enabled
+	if not _enabled and visible:
+		_close()
 
 func _open() -> void:
 	_tree_was_paused = get_tree().paused

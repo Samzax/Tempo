@@ -1,0 +1,55 @@
+class_name MainMenu
+extends CanvasLayer
+
+signal start_game_requested
+
+@onready var _menu_container: Control = $MenuContainer
+@onready var _background: ColorRect = $Background
+@onready var _start_button: Button = $MenuContainer/StartButton
+@onready var _controls_button: Button = $MenuContainer/ControlsButton
+@onready var _controls_panel: Control = $ControlsPanel
+@onready var _close_button: Button = $ControlsPanel/Panel/MarginContainer/Content/CloseButton
+
+var _start_requested := false
+
+func _ready() -> void:
+	var viewport_size := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
+	)
+	_background.position = Vector2.ZERO
+	_background.size = viewport_size
+	_controls_panel.position = Vector2.ZERO
+	_controls_panel.size = viewport_size
+	_start_button.pressed.connect(_on_start_button_pressed)
+	_controls_button.pressed.connect(_open_controls)
+	_close_button.pressed.connect(_close_controls)
+	_controls_panel.hide()
+	call_deferred(&"_focus_start_button")
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible or not _controls_panel.visible:
+		return
+	if event.is_action_pressed(&"ui_cancel"):
+		_close_controls()
+		get_viewport().set_input_as_handled()
+
+func _on_start_button_pressed() -> void:
+	if _start_requested:
+		return
+	_start_requested = true
+	hide()
+	start_game_requested.emit()
+
+func _open_controls() -> void:
+	_menu_container.hide()
+	_controls_panel.show()
+	_close_button.grab_focus()
+
+func _close_controls() -> void:
+	_controls_panel.hide()
+	_menu_container.show()
+	_controls_button.grab_focus()
+
+func _focus_start_button() -> void:
+	_start_button.grab_focus()

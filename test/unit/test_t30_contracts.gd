@@ -4,6 +4,16 @@ const MAIN_SCENE := preload("res://scenes/main/main.tscn")
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 
 
+class EscapeProbe:
+	extends Node
+
+	var escape_count := 0
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			escape_count += 1
+
+
 func _topology_signature(sector: SectorDef) -> Array:
 	# Node IDs are sector-local implementation details.  The signature only records
 	# the layout and the layout of every outgoing edge.
@@ -83,6 +93,9 @@ func _wait_for(condition: Callable, limit: int, message: String) -> bool:
 func _main() -> Node:
 	var main := MAIN_SCENE.instantiate()
 	add_child_autofree(main)
+	(main.get_node("MainMenu/MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	await get_tree().process_frame
 	return main
 
 
@@ -187,7 +200,7 @@ func test_fixed_seed_sector_set_has_two_real_normalized_topologies() -> void:
 	assert_gte(signatures.size(), 2, "fixed seed set must produce two real normalized topologies")
 
 
-func test_session_starts_automatically_transitions_once_and_preserves_player() -> void:
+func test_session_starts_explicitly_transitions_once_and_preserves_player() -> void:
 	var main := await _main()
 	var session := main.get_node("Session") as Session
 	var map := main.get_node("Session/HyperspaceUI/Map") as HyperspaceUI
@@ -264,7 +277,7 @@ func test_hyperspace_uses_input_pipeline_without_pausing_and_only_selects_presen
 	await _key(KEY_M)
 	for _i in 2:
 		await get_tree().process_frame
-	assert_true(ui.visible)
+	assert_false(ui.visible)
 	assert_false(get_tree().paused)
 	ui.present_sector_advance(sector, {}, false)
 	await _key(KEY_ESCAPE)
@@ -281,6 +294,55 @@ func test_hyperspace_uses_input_pipeline_without_pausing_and_only_selects_presen
 	for _i in 2:
 		await get_tree().process_frame
 	assert_signal_emit_count(ui, &"sector_advance_requested", 1)
+
+
+func test_boot_without_start_keeps_hud_hidden_and_session_uninitialized() -> void:
+	var main := MAIN_SCENE.instantiate()
+	add_child_autofree(main)
+	await get_tree().process_frame
+
+	var hud := main.get_node("UI/HUD") as Control
+	var session := main.get_node("Session") as Session
+	assert_false(hud.visible)
+	assert_null(session.run_state)
+
+
+func test_invisible_hyperspace_does_not_consume_escape() -> void:
+	var ui := HyperspaceUI.new()
+	var probe := EscapeProbe.new()
+	add_child_autofree(ui)
+	add_child_autofree(probe)
+	await get_tree().process_frame
+
+	assert_false(ui.visible)
+	await _key(KEY_ESCAPE)
+	assert_eq(probe.escape_count, 1)
+
+
+func test_invisible_hud_does_not_poll_or_trigger_game_over() -> void:
+	var main := MAIN_SCENE.instantiate()
+	add_child_autofree(main)
+	await get_tree().process_frame
+
+	var hud := main.get_node("UI/HUD") as Control
+	var game_state := get_node_or_null("/root/GameState")
+	if not assert_not_null(game_state, "GameState autoload absent"):
+		return
+	var score_text: String = hud._score.text
+	var lives_text: String = hud._lives.text
+	var prior_score: int = game_state.score
+	var prior_lives: int = game_state.player_lives
+	game_state.score = prior_score + 100
+	game_state.player_lives = 0
+	await get_tree().process_frame
+
+	assert_false(hud.visible)
+	assert_eq(hud._score.text, score_text)
+	assert_eq(hud._lives.text, lives_text)
+	assert_false(hud._game_over.visible)
+	assert_false(get_tree().paused)
+	game_state.score = prior_score
+	game_state.player_lives = prior_lives
 
 
 func test_bosses_advance_sectors_then_complete_once_with_visible_final_state() -> void:

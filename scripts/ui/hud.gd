@@ -124,6 +124,8 @@ func _make_label(size: int, col: Color) -> Label:
 	return l
 
 func _process(_dt: float) -> void:
+	if not is_visible_in_tree():
+		return
 	if _gs != null:
 		_score.text = "PONTOS  %d" % _gs.score
 		_lives.text = "VIDAS  %d" % _gs.player_lives
