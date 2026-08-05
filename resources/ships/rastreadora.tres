@@ -1,8 +1,8 @@
-[gd_resource type="Resource" script_class="ShipDef" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="ShipDef" load_steps=7 format=3 uid="uid://g1v5z7r3t6n8h"]
 
-[ext_resource type="Script" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
-[ext_resource type="Texture2D" path="res://assets/sprites/rastreadora.png" id="2_texture"]
-[ext_resource type="Script" path="res://scripts/stats/base_stat_value.gd" id="3_base_stat"]
+[ext_resource type="Script" uid="uid://dxj8iu0hungha" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
+[ext_resource type="Texture2D" uid="uid://dk5f8paqy4z9c" path="res://assets/sprites/rastreadora.png" id="2_texture"]
+[ext_resource type="Script" uid="uid://ejapxfmnbiux" path="res://scripts/stats/base_stat_value.gd" id="3_base_stat"]
 
 [sub_resource type="Resource" id="BaseStatValue_health"]
 script = ExtResource("3_base_stat")
