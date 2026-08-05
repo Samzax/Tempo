@@ -60,9 +60,13 @@ func deploy_engineer_deployable(player: Node2D) -> bool:
 	_engineer_deploy_sequence += 1
 	return true
 
-func start_new_run(seed_value: int) -> void:
+func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAULT_CHARACTER_ID) -> void:
 	if _has_started:
 		return
+	if _player != null and _player.has_method(&"configure_character"):
+		var current_character := _player.get("character") as CharacterDef
+		if current_character == null or current_character.id != character_id:
+			_player.call(&"configure_character", character_id)
 	_has_started = true
 	RunManager.start_run(seed_value)
 	run_state = RunState.new()

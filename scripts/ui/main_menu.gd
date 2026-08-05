@@ -1,13 +1,15 @@
 class_name MainMenu
 extends CanvasLayer
 
-signal start_game_requested(ship_id: StringName)
+signal start_game_requested(ship_id: StringName, character_id: StringName)
 
 @onready var _menu_container: Control = $MenuContainer
 @onready var _background: ColorRect = $Background
 @onready var _start_button: Button = $MenuContainer/StartButton
 @onready var _controls_button: Button = $MenuContainer/ControlsButton
 @onready var _ship_select: OptionButton = $MenuContainer/ShipSelect
+@onready var _character_option: OptionButton = $MenuContainer/CharacterOption
+@onready var _character_description: Label = $MenuContainer/CharacterDescription
 @onready var _controls_panel: Control = $ControlsPanel
 @onready var _close_button: Button = $ControlsPanel/Panel/MarginContainer/Content/CloseButton
 
@@ -26,6 +28,8 @@ func _ready() -> void:
 	_controls_button.pressed.connect(_open_controls)
 	_populate_ship_select()
 	_close_button.pressed.connect(_close_controls)
+	_character_option.item_selected.connect(_on_character_selected)
+	_populate_characters()
 	_controls_panel.hide()
 	call_deferred(&"_focus_start_button")
 
@@ -44,7 +48,7 @@ func _on_start_button_pressed() -> void:
 		return
 	_start_requested = true
 	hide()
-	start_game_requested.emit(ship_id)
+	start_game_requested.emit(ship_id, _selected_character_id())
 
 func _populate_ship_select() -> void:
 	_ship_select.clear()
@@ -60,6 +64,25 @@ func _selected_ship_id() -> StringName:
 		return &""
 	var selected := clampi(_ship_select.selected, 0, _ship_select.item_count - 1)
 	return StringName(_ship_select.get_item_metadata(selected))
+
+func _populate_characters() -> void:
+	_character_option.clear()
+	for definition in CharacterDef.get_roster():
+		_character_option.add_item(definition.display_name)
+		_character_option.set_item_metadata(_character_option.item_count - 1, definition.id)
+	_character_option.select(0)
+	_refresh_character_description()
+
+func _on_character_selected(_index: int) -> void:
+	_refresh_character_description()
+
+func _selected_character_id() -> StringName:
+	var metadata := _character_option.get_item_metadata(_character_option.selected)
+	return StringName(metadata) if metadata is StringName else CharacterDef.ROSTER_IDS[0]
+
+func _refresh_character_description() -> void:
+	var definition := CharacterDef.resolve_id(_selected_character_id())
+	_character_description.text = definition.description
 
 func _open_controls() -> void:
 	_menu_container.hide()

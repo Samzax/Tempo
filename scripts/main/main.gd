@@ -17,16 +17,19 @@ func _ready() -> void:
 	_dev_sandbox.set_enabled(false)
 	_main_menu.start_game_requested.connect(_on_start_game_requested)
 
-func _on_start_game_requested(ship_id: StringName) -> void:
+func _on_start_game_requested(ship_id: StringName, character_id: StringName) -> void:
 	if _gameplay_started or not ShipCatalog.is_valid(ship_id):
 		return
 	var selected_ship := ShipCatalog.get_ship(ship_id)
 	var player := _world.get_node_or_null("Player") as Player
-	if selected_ship == null or player == null or not player.configure_ship(selected_ship):
+	if selected_ship == null or player == null:
+		return
+	RunManager.select_character(character_id)
+	if not player.configure_selection(selected_ship, RunManager.selected_character_id):
 		return
 	_gameplay_started = true
 	_world.show()
 	_world.process_mode = Node.PROCESS_MODE_INHERIT
 	_hud.show()
 	_dev_sandbox.set_enabled(true)
-	_session.start_new_run(RunManager.DEFAULT_SEED)
+	_session.start_new_run(RunManager.DEFAULT_SEED, RunManager.selected_character_id)

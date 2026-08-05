@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CharacterDef" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/character_def.gd" id="1_character_def"]
+[ext_resource type="Texture2D" path="res://assets/characters/chronomancer.svg" id="2_portrait"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier_def.gd" id="3_modifier"]
+
+[sub_resource type="Resource" id="StatModifierDef_blink_haste"]
+script = ExtResource("3_modifier")
+stat = &"blink_haste"
+op = 0
+value = 0.25
+
+[resource]
+script = ExtResource("1_character_def")
+id = &"chronomancer"
+display_name = "Cronomante"
+description = "Dobra instantes ao redor do blink para reposicionar-se antes do perigo."
+portrait = ExtResource("2_portrait")
+ability_e = &"time_warp"
+tags = Array[StringName]([&"time", &"blink"])
+modifiers = Array[ExtResource("3_modifier")]([SubResource("StatModifierDef_blink_haste")])

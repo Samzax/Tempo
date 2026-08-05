@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CharacterDef" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/character_def.gd" id="1_character_def"]
+[ext_resource type="Texture2D" path="res://assets/characters/guardian.svg" id="2_portrait"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier_def.gd" id="3_modifier"]
+
+[sub_resource type="Resource" id="StatModifierDef_max_health"]
+script = ExtResource("3_modifier")
+stat = &"max_health"
+op = 0
+value = 1.0
+
+[resource]
+script = ExtResource("1_character_def")
+id = &"guardian"
+display_name = "Guardião"
+description = "Defensor resistente que segura a linha quando a pressão aumenta."
+portrait = ExtResource("2_portrait")
+ability_e = &"guardian_shield"
+tags = Array[StringName]([&"void", &"contact"])
+modifiers = Array[ExtResource("3_modifier")]([SubResource("StatModifierDef_max_health")])
