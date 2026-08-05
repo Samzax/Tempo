@@ -33,9 +33,11 @@ func _ready() -> void:
 	_hyperspace.node_selected.connect(_on_node_selected)
 	_hyperspace.sector_advance_requested.connect(_on_sector_advance_requested)
 
-func start_new_run(seed_value: int) -> void:
+func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAULT_CHARACTER_ID) -> void:
 	if _has_started:
 		return
+	if _player != null and _player.has_method(&"configure_character"):
+		_player.call(&"configure_character", character_id)
 	_has_started = true
 	RunManager.start_run(seed_value)
 	run_state = RunState.new()

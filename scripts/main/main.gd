@@ -17,7 +17,7 @@ func _ready() -> void:
 	_dev_sandbox.set_enabled(false)
 	_main_menu.start_game_requested.connect(_on_start_game_requested)
 
-func _on_start_game_requested() -> void:
+func _on_start_game_requested(character_id: StringName) -> void:
 	if _gameplay_started:
 		return
 	_gameplay_started = true
@@ -25,4 +25,5 @@ func _on_start_game_requested() -> void:
 	_world.process_mode = Node.PROCESS_MODE_INHERIT
 	_hud.show()
 	_dev_sandbox.set_enabled(true)
-	_session.start_new_run(RunManager.DEFAULT_SEED)
+	RunManager.select_character(character_id)
+	_session.start_new_run(RunManager.DEFAULT_SEED, RunManager.selected_character_id)

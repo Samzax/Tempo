@@ -9,8 +9,14 @@ static func _ensure() -> void:
 	if _abilities.is_empty():
 		var overdrive := OverdriveAbility.new()
 		var shield := ShieldAbility.new()
+		var guardian_shield := GuardianShieldAbility.new()
+		var hacker_overdrive := HackerOverdriveAbility.new()
+		var time_warp := TimeWarpAbility.new()
 		_abilities[overdrive.id] = overdrive
 		_abilities[shield.id] = shield
+		_abilities[guardian_shield.id] = guardian_shield
+		_abilities[hacker_overdrive.id] = hacker_overdrive
+		_abilities[time_warp.id] = time_warp
 
 ## Devolve a habilidade pelo identificador, ou nulo se ela nao existir.
 static func get_ability(id: StringName) -> AbilityDef:
