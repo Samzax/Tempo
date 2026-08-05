@@ -16,3 +16,7 @@ func activate(_player: Node2D) -> void:
 func try_activate(player: Node2D) -> bool:
 	activate(player)
 	return true
+
+## Devolve a recarga aplicavel ao slot para este jogador.
+func get_cooldown(_player: Node2D) -> float:
+	return cooldown
