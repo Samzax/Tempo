@@ -8,15 +8,25 @@ const SHIPS_PATH := "res://resources/ships"
 static var _ships: Dictionary = {}
 static var _ordered_ids: Array[StringName] = []
 
+static func normalize_ship_filename(filename: String) -> String:
+	if filename.ends_with(".tres.remap"):
+		return filename.trim_suffix(".remap")
+	return filename
+
 static func _ensure() -> void:
 	if not _ships.is_empty():
 		return
 	var filenames := DirAccess.get_files_at(SHIPS_PATH)
 	filenames.sort()
+	var resource_filenames: Dictionary = {}
 	for filename in filenames:
-		if not filename.ends_with(".tres"):
+		var resource_filename := normalize_ship_filename(filename)
+		if not resource_filename.ends_with(".tres"):
 			continue
-		var ship := load("%s/%s" % [SHIPS_PATH, filename]) as ShipDef
+		if resource_filenames.has(resource_filename):
+			continue
+		resource_filenames[resource_filename] = true
+		var ship := load("%s/%s" % [SHIPS_PATH, resource_filename]) as ShipDef
 		if ship == null:
 			push_warning("ShipCatalog ignorou conteudo invalido: %s." % filename)
 			continue

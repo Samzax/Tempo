@@ -10,6 +10,11 @@ func test_ship_catalog_exposes_canonical_ship_and_lookup_contract() -> void:
 	assert_false(ShipCatalog.is_valid(&"nave_de_track_b_inexistente"))
 	assert_null(ShipCatalog.get_ship(&"nave_de_track_b_inexistente"))
 
+func test_ship_catalog_normalizes_ship_filenames() -> void:
+	assert_eq(ShipCatalog.normalize_ship_filename("nave.tres"), "nave.tres")
+	assert_eq(ShipCatalog.normalize_ship_filename("nave.tres.remap"), "nave.tres")
+	assert_eq(ShipCatalog.normalize_ship_filename("arquivo.txt.remap"), "arquivo.txt.remap")
+
 func test_loadout_uses_catalogued_ship_and_character_defaults() -> void:
 	var player := preload("res://scenes/player/player.tscn").instantiate() as Player
 	add_child_autofree(player)
