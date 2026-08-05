@@ -1,10 +1,9 @@
 [remap]
 
-uid="uid://dk5f8paqy4z9c"
-
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/rastreadora.png-a5539c879ba7f7c1d08eb0075d4409a7.ctex"
+uid="uid://dk5f8paqy41ac"
+path="res://.godot/imported/rastreadora.png-72e59e5e75413f6622716e217da8593e.ctex"
 metadata={
 "vram_texture": false
 }
@@ -12,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/rastreadora.png"
-dest_files=["res://.godot/imported/rastreadora.png-a5539c879ba7f7c1d08eb0075d4409a7.ctex"]
+dest_files=["res://.godot/imported/rastreadora.png-72e59e5e75413f6622716e217da8593e.ctex"]
 
 [params]
 

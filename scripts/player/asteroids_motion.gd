@@ -11,18 +11,18 @@ static func calculate_velocity(
 	max_speed: float,
 	delta: float,
 ) -> Vector2:
-	if not max_speed.is_finite() or max_speed <= 0.0:
+	if not is_finite(max_speed) or max_speed <= 0.0:
 		return Vector2.ZERO
 
 	var velocity := _finite_vector_or_zero(current_velocity)
-	if not delta.is_finite() or delta <= 0.0:
+	if not is_finite(delta) or delta <= 0.0:
 		return velocity
 
 	var heading_direction := _normalized_or_zero(heading)
 	if is_thrusting and heading_direction != Vector2.ZERO:
 		var valid_acceleration := _non_negative_finite(acceleration)
 		var acceleration_distance := _safe_positive_product(valid_acceleration, delta)
-		if not acceleration_distance.is_finite():
+		if not is_finite(acceleration_distance):
 			return heading_direction * max_speed
 		velocity = _add_and_clamp_speed(
 			velocity,
@@ -44,7 +44,7 @@ static func _finite_vector_or_zero(value: Vector2) -> Vector2:
 
 
 static func _non_negative_finite(value: float) -> float:
-	return maxf(value, 0.0) if value.is_finite() else 0.0
+	return maxf(value, 0.0) if is_finite(value) else 0.0
 
 
 static func _normalized_or_zero(value: Vector2) -> Vector2:
@@ -70,7 +70,7 @@ static func _clamp_speed(velocity: Vector2, max_speed: float) -> Vector2:
 
 static func _safe_positive_product(first: float, second: float) -> float:
 	var product := first * second
-	return product if product.is_finite() else INF
+	return product if is_finite(product) else INF
 
 
 static func _add_and_clamp_speed(
@@ -101,6 +101,6 @@ static func _move_toward_zero(velocity: Vector2, distance: float) -> Vector2:
 
 	var scaled_length := (velocity / scale).length()
 	var scaled_distance := distance / scale
-	if not scaled_distance.is_finite() or scaled_distance >= scaled_length:
+	if not is_finite(scaled_distance) or scaled_distance >= scaled_length:
 		return Vector2.ZERO
 	return velocity - velocity * (scaled_distance / scaled_length)

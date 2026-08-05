@@ -5,7 +5,6 @@
 /build/
 /export/
 export.cfg
-export_presets.cfg
 
 # Traduções geradas a partir de CSV
 *.translation
@@ -20,3 +19,4 @@ mono_crash.*.json
 Thumbs.db
 *.swp
 *~
+*.uid

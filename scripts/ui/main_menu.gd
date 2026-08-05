@@ -77,7 +77,7 @@ func _on_character_selected(_index: int) -> void:
 	_refresh_character_description()
 
 func _selected_character_id() -> StringName:
-	var metadata := _character_option.get_item_metadata(_character_option.selected)
+	var metadata: Variant = _character_option.get_item_metadata(_character_option.selected)
 	return StringName(metadata) if metadata is StringName else CharacterDef.ROSTER_IDS[0]
 
 func _refresh_character_description() -> void:

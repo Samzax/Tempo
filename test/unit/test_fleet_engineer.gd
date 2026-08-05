@@ -24,6 +24,7 @@ func test_loadout_uses_catalogued_ship_and_character_defaults() -> void:
 	assert_eq(player.character.id, &"piloto_base")
 	assert_eq(player._stats.get_stat(&"max_health"), 3.0)
 
+
 func test_base_ship_is_a_valid_shipdef_with_expected_loadout_contract() -> void:
 	var base_ship := load("res://resources/ships/base.tres") as ShipDef
 	assert_not_null(base_ship)

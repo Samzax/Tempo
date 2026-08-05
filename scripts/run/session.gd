@@ -50,7 +50,7 @@ func deploy_engineer_deployable(player: Node2D) -> bool:
 		if existing != null and existing.deploying_player == player:
 			deployed_by_player.append(existing)
 	while deployed_by_player.size() >= ENGINEER_DEPLOYABLE_LIMIT:
-		var oldest := deployed_by_player.pop_front()
+		var oldest: EngineerDeployable = deployed_by_player.pop_front()
 		container.remove_child(oldest)
 		oldest.queue_free()
 	var deployable := ENGINEER_DEPLOYABLE.instantiate() as EngineerDeployable

@@ -1,10 +1,9 @@
 [remap]
 
-uid="uid://bq3d6m8nw2x7a"
-
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/bruta.png-2ed9e948b6cb12ddcc0e782ef3c7a20a.ctex"
+uid="uid://bq3d6m8nw2x7a"
+path="res://.godot/imported/bruta.png-f2e0b9cba02cf3ed2190eef11df8b38b.ctex"
 metadata={
 "vram_texture": false
 }
@@ -12,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/bruta.png"
-dest_files=["res://.godot/imported/bruta.png-2ed9e948b6cb12ddcc0e782ef3c7a20a.ctex"]
+dest_files=["res://.godot/imported/bruta.png-f2e0b9cba02cf3ed2190eef11df8b38b.ctex"]
 
 [params]
 

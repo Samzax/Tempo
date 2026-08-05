@@ -1,10 +1,9 @@
 [remap]
 
-uid="uid://cj4e7n9px3y8b"
-
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/engenheira.png-8eb398484dbc7328d80a36d6e15472f9.ctex"
+uid="uid://cj4e7oapx3y8b"
+path="res://.godot/imported/engenheira.png-44c3fc8faebd5dfac47d731a016b6d79.ctex"
 metadata={
 "vram_texture": false
 }
@@ -12,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/engenheira.png"
-dest_files=["res://.godot/imported/engenheira.png-8eb398484dbc7328d80a36d6e15472f9.ctex"]
+dest_files=["res://.godot/imported/engenheira.png-44c3fc8faebd5dfac47d731a016b6d79.ctex"]
 
 [params]
 

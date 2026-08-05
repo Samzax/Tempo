@@ -1,10 +1,9 @@
 [remap]
 
-uid="uid://em6g9qbrz5a2d"
-
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/interceptadora.png-4ec2c0aa978d96b80799e2c49de47014.ctex"
+uid="uid://rrlooejgxfbl"
+path="res://.godot/imported/interceptadora.png-8d12938beabe8305151beeeae03ccb5c.ctex"
 metadata={
 "vram_texture": false
 }
@@ -12,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/interceptadora.png"
-dest_files=["res://.godot/imported/interceptadora.png-4ec2c0aa978d96b80799e2c49de47014.ctex"]
+dest_files=["res://.godot/imported/interceptadora.png-8d12938beabe8305151beeeae03ccb5c.ctex"]
 
 [params]
 
