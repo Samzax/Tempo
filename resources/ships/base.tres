@@ -1,9 +1,11 @@
-[gd_resource type="Resource" script_class="ShipDef" format=3]
+[gd_resource type="Resource" script_class="ShipDef" load_steps=2 format=3 uid="uid://b0q4k7m2n8x5c"]
 
-[ext_resource type="Script" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
+[ext_resource type="Script" uid="uid://dxj8iu0hungha" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
+[ext_resource type="Texture2D" uid="uid://cgl61ukp0l8rk" path="res://assets/sprites/ship.png" id="2_texture"]
 
 [resource]
 script = ExtResource("1_ship_def")
 id = &"nave_base"
 display_name = "Fighter Padrao"
+hull_texture = ExtResource("2_texture")
 ability_q = &"sobrecarga"
