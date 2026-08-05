@@ -1,12 +1,13 @@
 class_name MainMenu
 extends CanvasLayer
 
-signal start_game_requested
+signal start_game_requested(ship_id: StringName)
 
 @onready var _menu_container: Control = $MenuContainer
 @onready var _background: ColorRect = $Background
 @onready var _start_button: Button = $MenuContainer/StartButton
 @onready var _controls_button: Button = $MenuContainer/ControlsButton
+@onready var _ship_select: OptionButton = $MenuContainer/ShipSelect
 @onready var _controls_panel: Control = $ControlsPanel
 @onready var _close_button: Button = $ControlsPanel/Panel/MarginContainer/Content/CloseButton
 
@@ -23,6 +24,7 @@ func _ready() -> void:
 	_controls_panel.size = viewport_size
 	_start_button.pressed.connect(_on_start_button_pressed)
 	_controls_button.pressed.connect(_open_controls)
+	_populate_ship_select()
 	_close_button.pressed.connect(_close_controls)
 	_controls_panel.hide()
 	call_deferred(&"_focus_start_button")
@@ -37,9 +39,27 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_start_button_pressed() -> void:
 	if _start_requested:
 		return
+	var ship_id := _selected_ship_id()
+	if not ShipCatalog.is_valid(ship_id):
+		return
 	_start_requested = true
 	hide()
-	start_game_requested.emit()
+	start_game_requested.emit(ship_id)
+
+func _populate_ship_select() -> void:
+	_ship_select.clear()
+	for ship in ShipCatalog.all():
+		_ship_select.add_item(ship.display_name if not ship.display_name.is_empty() else String(ship.id))
+		_ship_select.set_item_metadata(_ship_select.item_count - 1, ship.id)
+	var has_ships := _ship_select.item_count > 0
+	_ship_select.disabled = not has_ships
+	_start_button.disabled = not has_ships
+
+func _selected_ship_id() -> StringName:
+	if _ship_select.item_count == 0:
+		return &""
+	var selected := clampi(_ship_select.selected, 0, _ship_select.item_count - 1)
+	return StringName(_ship_select.get_item_metadata(selected))
 
 func _open_controls() -> void:
 	_menu_container.hide()

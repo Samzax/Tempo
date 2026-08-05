@@ -17,8 +17,12 @@ func _ready() -> void:
 	_dev_sandbox.set_enabled(false)
 	_main_menu.start_game_requested.connect(_on_start_game_requested)
 
-func _on_start_game_requested() -> void:
-	if _gameplay_started:
+func _on_start_game_requested(ship_id: StringName) -> void:
+	if _gameplay_started or not ShipCatalog.is_valid(ship_id):
+		return
+	var selected_ship := ShipCatalog.get_ship(ship_id)
+	var player := _world.get_node_or_null("Player") as Player
+	if selected_ship == null or player == null or not player.configure_ship(selected_ship):
 		return
 	_gameplay_started = true
 	_world.show()

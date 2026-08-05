@@ -22,9 +22,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -105.0
-offset_top = -52.0
+offset_top = -76.0
 offset_right = 105.0
-offset_bottom = 52.0
+offset_bottom = 76.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 12
@@ -34,6 +34,14 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "TEMPO"
 horizontal_alignment = 1
+
+[node name="ShipLabel" type="Label" parent="MenuContainer"]
+layout_mode = 2
+text = "Nave"
+
+[node name="ShipSelect" type="OptionButton" parent="MenuContainer"]
+custom_minimum_size = Vector2(210, 30)
+layout_mode = 2
 
 [node name="StartButton" type="Button" parent="MenuContainer"]
 custom_minimum_size = Vector2(210, 34)

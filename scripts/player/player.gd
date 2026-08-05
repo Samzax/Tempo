@@ -1,3 +1,4 @@
+class_name Player
 extends CharacterBody2D
 ## Nave do jogador.
 ## Movimento X,Y com aceleração/atrito, inclinação progressiva (5 poses),
@@ -56,12 +57,7 @@ func _ready() -> void:
 	if character == null:
 		character = preload("res://resources/characters/base.tres")
 
-	_stats = StatBlock.new(StatCatalog.get_all())
-	Loadout.apply(_stats, ship, character)
-	if ship != null and not ship.ability_q.is_empty():
-		_ability_q = AbilityCatalog.get_ability(ship.ability_q)
-	if character != null and not character.ability_e.is_empty():
-		_ability_e = AbilityCatalog.get_ability(character.ability_e)
+	_apply_loadout()
 	_dispatcher = EffectDispatcher.new(self, _gather_effects())
 	_inventory = Inventory.new(_stats, _dispatcher)
 	EventBus.enemy_died.connect(_on_enemy_died)
@@ -72,6 +68,53 @@ func _ready() -> void:
 	_effects = get_tree().get_first_node_in_group("effects")
 	_spawn_point = global_position
 	health.died.connect(_on_died)
+
+## Troca a nave antes da execucao e reaplica o loadout se o Player ja estiver pronto.
+func configure_ship(next_ship: ShipDef) -> bool:
+	if next_ship == null:
+		return false
+	ship = next_ship
+	if is_node_ready():
+		_apply_loadout()
+		if _dispatcher != null:
+			_dispatcher = EffectDispatcher.new(self, _gather_effects())
+			_inventory = Inventory.new(_stats, _dispatcher)
+		if health != null:
+			health.max_health = _stats.get_stat(&"max_health")
+			health.health = health.max_health
+	return true
+
+## Cria o deployable da Engenheira no dono da sala ativa, nunca no Player.
+func deploy_engineer_gadget() -> bool:
+	var session := get_tree().get_first_node_in_group(&"session")
+	return session != null and session.has_method(&"deploy_engineer_deployable") and bool(session.call(&"deploy_engineer_deployable", self))
+
+func _apply_loadout() -> void:
+	_stats = StatBlock.new(StatCatalog.get_all())
+	Loadout.apply(_stats, ship, character)
+	_ability_q = AbilityCatalog.get_ability(ship.ability_q) if ship != null and not ship.ability_q.is_empty() else null
+	_ability_e = AbilityCatalog.get_ability(character.ability_e) if character != null and not character.ability_e.is_empty() else null
+	_apply_hull_texture()
+
+## Troca somente o atlas de cada frame; regioes, animacoes e o casco sem rotacao sao preservados.
+func _apply_hull_texture() -> void:
+	if sprite == null or ship == null or ship.hull_texture == null:
+		return
+	# SpriteFrames pode ser compartilhado por instancias da cena. Duplica-lo evita
+	# que a escolha de um jogador altere o casco de outro em co-op.
+	var frames := sprite.sprite_frames.duplicate(true) as SpriteFrames
+	if frames == null:
+		return
+	for animation_name in frames.get_animation_names():
+		for frame_index in frames.get_frame_count(animation_name):
+			var old_texture := frames.get_frame_texture(animation_name, frame_index)
+			var atlas_frame := old_texture as AtlasTexture
+			if atlas_frame == null:
+				continue
+			var replacement := atlas_frame.duplicate() as AtlasTexture
+			replacement.atlas = ship.hull_texture
+			frames.set_frame(animation_name, frame_index, replacement)
+	sprite.sprite_frames = frames
 
 ## Adquire um item e aplica seus efeitos e modificadores.
 func acquire_item(item: ItemDef) -> bool:
@@ -231,15 +274,15 @@ func _handle_blink_input(dir: Vector2) -> void:
 ## Ativa as habilidades equipadas quando seus slots estao prontos.
 func _handle_ability_input() -> void:
 	if Input.is_action_just_pressed("ability_q") and _ability_q != null and _ability_q_cd <= 0.0:
-		_ability_q.activate(self)
-		_ability_q_cd = _ability_q.cooldown
-		_ability_q_cd_duration = _ability_q.cooldown
-		EventBus.ability_used.emit(&"ability_q")
+		if _ability_q.try_activate(self):
+			_ability_q_cd = _ability_q.cooldown
+			_ability_q_cd_duration = _ability_q.cooldown
+			EventBus.ability_used.emit(&"ability_q")
 	if Input.is_action_just_pressed("ability_e") and _ability_e != null and _ability_e_cd <= 0.0:
-		_ability_e.activate(self)
-		_ability_e_cd = _ability_e.cooldown
-		_ability_e_cd_duration = _ability_e.cooldown
-		EventBus.ability_used.emit(&"ability_e")
+		if _ability_e.try_activate(self):
+			_ability_e_cd = _ability_e.cooldown
+			_ability_e_cd_duration = _ability_e.cooldown
+			EventBus.ability_used.emit(&"ability_e")
 
 ## Leva dano por contato enquanto um inimigo estiver sobreposto e não houver i-frames.
 func _check_contact() -> void:

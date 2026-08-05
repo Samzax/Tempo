@@ -8,6 +8,8 @@
 
 [node name="Enemies" type="Node2D" parent="." groups=["enemies_container"]]
 
+[node name="Deployables" type="Node2D" parent="."]
+
 [node name="Directors" type="Node" parent="."]
 
 [node name="SpawnDirector" type="Node" parent="Directors"]

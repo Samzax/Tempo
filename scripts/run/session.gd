@@ -7,6 +7,8 @@ signal run_completed
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const COMBAT_POOL := preload("res://resources/loot/combat_pool.tres")
 const BOSS_POOL := preload("res://resources/loot/boss_pool.tres")
+const ENGINEER_DEPLOYABLE := preload("res://scenes/deployables/engineer_deployable.tscn")
+const ENGINEER_DEPLOYABLE_LIMIT := 3
 
 @export var player_path: NodePath
 @export var room_host_path: NodePath
@@ -22,8 +24,10 @@ var _room_active := false
 var _awaiting_boss_advance := false
 var _room_generation := 0
 var _has_started := false
+var _engineer_deploy_sequence := 0
 
 func _ready() -> void:
+	add_to_group(&"session")
 	_player = get_node_or_null(player_path) as Node2D
 	_room_host = get_node_or_null(room_host_path)
 	_hyperspace = get_node_or_null(hyperspace_path) as HyperspaceUI
@@ -32,6 +36,29 @@ func _ready() -> void:
 		return
 	_hyperspace.node_selected.connect(_on_node_selected)
 	_hyperspace.sector_advance_requested.connect(_on_sector_advance_requested)
+
+## Instancia a proxima unidade da Engenheira no container da sala e remove a mais antiga do mesmo jogador no limite.
+func deploy_engineer_deployable(player: Node2D) -> bool:
+	if not _room_active or not is_instance_valid(_active_room) or player == null:
+		return false
+	var container := _active_room.get_node_or_null("Deployables") as Node2D
+	if container == null:
+		return false
+	var deployed_by_player: Array[EngineerDeployable] = []
+	for child in container.get_children():
+		var existing := child as EngineerDeployable
+		if existing != null and existing.deploying_player == player:
+			deployed_by_player.append(existing)
+	while deployed_by_player.size() >= ENGINEER_DEPLOYABLE_LIMIT:
+		var oldest := deployed_by_player.pop_front()
+		container.remove_child(oldest)
+		oldest.queue_free()
+	var deployable := ENGINEER_DEPLOYABLE.instantiate() as EngineerDeployable
+	container.add_child(deployable)
+	deployable.global_position = player.global_position + Vector2.UP.rotated(_engineer_deploy_sequence * TAU / 3.0) * 20.0
+	deployable.configure(_engineer_deploy_sequence % 3, player)
+	_engineer_deploy_sequence += 1
+	return true
 
 func start_new_run(seed_value: int) -> void:
 	if _has_started:
@@ -143,6 +170,11 @@ func _dispose_active_room() -> void:
 	_room_generation += 1
 	_persist_active_offer()
 	if is_instance_valid(_active_room):
+		# Os deployables pertencem a sala; nao sobrevivem a troca de no nem ao fim da execucao.
+		var deployables := _active_room.get_node_or_null("Deployables")
+		if deployables != null:
+			for deployable in deployables.get_children():
+				deployable.queue_free()
 		var director := _active_room.get_node_or_null("Directors/SpawnDirector")
 		if director != null and director.has_method(&"stop"):
 			director.call(&"stop")

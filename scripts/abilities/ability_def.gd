@@ -10,3 +10,9 @@ var icon: Texture2D
 ## Ativa a habilidade para o jogador informado.
 func activate(_player: Node2D) -> void:
 	pass
+
+## Variante que informa se a ativacao teve efeito. A implementacao padrao
+## preserva habilidades legadas que implementam apenas `activate`.
+func try_activate(player: Node2D) -> bool:
+	activate(player)
+	return true

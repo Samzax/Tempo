@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/deployables/engineer_deployable.gd" id="1_deployable"]
+
+[sub_resource type="CircleShape2D" id="Circle_influence"]
+radius = 18.0
+
+[node name="EngineerDeployable" type="Node2D"]
+script = ExtResource("1_deployable")
+
+[node name="Influence" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 4
+monitoring = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Influence"]
+shape = SubResource("Circle_influence")
