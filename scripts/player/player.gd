@@ -56,14 +56,7 @@ func _ready() -> void:
 	if character == null:
 		character = preload("res://resources/characters/base.tres")
 
-	_stats = StatBlock.new(StatCatalog.get_all())
-	Loadout.apply(_stats, ship, character)
-	if ship != null and not ship.ability_q.is_empty():
-		_ability_q = AbilityCatalog.get_ability(ship.ability_q)
-	if character != null and not character.ability_e.is_empty():
-		_ability_e = AbilityCatalog.get_ability(character.ability_e)
-	_dispatcher = EffectDispatcher.new(self, _gather_effects())
-	_inventory = Inventory.new(_stats, _dispatcher)
+	_configure_loadout()
 	EventBus.enemy_died.connect(_on_enemy_died)
 	health.damaged.connect(_on_health_damaged)
 	health.max_health = _stats.get_stat(&"max_health")
@@ -72,6 +65,40 @@ func _ready() -> void:
 	_effects = get_tree().get_first_node_in_group("effects")
 	_spawn_point = global_position
 	health.died.connect(_on_died)
+
+## Aplica a selecao antes do inicio da run. Reconstruir o loadout nao reconecta
+## sinais do Player e por isso permanece seguro mesmo apos o _ready da cena.
+func configure_character(character_id: StringName) -> void:
+	character = CharacterDef.resolve_id(character_id)
+	if is_node_ready():
+		_configure_loadout()
+
+func _configure_loadout() -> void:
+	if character == null:
+		character = preload("res://resources/characters/base.tres")
+	_stats = StatBlock.new(StatCatalog.get_all())
+	Loadout.apply(_stats, ship, character)
+	_ability_q = AbilityCatalog.get_ability(ship.ability_q) if ship != null and not ship.ability_q.is_empty() else null
+	_ability_e = AbilityCatalog.get_ability(character.ability_e) if character != null and not character.ability_e.is_empty() else null
+	_dispatcher = EffectDispatcher.new(self, _gather_effects())
+	_inventory = Inventory.new(_stats, _dispatcher)
+	if is_instance_valid(health):
+		health.max_health = _stats.get_stat(&"max_health")
+		health.health = health.max_health
+
+## Substitui o buff ativo da habilidade para evitar colisao de source_id e
+## acúmulo acidental ao reativar uma habilidade ainda ativa.
+func apply_temporary_modifier(source_id: StringName, stat_id: StringName, op: StatDef.Op, value: float, duration: float) -> void:
+	if _stats == null:
+		return
+	_stats.remove_modifiers_by_source(source_id)
+	var modifier := StatModifierDef.new()
+	modifier.stat = stat_id
+	modifier.op = op
+	modifier.value = value
+	modifier.duration = duration
+	modifier.source_id = source_id
+	_stats.add_modifier(modifier)
 
 ## Adquire um item e aplica seus efeitos e modificadores.
 func acquire_item(item: ItemDef) -> bool:

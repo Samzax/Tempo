@@ -22,9 +22,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -105.0
-offset_top = -52.0
+offset_top = -100.0
 offset_right = 105.0
-offset_bottom = 52.0
+offset_bottom = 100.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 12
@@ -48,6 +48,24 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Controles"
 focus_neighbor_top = NodePath("../StartButton")
+focus_neighbor_bottom = NodePath("../CharacterOption")
+
+[node name="CharacterLabel" type="Label" parent="MenuContainer"]
+layout_mode = 2
+text = "PERSONAGEM"
+
+[node name="CharacterOption" type="OptionButton" parent="MenuContainer"]
+custom_minimum_size = Vector2(210, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+focus_neighbor_top = NodePath("../ControlsButton")
+focus_neighbor_bottom = NodePath("../StartButton")
+
+[node name="CharacterDescription" type="Label" parent="MenuContainer"]
+custom_minimum_size = Vector2(210, 38)
+layout_mode = 2
+autowrap_mode = 2
+horizontal_alignment = 1
 
 [node name="ControlsPanel" type="Control" parent="."]
 layout_mode = 3
