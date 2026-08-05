@@ -79,19 +79,17 @@ func test_new_ships_have_hull_textures() -> void:
 func test_new_ship_textures_are_80_by_48() -> void:
 	for ship_id in NEW_SHIP_TEXTURES:
 		assert_true(FileAccess.file_exists(NEW_SHIP_TEXTURES[ship_id]), "Arquivo da textura de %s deve existir" % ship_id)
-		var image := Image.new()
-		var error := image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[ship_id]))
-		assert_eq(error, OK, "Textura de %s deve carregar diretamente do arquivo" % ship_id)
-		if error == OK:
+		var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[ship_id]))
+		assert_not_null(image, "Textura de %s deve carregar diretamente do arquivo" % ship_id)
+		if image != null:
 			assert_eq(image.get_width(), 80, "Largura de %s" % ship_id)
 			assert_eq(image.get_height(), 48, "Altura de %s" % ship_id)
 
 func test_new_ship_textures_have_transparent_corners() -> void:
 	for ship_id in NEW_SHIP_TEXTURES:
-		var image := Image.new()
-		var error := image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[ship_id]))
-		assert_eq(error, OK, "Textura de %s deve carregar" % ship_id)
-		if error != OK:
+		var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[ship_id]))
+		assert_not_null(image, "Textura de %s deve carregar" % ship_id)
+		if image == null:
 			continue
 		for corner in [Vector2i(0, 0), Vector2i(79, 0), Vector2i(0, 47), Vector2i(79, 47)]:
 			assert_lt(image.get_pixelv(corner).a, 1.0, "Canto %s de %s deve ser transparente" % [corner, ship_id])
