@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="ShipDef" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/rastreadora.png" id="2_texture"]
+[ext_resource type="Script" path="res://scripts/stats/base_stat_value.gd" id="3_base_stat"]
+
+[sub_resource type="Resource" id="BaseStatValue_health"]
+script = ExtResource("3_base_stat")
+stat = &"max_health"
+value = 2.0
+
+[sub_resource type="Resource" id="BaseStatValue_aim"]
+script = ExtResource("3_base_stat")
+stat = &"aim_tier"
+value = 3.0
+
+[sub_resource type="Resource" id="BaseStatValue_projectile_speed"]
+script = ExtResource("3_base_stat")
+stat = &"projectile_speed"
+value = 420.0
+
+[sub_resource type="Resource" id="BaseStatValue_projectile_lifetime"]
+script = ExtResource("3_base_stat")
+stat = &"projectile_lifetime"
+value = 2.4
+
+[resource]
+script = ExtResource("1_ship_def")
+id = &"nave_rastreadora"
+display_name = "Rastreadora"
+hull_texture = ExtResource("2_texture")
+base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_aim"), SubResource("BaseStatValue_projectile_speed"), SubResource("BaseStatValue_projectile_lifetime")])
+ability_q = &"sobrecarga"

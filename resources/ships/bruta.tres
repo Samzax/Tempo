@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="ShipDef" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bruta.png" id="2_texture"]
+[ext_resource type="Script" path="res://scripts/stats/base_stat_value.gd" id="3_base_stat"]
+
+[sub_resource type="Resource" id="BaseStatValue_health"]
+script = ExtResource("3_base_stat")
+stat = &"max_health"
+value = 5.0
+
+[sub_resource type="Resource" id="BaseStatValue_speed"]
+script = ExtResource("3_base_stat")
+stat = &"max_speed"
+value = 125.0
+
+[sub_resource type="Resource" id="BaseStatValue_acceleration"]
+script = ExtResource("3_base_stat")
+stat = &"acceleration"
+value = 850.0
+
+[sub_resource type="Resource" id="BaseStatValue_damage"]
+script = ExtResource("3_base_stat")
+stat = &"damage"
+value = 1.5
+
+[resource]
+script = ExtResource("1_ship_def")
+id = &"nave_bruta"
+display_name = "Bruta"
+hull_texture = ExtResource("2_texture")
+base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_acceleration"), SubResource("BaseStatValue_damage")])
+ability_q = &"sobrecarga"
