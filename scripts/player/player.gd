@@ -5,8 +5,6 @@ extends CharacterBody2D
 ## instantâneo com i-frames. Recebe dano por contato com inimigos (respeitando
 ## os i-frames) e renasce no centro ao morrer.
 	
-## Quão rápido a inclinação acompanha a entrada horizontal (poses por segundo).
-@export var bank_rate: float = 6.0
 @export var ship: ShipDef
 @export var character: CharacterDef
 
@@ -24,7 +22,6 @@ const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
 
 enum AimSource { NONE, MOUSE, JOYPAD }
 
-var _bank: float = 0.0
 var _fire_cooldown: float = 0.0
 var _blink_cd: float = 0.0
 var _blink_cd_duration: float = 0.0
@@ -129,24 +126,30 @@ func _physics_process(delta: float) -> void:
 	_dispatcher.tick(delta)
 	_tick_timers(delta)
 	_update_aim()
-	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	_handle_blink_input(dir)
+	rotation = _aim_vector.angle() + PI / 2.0
+	var is_thrusting := Input.is_action_pressed("move_up")
+	var blink_consumed := _handle_blink_input()
 	_handle_ability_input()
 
-	if dir != Vector2.ZERO:
-		velocity = velocity.move_toward(dir * _stats.get_stat(&"max_speed"), _stats.get_stat(&"acceleration") * delta)
-	else:
-		velocity = velocity.move_toward(Vector2.ZERO, _stats.get_stat(&"friction") * delta)
+	if not blink_consumed:
+		velocity = AsteroidsMotion.calculate_velocity(
+			velocity,
+			_aim_vector,
+			is_thrusting,
+			_stats.get_stat(&"acceleration"),
+			_stats.get_stat(&"friction"),
+			_stats.get_stat(&"max_speed"),
+			delta,
+		)
 
-	move_and_slide()
-	_clamp_to_bounds()
+		move_and_slide()
+		_clamp_to_bounds()
 	_refresh_mouse_aim()
+	rotation = _aim_vector.angle() + PI / 2.0
 	_check_contact()
-	_update_bank(dir.x, delta)
+	_update_bank()
 	_update_thruster()
 	_update_invuln_visual()
-	muzzle.position = _aim_vector * 12.0
-	muzzle.rotation = _aim_vector.angle() + PI / 2.0
 	_handle_fire(delta)
 
 ## Detecta o mouse antes da interface para preservar a troca de fonte da mira.
@@ -162,7 +165,8 @@ func _update_aim() -> void:
 		_last_aim_source = AimSource.JOYPAD
 	if _last_aim_source == AimSource.JOYPAD and joypad_active:
 		_aim_vector = joypad_aim.normalized()
-	elif _last_aim_source == AimSource.MOUSE:
+	elif _last_aim_source != AimSource.JOYPAD or not joypad_active:
+		_last_aim_source = AimSource.MOUSE
 		_refresh_mouse_aim()
 	_joypad_aim_was_active = joypad_active
 
@@ -206,12 +210,12 @@ func _tick_timers(delta: float) -> void:
 	_ability_e_cd = maxf(0.0, _ability_e_cd - delta)
 	_invuln_timer = maxf(0.0, _invuln_timer - delta)
 
-## Blink: teleporte instantâneo na direção do movimento (ou da mira se parado),
+## Blink: teleporte instantâneo na direção da mira,
 ## com efeito de colapso na origem e no destino, i-frames e recarga.
-func _handle_blink_input(dir: Vector2) -> void:
+func _handle_blink_input() -> bool:
 	if _blink_cd > 0.0 or not Input.is_action_just_pressed("blink"):
-		return
-	var bdir := dir.normalized() if dir != Vector2.ZERO else _aim_vector
+		return false
+	var bdir := _aim_vector
 	var origin := global_position
 	var m := 10.0
 	var dest := origin + bdir * _stats.get_stat(&"blink_distance")
@@ -227,6 +231,7 @@ func _handle_blink_input(dir: Vector2) -> void:
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))
 	_spawn_teleport_fx(origin)
 	_spawn_teleport_fx(dest)
+	return true
 
 ## Ativa as habilidades equipadas quando seus slots estao prontos.
 func _handle_ability_input() -> void:
@@ -298,22 +303,10 @@ func _clamp_to_bounds() -> void:
 	global_position.x = clampf(global_position.x, m, _bounds.x - m)
 	global_position.y = clampf(global_position.y, m, _bounds.y - m)
 
-## Faz a inclinação seguir a entrada suavemente e escolhe a pose correspondente.
-func _update_bank(input_x: float, delta: float) -> void:
-	_bank = move_toward(_bank, input_x, bank_rate * delta)
-	var anim := &"neutral"
-	if _bank <= -0.66:
-		anim = &"hard_left"
-	elif _bank <= -0.2:
-		anim = &"soft_left"
-	elif _bank < 0.2:
-		anim = &"neutral"
-	elif _bank < 0.66:
-		anim = &"soft_right"
-	else:
-		anim = &"hard_right"
-	if sprite.animation != anim:
-		sprite.play(anim)
+## Mantém a pose neutra: A/S/D não geram strafe nem inclinação.
+func _update_bank() -> void:
+	if sprite.animation != &"neutral":
+		sprite.play(&"neutral")
 
 ## O propulsor estica e intensifica conforme a velocidade atual.
 func _update_thruster() -> void:
