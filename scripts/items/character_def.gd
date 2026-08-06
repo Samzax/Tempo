@@ -6,6 +6,7 @@ extends ProviderDef
 @export var description: String
 @export var portrait: Texture2D
 @export var ability_e: StringName
+@export var thrust_color: Color = Color.WHITE
 
 const ROSTER_IDS: Array[StringName] = [&"hacker", &"guardian", &"chronomancer"]
 const BASE_CHARACTER_PATH := "res://resources/characters/base.tres"

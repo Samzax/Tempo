@@ -103,6 +103,7 @@ func _configure_loadout() -> void:
 	Loadout.apply(_stats, ship, character)
 	_ability_q = AbilityCatalog.get_ability(ship.ability_q) if ship != null and not ship.ability_q.is_empty() else null
 	_ability_e = AbilityCatalog.get_ability(character.ability_e) if character != null and not character.ability_e.is_empty() else null
+	thruster.color = character.thrust_color
 	_apply_hull_texture()
 	_dispatcher = EffectDispatcher.new(self, _gather_effects())
 	_inventory = Inventory.new(_stats, _dispatcher)

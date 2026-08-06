@@ -1,5 +1,7 @@
 extends GutTest
 
+const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
+
 class FakeAbilityPlayer extends Node2D:
 	var modifier_calls: Array = []
 	var invuln_calls: Array[float] = []
@@ -85,3 +87,36 @@ func test_invalid_selection_is_normalized_before_run() -> void:
 func test_unknown_character_uses_the_existing_base_fallback() -> void:
 	var fallback := CharacterDef.resolve_id(&"missing")
 	assert_eq(fallback.id, &"piloto_base")
+	assert_eq(fallback.thrust_color, Color.WHITE)
+
+func test_character_thrust_color_defaults_to_white() -> void:
+	assert_eq(CharacterDef.new().thrust_color, Color.WHITE)
+
+func test_player_thrusters_keep_character_colors_isolated_and_reset_to_fallback() -> void:
+	var blue_character := CharacterDef.new()
+	blue_character.thrust_color = Color.CORNFLOWER_BLUE
+	var orange_character := CharacterDef.new()
+	orange_character.thrust_color = Color.DARK_ORANGE
+	var first := PLAYER_SCENE.instantiate() as Player
+	var second := PLAYER_SCENE.instantiate() as Player
+	add_child_autofree(first)
+	add_child_autofree(second)
+	await get_tree().process_frame
+
+	first.character = blue_character
+	first._configure_loadout()
+	second.character = orange_character
+	second._configure_loadout()
+	assert_eq(first.thruster.color, Color.CORNFLOWER_BLUE)
+	assert_eq(second.thruster.color, Color.DARK_ORANGE)
+	assert_ne(first.thruster.color, second.thruster.color)
+
+	assert_true(first.configure_ship(first.ship))
+	assert_eq(first.thruster.color, Color.CORNFLOWER_BLUE)
+	assert_true(second.configure_selection(second.ship, &"missing"))
+	assert_eq(second.character.id, &"piloto_base")
+	assert_eq(second.thruster.color, Color.WHITE)
+	assert_eq(first.thruster.color, Color.CORNFLOWER_BLUE)
+	first.configure_character(&"missing")
+	assert_eq(first.character.id, &"piloto_base")
+	assert_eq(first.thruster.color, Color.WHITE)
