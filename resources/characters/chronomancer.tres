@@ -12,6 +12,7 @@ value = 0.25
 
 [resource]
 script = ExtResource("1_character_def")
+thrust_color = Color(0.737255, 0.54902, 1, 1)
 id = &"chronomancer"
 display_name = "Cronomante"
 description = "Dobra instantes ao redor do blink para reposicionar-se antes do perigo."

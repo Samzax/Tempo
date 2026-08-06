@@ -12,6 +12,7 @@ value = 1.0
 
 [resource]
 script = ExtResource("1_character_def")
+thrust_color = Color(0.34902, 0.964706, 0.847059, 1)
 id = &"hacker"
 display_name = "Hacker"
 description = "Especialista em precisão que transforma dados de mira em vantagem tática."

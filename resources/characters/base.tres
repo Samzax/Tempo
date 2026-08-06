@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_character_def")
+thrust_color = Color(1, 1, 1, 1)
 id = &"piloto_base"
 display_name = "Piloto Novato"
 description = "O graduado padrao da academia espacial."
