@@ -104,15 +104,72 @@ func test_ui_cancel_closes_controls_and_returns_focus_to_controls_button() -> vo
 	assert_false(menu.get_node("ControlsPanel").visible)
 	assert_eq(menu.get_viewport().gui_get_focus_owner(), controls_button)
 
-func test_start_button_hides_menu_and_emits_start_request() -> void:
+func test_start_button_opens_character_without_emitting_start_request() -> void:
 	var menu := await _menu()
 	watch_signals(menu)
 
 	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
 	await get_tree().process_frame
 
-	assert_signal_emitted(menu, &"start_game_requested")
-	assert_false(menu.visible)
+	assert_signal_not_emitted(menu, &"start_game_requested")
+	assert_true(menu.get_node("CharacterSelectionPanel").visible)
+	assert_false(menu.get_node("ShipSelectionPanel").visible)
+	assert_eq(menu.get_viewport().gui_get_focus_owner(),
+		menu.get_node("CharacterSelectionPanel/MarginContainer/VBoxContainer/CharacterContent/Details/CharacterOptionButton"))
+
+func test_character_continue_opens_ship_and_ship_confirm_emits_pair_once() -> void:
+	var menu := await _menu()
+	watch_signals(menu)
+	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	var character_panel := menu.get_node("CharacterSelectionPanel") as CharacterSelectionPanel
+	var ship_panel := menu.get_node("ShipSelectionPanel") as ShipSelectionPanel
+	assert_true(character_panel.set_selected_id(&"chronomancer"))
+	(character_panel.get_node("MarginContainer/VBoxContainer/Actions/ContinueButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	assert_false(character_panel.visible)
+	assert_true(ship_panel.visible)
+	assert_signal_not_emitted(menu, &"start_game_requested")
+	assert_eq(ship_panel.selected_id(), ShipCatalog.all()[0].id)
+	assert_eq(menu.get_viewport().gui_get_focus_owner(), ship_panel.get_node("ShipOptionButton"))
+	assert_true(ship_panel.set_selected_id(&"nave_engenheira"))
+	(ship_panel.get_node("ButtonContainer/ContinueButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	assert_signal_emitted_with_parameters(menu, &"start_game_requested", [&"nave_engenheira", &"chronomancer"])
+	assert_signal_emit_count(menu, &"start_game_requested", 1)
+	(ship_panel.get_node("ButtonContainer/ContinueButton") as Button).emit_signal("pressed")
+	assert_signal_emit_count(menu, &"start_game_requested", 1)
+
+func test_back_navigation_preserves_and_allows_bidirectional_selection_changes() -> void:
+	var menu := await _menu()
+	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	var character_panel := menu.get_node("CharacterSelectionPanel") as CharacterSelectionPanel
+	var ship_panel := menu.get_node("ShipSelectionPanel") as ShipSelectionPanel
+	assert_true(character_panel.set_selected_id(&"guardian"))
+	(character_panel.get_node("MarginContainer/VBoxContainer/Actions/ContinueButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	assert_true(ship_panel.set_selected_id(&"nave_engenheira"))
+	(ship_panel.get_node("ButtonContainer/BackButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	assert_true(character_panel.visible)
+	assert_eq(character_panel.selected_id(), &"guardian")
+	assert_eq(menu.get_viewport().gui_get_focus_owner(),
+		character_panel.get_node("MarginContainer/VBoxContainer/CharacterContent/Details/CharacterOptionButton"))
+	assert_true(character_panel.set_selected_id(&"chronomancer"))
+	(character_panel.get_node("MarginContainer/VBoxContainer/Actions/ContinueButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	assert_eq(ship_panel.selected_id(), &"nave_engenheira")
+	(ship_panel.get_node("ButtonContainer/BackButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	(character_panel.get_node("MarginContainer/VBoxContainer/Actions/BackButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	assert_true(menu.get_node("MenuContainer").visible)
+	assert_eq(menu.get_viewport().gui_get_focus_owner(), menu.get_node("MenuContainer/StartButton"))
 
 func test_selected_ids_reach_player_before_session_starts() -> void:
 	var main := MAIN_SCENE.instantiate()
@@ -131,9 +188,15 @@ func test_selected_ids_reach_player_before_session_starts() -> void:
 	main.set("_session", session)
 
 	var menu := main.get_node("MainMenu") as MainMenu
-	assert_true(_select_option_id(menu.get_node("MenuContainer/ShipSelect") as OptionButton, &"nave_engenheira"))
-	assert_true(_select_option_id(menu.get_node("MenuContainer/CharacterOption") as OptionButton, &"chronomancer"))
 	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	var character_panel := menu.get_node("CharacterSelectionPanel") as CharacterSelectionPanel
+	var ship_panel := menu.get_node("ShipSelectionPanel") as ShipSelectionPanel
+	assert_true(character_panel.set_selected_id(&"chronomancer"))
+	(character_panel.get_node("MarginContainer/VBoxContainer/Actions/ContinueButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	assert_true(ship_panel.set_selected_id(&"nave_engenheira"))
+	(ship_panel.get_node("ButtonContainer/ContinueButton") as Button).emit_signal("pressed")
 
 	assert_eq(RunManager.selected_character_id, &"chronomancer")
 	assert_eq(player.selected_ship_id, &"nave_engenheira")
@@ -161,6 +224,14 @@ func test_main_boot_disables_and_hides_world_and_hud_until_start() -> void:
 
 	watch_signals(menu)
 	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	var character_panel := menu.get_node("CharacterSelectionPanel") as CharacterSelectionPanel
+	var ship_panel := menu.get_node("ShipSelectionPanel") as ShipSelectionPanel
+	assert_true(character_panel.set_selected_id(&"chronomancer"))
+	(character_panel.get_node("MarginContainer/VBoxContainer/Actions/ContinueButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	assert_true(ship_panel.set_selected_id(&"nave_engenheira"))
+	(ship_panel.get_node("ButtonContainer/ContinueButton") as Button).emit_signal("pressed")
 	await get_tree().process_frame
 
 	assert_signal_emitted(menu, &"start_game_requested")

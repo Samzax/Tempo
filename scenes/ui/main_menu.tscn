@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_main_menu"]
+[ext_resource type="PackedScene" path="res://scenes/ui/character_selection_panel.tscn" id="2_character_selection"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ship_selection_panel.tscn" id="3_ship_selection"]
 
 [node name="MainMenu" type="CanvasLayer"]
 layer = 10
@@ -22,9 +24,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -105.0
-offset_top = -125.0
+offset_top = -65.0
 offset_right = 105.0
-offset_bottom = 125.0
+offset_bottom = 65.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 12
@@ -34,14 +36,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "TEMPO"
 horizontal_alignment = 1
-
-[node name="ShipLabel" type="Label" parent="MenuContainer"]
-layout_mode = 2
-text = "Nave"
-
-[node name="ShipSelect" type="OptionButton" parent="MenuContainer"]
-custom_minimum_size = Vector2(210, 30)
-layout_mode = 2
 
 [node name="StartButton" type="Button" parent="MenuContainer"]
 custom_minimum_size = Vector2(210, 34)
@@ -56,24 +50,32 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Controles"
 focus_neighbor_top = NodePath("../StartButton")
-focus_neighbor_bottom = NodePath("../CharacterOption")
 
-[node name="CharacterLabel" type="Label" parent="MenuContainer"]
-layout_mode = 2
-text = "PERSONAGEM"
+[node name="CharacterSelectionPanel" parent="." instance=ExtResource("2_character_selection")]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -180.0
+offset_top = -115.0
+offset_right = 180.0
+offset_bottom = 115.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="CharacterOption" type="OptionButton" parent="MenuContainer"]
-custom_minimum_size = Vector2(210, 32)
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-focus_neighbor_top = NodePath("../ControlsButton")
-focus_neighbor_bottom = NodePath("../StartButton")
-
-[node name="CharacterDescription" type="Label" parent="MenuContainer"]
-custom_minimum_size = Vector2(210, 38)
-layout_mode = 2
-autowrap_mode = 2
-horizontal_alignment = 1
+[node name="ShipSelectionPanel" parent="." instance=ExtResource("3_ship_selection")]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -105.0
+offset_top = -57.0
+offset_right = 105.0
+offset_bottom = 57.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="ControlsPanel" type="Control" parent="."]
 layout_mode = 3
