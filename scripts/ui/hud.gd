@@ -63,6 +63,7 @@ var _score: Label
 var _lives: Label
 var _blink_icon: BlinkCooldownIcon
 var _game_over: Label
+var _pips_row: HBoxContainer
 var _pips: Array[ColorRect] = []
 var _player: Node = null
 var _gs: Node = null
@@ -73,8 +74,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_gs = get_node_or_null("/root/GameState")
-	_player = get_tree().get_first_node_in_group("player")
 	_build()
+	_bind_player(get_tree().get_first_node_in_group("player"))
 
 func _build() -> void:
 	var box := VBoxContainer.new()
@@ -87,17 +88,9 @@ func _build() -> void:
 	_lives = _make_label(12, Color(0.85, 0.9, 1.0))
 	box.add_child(_lives)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 2)
-	box.add_child(row)
-	var maxhp := 5
-	if _player != null and _player.health != null:
-		maxhp = floori(_player.health.max_health)
-	for i in maxhp:
-		var pip := ColorRect.new()
-		pip.custom_minimum_size = Vector2(7, 7)
-		row.add_child(pip)
-		_pips.append(pip)
+	_pips_row = HBoxContainer.new()
+	_pips_row.add_theme_constant_override("separation", 2)
+	box.add_child(_pips_row)
 
 	_blink_icon = BlinkCooldownIcon.new()
 	_blink_icon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -126,6 +119,8 @@ func _make_label(size: int, col: Color) -> Label:
 func _process(_dt: float) -> void:
 	if not is_visible_in_tree():
 		return
+	if _player == null or not is_instance_valid(_player):
+		_bind_player(get_tree().get_first_node_in_group("player"))
 	if _gs != null:
 		_score.text = "PONTOS  %d" % _gs.score
 		_lives.text = "VIDAS  %d" % _gs.player_lives
@@ -138,6 +133,39 @@ func _process(_dt: float) -> void:
 	_blink_icon.set_cooldown_ratio(blink_ratio)
 	if not _over and _gs != null and _gs.player_lives <= 0:
 		_trigger_over()
+
+func _bind_player(next_player: Node) -> void:
+	if next_player == _player and is_instance_valid(_player):
+		if not _player.health_capacity_changed.is_connected(_on_player_health_capacity_changed):
+			_player.health_capacity_changed.connect(_on_player_health_capacity_changed)
+		return
+	if is_instance_valid(_player) and _player.health_capacity_changed.is_connected(_on_player_health_capacity_changed):
+		_player.health_capacity_changed.disconnect(_on_player_health_capacity_changed)
+	_player = next_player
+	if not is_instance_valid(_player):
+		_player = null
+		return
+	if not _player.health_capacity_changed.is_connected(_on_player_health_capacity_changed):
+		_player.health_capacity_changed.connect(_on_player_health_capacity_changed)
+	if _player.health != null and is_instance_valid(_player.health):
+		_rebuild_pips(_player.health.max_health)
+
+func _on_player_health_capacity_changed(max_health: float) -> void:
+	_rebuild_pips(max_health)
+
+func _rebuild_pips(max_health: float) -> void:
+	var pip_count := maxi(floori(max_health), 0)
+	for child in _pips_row.get_children():
+		_pips_row.remove_child(child)
+		child.queue_free()
+	_pips.clear()
+	var health := floori(_player.health.health) if is_instance_valid(_player) and _player.health != null else 0
+	for i in pip_count:
+		var pip := ColorRect.new()
+		pip.custom_minimum_size = Vector2(7, 7)
+		pip.color = Color(1.0, 0.3, 0.35) if i < health else Color(0.25, 0.25, 0.3)
+		_pips_row.add_child(pip)
+		_pips.append(pip)
 
 func _trigger_over() -> void:
 	_over = true
