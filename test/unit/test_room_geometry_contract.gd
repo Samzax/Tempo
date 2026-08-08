@@ -7,7 +7,15 @@ const SESSION_SCRIPT := preload("res://scripts/run/session.gd")
 const MAIN_SCENE := preload("res://scenes/main/main.tscn")
 
 const ARENA := Rect2(Vector2.ZERO, Vector2(720, 405))
-const VIEWPORT_SIZE := Vector2(480, 270)
+const VIEWPORT_SIZE := Vector2(720, 405)
+
+func test_project_display_contract_uses_logical_viewport_and_integer_canvas_stretch() -> void:
+	assert_eq(ProjectSettings.get_setting("display/window/size/viewport_width"), 720)
+	assert_eq(ProjectSettings.get_setting("display/window/size/viewport_height"), 405)
+	assert_eq(ProjectSettings.get_setting("display/window/size/window_width_override"), 1440)
+	assert_eq(ProjectSettings.get_setting("display/window/size/window_height_override"), 810)
+	assert_eq(ProjectSettings.get_setting("display/window/stretch/mode"), "canvas_items")
+	assert_eq(ProjectSettings.get_setting("display/window/stretch/scale_mode"), "integer")
 
 func test_room_default_and_configured_size_expose_center_and_bounds() -> void:
 	var room := RoomDef.new()
@@ -29,6 +37,7 @@ func test_main_scene_starts_player_and_camera_at_room_center_without_sprite_scal
 	var player := main.get_node("World/Player") as Player
 	var visual_root := player.get_node("VisualRoot") as Node2D
 	var animated_sprite := visual_root.get_node("AnimatedSprite2D") as AnimatedSprite2D
+	var background := main.get_node("PhaseBackground") as Sprite2D
 
 	assert_eq(camera.position, expected_center)
 	assert_eq(player.position, expected_center)
@@ -36,6 +45,27 @@ func test_main_scene_starts_player_and_camera_at_room_center_without_sprite_scal
 	assert_eq(player.scale, Vector2.ONE)
 	assert_eq(visual_root.scale, Vector2.ONE)
 	assert_eq(animated_sprite.scale, Vector2.ONE)
+	assert_eq(background.position, expected_center)
+	assert_eq(background.scale, Vector2.ONE)
+
+func test_active_session_camera_does_not_follow_player_movement() -> void:
+	var main := MAIN_SCENE.instantiate()
+	add_child_autofree(main)
+	await get_tree().process_frame
+
+	var session := main.get_node("Session") as Session
+	var player := main.get_node("World/Player") as Player
+	var camera := main.get_node("World/Camera2D") as Camera2D
+	session.start_new_run(12345)
+	await get_tree().process_frame
+	var fixed_position := camera.global_position
+	var moved_position := player.global_position + Vector2(80, 40)
+	player.global_position = moved_position
+	await get_tree().process_frame
+	await get_tree().physics_frame
+
+	assert_ne(player.global_position, fixed_position)
+	assert_eq(camera.global_position, fixed_position)
 
 func test_session_start_new_run_configures_real_room_geometry() -> void:
 	var main := MAIN_SCENE.instantiate()
