@@ -185,6 +185,102 @@ func test_bruta_visual_settle_changes_only_visual_root() -> void:
 	assert_almost_eq(player.body_collision.rotation, 0.18, 0.0001)
 	assert_almost_eq(player.visual_root.rotation, lerpf(0.1, -deg_to_rad(3.0), 0.2), 0.0001)
 
+func test_bruta_spawn_stopped_does_not_start_spin() -> void:
+	var player: Player = await _bruta_player()
+	player._update_omni_stop_spin(0.1, Vector2.ZERO)
+
+	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
+
+func test_bruta_micro_movement_below_threshold_does_not_start_spin() -> void:
+	var player: Player = await _bruta_player()
+	player.velocity = Vector2(49.9, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.1, Vector2.ZERO)
+
+	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
+
+func test_bruta_significant_movement_then_stop_starts_spin() -> void:
+	var player: Player = await _bruta_player()
+	player.velocity = Vector2(50.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player._update_omni_stop_spin(0.01, Vector2.ZERO)
+
+	assert_ne(player.visual_root.rotation, 0.0)
+
+func test_bruta_spin_rotates_only_visual_root() -> void:
+	var player: Player = await _bruta_player()
+	player.rotation = 0.37
+	player.body_collision.rotation = 0.18
+	player.hurtbox.rotation = -0.22
+	player.velocity = Vector2(60.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player._update_omni_stop_spin(0.05, Vector2.ZERO)
+
+	assert_ne(player.visual_root.rotation, 0.0)
+	assert_almost_eq(player.rotation, 0.37, 0.0001)
+	assert_almost_eq(player.body_collision.rotation, 0.18, 0.0001)
+	assert_almost_eq(player.hurtbox.rotation, -0.22, 0.0001)
+
+func test_bruta_spin_finishes_at_zero_and_does_not_repeat_while_stopped() -> void:
+	var player: Player = await _bruta_player()
+	player.velocity = Vector2(60.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player._update_omni_stop_spin(0.1, Vector2.ZERO)
+	player._update_omni_stop_spin(0.1, Vector2.ZERO)
+	player._update_omni_stop_spin(0.15, Vector2.ZERO)
+	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
+	player._update_omni_stop_spin(0.1, Vector2.ZERO)
+	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
+
+func test_bruta_stop_events_alternate_spin_direction() -> void:
+	var player: Player = await _bruta_player()
+	player.velocity = Vector2(60.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player._update_omni_stop_spin(0.01, Vector2.ZERO)
+	var first_rotation := player.visual_root.rotation
+	player._update_omni_stop_spin(0.35, Vector2.ZERO)
+	player.velocity = Vector2(60.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player._update_omni_stop_spin(0.01, Vector2.ZERO)
+
+	assert_true(first_rotation < 0.0)
+	assert_true(player.visual_root.rotation > 0.0)
+
+func test_bruta_new_input_cancels_spin_and_restores_visual_root() -> void:
+	var player: Player = await _bruta_player()
+	player.velocity = Vector2(60.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player._update_omni_stop_spin(0.05, Vector2.ZERO)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+
+	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
+
+func test_aim_forward_never_enters_spin_fsm_and_switch_to_base_clears_state() -> void:
+	var player: Player = await _bruta_player()
+	player.velocity = Vector2(60.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
+	player.velocity = Vector2(5.0, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
+	player._update_omni_stop_spin(0.01, Vector2.ZERO)
+	assert_ne(player.visual_root.rotation, 0.0)
+	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_base")))
+	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
+	player._update_omni_stop_spin(0.1, Vector2.ZERO)
+	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
+
 
 func test_bruta_escape_thrusters_are_opposite_to_movement() -> void:
 	var player: Player = await _bruta_player()

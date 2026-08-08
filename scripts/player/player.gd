@@ -26,6 +26,14 @@ const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
 @onready var hurtbox_collision: CollisionShape2D = $Hurtbox/CollisionShape2D
 
 enum AimSource { NONE, MOUSE, JOYPAD }
+enum SpinState { IDLE, MOVING, SPINNING }
+
+const OMNI_STOP_SPEED := 5.0
+const OMNI_MOVING_SPEED := 50.0
+const OMNI_STOP_SPIN_DURATION := 0.35
+const OMNI_STOP_SPIN_ANTICIPATION := 0.15
+const OMNI_STOP_SPIN_SETTLE := 0.12
+const OMNI_STOP_SPIN_ANTICIPATION_ANGLE := PI / 18.0
 
 var _fire_cooldown: float = 0.0
 var _blink_cd: float = 0.0
@@ -50,6 +58,10 @@ var _inventory: Inventory
 var _base_sprite_frames: SpriteFrames = null
 var _base_body_shape: Shape2D = null
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
+var _omni_stop_spin_state: SpinState = SpinState.IDLE
+var _omni_stop_spin_elapsed := 0.0
+var _omni_stop_spin_direction := 1.0
+var _omni_stop_spin_next_direction := 1.0
 
 func _ready() -> void:
 	if ship == null:
@@ -129,6 +141,7 @@ func _configure_loadout() -> void:
 ## Restaura o estado que pode ter sido alterado por uma nave omni antes de
 ## aplicar o novo casco. Isso tambem mantem a troca para naves legadas segura.
 func _reset_ship_visual_state() -> void:
+	_reset_omni_stop_spin()
 	visual_root.rotation = 0.0
 	sprite.modulate = Color.WHITE
 	sprite.animation = &"neutral"
@@ -292,6 +305,7 @@ func _physics_process(delta: float) -> void:
 	if not omni:
 		rotation = _aim_vector.angle() + PI / 2.0
 	_check_contact()
+	_update_omni_stop_spin(delta, movement_direction if omni else Vector2.ZERO)
 	_update_bank(movement_direction if omni else Vector2.ZERO)
 	_update_thruster(movement_direction if omni else Vector2.DOWN)
 	_update_invuln_visual()
@@ -304,6 +318,71 @@ func _is_omni_ship() -> bool:
 ## Usa a mesma convencao de eixos do blink: esquerda, direita, cima, baixo.
 func _omni_movement_direction() -> Vector2:
 	return Input.get_vector("move_left", "move_right", "move_up", "move_down")
+
+## Faz a Bruta girar somente depois de uma parada real apos movimento significativo.
+## O giro vive apenas no VisualRoot para nunca afetar colisao ou orientacao fisica.
+func _update_omni_stop_spin(delta: float, omni_direction: Vector2) -> void:
+	if not _is_omni_ship():
+		_reset_omni_stop_spin()
+		return
+
+	if _omni_stop_spin_state == SpinState.SPINNING:
+		if omni_direction != Vector2.ZERO:
+			_reset_omni_stop_spin()
+			return
+		_omni_stop_spin_elapsed += delta
+		var progress := clampf(_omni_stop_spin_elapsed / OMNI_STOP_SPIN_DURATION, 0.0, 1.0)
+		visual_root.rotation = _omni_stop_spin_rotation(progress)
+		if progress >= 1.0:
+			visual_root.rotation = 0.0
+			_omni_stop_spin_state = SpinState.IDLE
+			_omni_stop_spin_elapsed = 0.0
+			_omni_stop_spin_next_direction *= -1.0
+		return
+
+	if velocity.length() >= OMNI_MOVING_SPEED:
+		_omni_stop_spin_state = SpinState.MOVING
+		return
+
+	if _omni_stop_spin_state == SpinState.MOVING and velocity.length() <= OMNI_STOP_SPEED and omni_direction == Vector2.ZERO:
+		_omni_stop_spin_state = SpinState.SPINNING
+		_omni_stop_spin_elapsed = 0.0
+		_omni_stop_spin_direction = _omni_stop_spin_next_direction
+		visual_root.rotation = 0.0
+
+## A antecipacao vai contra o giro; em seguida, a rotacao numerica avanca sem
+## cruzar a normalizacao angular ate o reset neutro no ultimo quadro.
+func _omni_stop_spin_rotation(progress: float) -> float:
+	var anticipation_end := OMNI_STOP_SPIN_ANTICIPATION
+	var settle_start := 1.0 - OMNI_STOP_SPIN_SETTLE
+	if progress < anticipation_end:
+		var anticipation_t := _smoothstep(progress / anticipation_end)
+		return -_omni_stop_spin_direction * OMNI_STOP_SPIN_ANTICIPATION_ANGLE * anticipation_t
+	if progress < settle_start:
+		var spin_t := _smoothstep((progress - anticipation_end) / (settle_start - anticipation_end))
+		return lerpf(
+			-_omni_stop_spin_direction * OMNI_STOP_SPIN_ANTICIPATION_ANGLE,
+			_omni_stop_spin_direction * (TAU - OMNI_STOP_SPIN_ANTICIPATION_ANGLE),
+			spin_t,
+		)
+	var settle_t := _smoothstep((progress - settle_start) / OMNI_STOP_SPIN_SETTLE)
+	return lerpf(
+		_omni_stop_spin_direction * (TAU - OMNI_STOP_SPIN_ANTICIPATION_ANGLE),
+		_omni_stop_spin_direction * TAU,
+		settle_t,
+	)
+
+func _smoothstep(value: float) -> float:
+	var t := clampf(value, 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
+
+## Cancela uma pirueta sem consumir a proxima direcao. Somente um giro concluido
+## alterna o sentido, para que blink, respawn e novo input sejam neutros.
+func _reset_omni_stop_spin() -> void:
+	_omni_stop_spin_state = SpinState.IDLE
+	_omni_stop_spin_elapsed = 0.0
+	if is_instance_valid(visual_root):
+		visual_root.rotation = 0.0
 
 ## Detecta o mouse antes da interface para preservar a troca de fonte da mira.
 func _input(event: InputEvent) -> void:
@@ -387,6 +466,7 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
+	_reset_omni_stop_spin()
 	_dispatcher.dispatch(&"on_blink", null, 0)
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))
 	_spawn_teleport_fx(origin)
@@ -452,6 +532,7 @@ func _on_enemy_died(_enemy: Node, fatal_info: DamageInfo) -> void:
 
 func _on_died(_fatal_info: DamageInfo) -> void:
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
+	_reset_omni_stop_spin()
 	_spawn_teleport_fx(global_position)
 	if GameState.player_lives <= 0:
 		hide()
@@ -459,6 +540,7 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 		return  # sem renascer: o HUD assume o fim de jogo
 	global_position = _spawn_point
 	velocity = Vector2.ZERO
+	_reset_omni_stop_spin()
 	health.reset()
 	_blink_cd = 0.0
 	_blink_cd_duration = 0.0
@@ -479,6 +561,8 @@ func _clamp_to_bounds() -> void:
 ## Mantém a pose neutra: A/S/D não geram strafe nem inclinação.
 func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
 	if _is_omni_ship():
+		if _omni_stop_spin_state == SpinState.SPINNING:
+			return
 		var target := clampf(omni_direction.x * deg_to_rad(3.0), -deg_to_rad(3.0), deg_to_rad(3.0))
 		visual_root.rotation = lerpf(visual_root.rotation, target, 0.2)
 		return
@@ -488,6 +572,14 @@ func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
 
 ## O propulsor estica e intensifica conforme a velocidade atual.
 func _update_thruster(omni_direction: Vector2 = Vector2.DOWN) -> void:
+	if _is_omni_ship() and _omni_stop_spin_state == SpinState.SPINNING:
+		for current_thruster in thrusters:
+			current_thruster.emitting = true
+			current_thruster.initial_velocity_min = 12.0
+			current_thruster.initial_velocity_max = 24.0
+			current_thruster.scale_amount_min = 0.45
+			current_thruster.scale_amount_max = 0.7
+		return
 	var ratio := clampf(velocity.length() / _stats.get_stat(&"max_speed"), 0.0, 1.0)
 	for current_thruster in thrusters:
 		var active := current_thruster == thruster if not _is_omni_ship() else _is_thruster_active(current_thruster, omni_direction)
