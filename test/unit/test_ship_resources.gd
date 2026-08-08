@@ -94,6 +94,126 @@ func test_new_ship_textures_have_transparent_corners() -> void:
 		for corner in [Vector2i(0, 0), Vector2i(79, 0), Vector2i(0, 47), Vector2i(79, 47)]:
 			assert_lt(image.get_pixelv(corner).a, 1.0, "Canto %s de %s deve ser transparente" % [corner, ship_id])
 
+func test_bruta_texture_is_rgba_and_each_atlas_cell_has_content() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_bruta"]))
+	assert_not_null(image, "Textura da Bruta deve carregar")
+	if image == null:
+		return
+	assert_eq(image.get_format(), Image.FORMAT_RGBA8, "Textura da Bruta deve estar em formato RGBA8")
+	for row in 2:
+		for column in 5:
+			var has_content := false
+			for y in 24:
+				for x in 16:
+					if image.get_pixel(column * 16 + x, row * 24 + y).a > 0.0:
+						has_content = true
+						break
+				if has_content:
+					break
+			assert_true(has_content, "Célula %d,%d da Bruta deve conter pixels não transparentes" % [column, row])
+
+func test_bruta_propulsion_frames_are_different() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_bruta"]))
+	assert_not_null(image, "Textura da Bruta deve carregar")
+	if image == null:
+		return
+	for column in 5:
+		assert_false(_bruta_cells_match(image, column, column, false), "Os frames de propulsão devem diferir na coluna %d" % column)
+		assert_true(_bruta_cells_match(image, column, column, true), "O casco da coluna %d deve ser idêntico entre as linhas" % column)
+
+func test_bruta_top_row_has_five_geometrically_distinct_poses() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_bruta"]))
+	assert_not_null(image, "Textura da Bruta deve carregar")
+	if image == null:
+		return
+	for left_column in 5:
+		for right_column in range(left_column + 1, 5):
+			assert_false(_bruta_top_cells_match(image, left_column, right_column), "As poses %d e %d não podem ser idênticas" % [left_column, right_column])
+			assert_false(_bruta_is_x_translation(image, left_column, right_column, 2), "As poses %d e %d não podem ser cópias deslocadas em X" % [left_column, right_column])
+
+func test_bruta_has_four_distinct_opaque_pod_groups_per_cell() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_bruta"]))
+	assert_not_null(image, "Textura da Bruta deve carregar")
+	if image == null:
+		return
+	for row in 2:
+		for column in 5:
+			assert_eq(_bruta_pod_group_count(image, column, row), 4, "Célula %d,%d deve ter quatro grupos opacos de propulsores" % [column, row])
+
+func test_bruta_resource_loads_and_points_to_texture() -> void:
+	var bruta := load(SHIP_PATHS[&"nave_bruta"]) as ShipDef
+	assert_not_null(bruta, "Resource da Bruta deve carregar")
+	if bruta == null:
+		return
+	assert_not_null(bruta.hull_texture, "Bruta deve apontar para uma textura de casco")
+	if bruta.hull_texture != null:
+		assert_eq(bruta.hull_texture.resource_path, NEW_SHIP_TEXTURES[&"nave_bruta"], "Bruta deve apontar para bruta.png")
+
+func _bruta_cells_match(image: Image, left_column: int, right_column: int, ignore_energy: bool) -> bool:
+	for y in 24:
+		for x in 16:
+			if ignore_energy and _is_bruta_energy_zone(x, y):
+				continue
+			if not is_equal_approx(image.get_pixel(left_column * 16 + x, y).a, image.get_pixel(right_column * 16 + x, y + 24).a):
+				return false
+	return true
+
+func _bruta_top_cells_match(image: Image, left_column: int, right_column: int) -> bool:
+	for y in 24:
+		for x in 16:
+			if image.get_pixel(left_column * 16 + x, y) != image.get_pixel(right_column * 16 + x, y):
+				return false
+	return true
+
+func _bruta_is_x_translation(image: Image, left_column: int, right_column: int, maximum_offset: int) -> bool:
+	for offset in range(-maximum_offset, maximum_offset + 1):
+		var matches := true
+		for y in 24:
+			for x in 16:
+				var source_x := x - offset
+				var source_color := Color(0, 0, 0, 0)
+				if source_x >= 0 and source_x < 16:
+					source_color = image.get_pixel(left_column * 16 + source_x, y)
+				if source_color != image.get_pixel(right_column * 16 + x, y):
+					matches = false
+					break
+			if not matches:
+				break
+		if matches:
+			return true
+	return false
+
+func _bruta_pod_group_count(image: Image, column: int, row: int) -> int:
+	# Four broad rear/side ROIs make this alpha-component check independent of pod colors.
+	var regions := [Rect2i(0, 1, 7, 9), Rect2i(9, 1, 7, 9), Rect2i(0, 14, 7, 10), Rect2i(9, 14, 7, 10)]
+	var groups := 0
+	for region in regions:
+		if _has_opaque_component(image, Rect2i(column * 16 + region.position.x, row * 24 + region.position.y, region.size.x, region.size.y)):
+			groups += 1
+	return groups
+
+func _has_opaque_component(image: Image, region: Rect2i) -> bool:
+	var pending: Array[Vector2i] = []
+	var visited := {}
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			var start := Vector2i(x, y)
+			if visited.has(start) or image.get_pixelv(start).a <= 0.0:
+				continue
+			pending.append(start)
+			visited[start] = true
+			while not pending.is_empty():
+				var pixel: Vector2i = pending.pop_back()
+				for neighbor in [pixel + Vector2i.LEFT, pixel + Vector2i.RIGHT, pixel + Vector2i.UP, pixel + Vector2i.DOWN]:
+					if region.has_point(neighbor) and not visited.has(neighbor) and image.get_pixelv(neighbor).a > 0.0:
+						visited[neighbor] = true
+						pending.append(neighbor)
+			return true
+	return false
+
+func _is_bruta_energy_zone(x: int, y: int) -> bool:
+	return x >= 3 and x <= 12 and y >= 6 and y <= 20
+
 func test_engineer_uses_engineer_deploy_ability() -> void:
 	var engineer := ShipCatalog.get_ship(&"nave_engenheira")
 	assert_not_null(engineer)
