@@ -86,6 +86,16 @@ func _on_ship_back_requested() -> void:
 	_state = MenuState.CHARACTER
 	_character_panel.grab_initial_focus()
 
+func reset_for_new_run() -> void:
+	_start_requested = false
+	_state = MenuState.MAIN
+	_controls_panel.hide()
+	_character_panel.hide()
+	_ship_panel.hide()
+	_menu_container.show()
+	show()
+	call_deferred(&"_focus_start_button")
+
 func _open_controls() -> void:
 	if _state != MenuState.MAIN:
 		return

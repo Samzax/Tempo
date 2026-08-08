@@ -171,6 +171,52 @@ func test_back_navigation_preserves_and_allows_bidirectional_selection_changes()
 	assert_true(menu.get_node("MenuContainer").visible)
 	assert_eq(menu.get_viewport().gui_get_focus_owner(), menu.get_node("MenuContainer/StartButton"))
 
+func test_reset_for_new_run_returns_from_character_selection_to_main_menu() -> void:
+	var menu := await _menu()
+	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	menu.reset_for_new_run()
+	await get_tree().process_frame
+
+	assert_true(menu.visible)
+	assert_true(menu.get_node("MenuContainer").visible)
+	assert_false(menu.get_node("ControlsPanel").visible)
+	assert_false(menu.get_node("CharacterSelectionPanel").visible)
+	assert_false(menu.get_node("ShipSelectionPanel").visible)
+	assert_eq(menu.get_viewport().gui_get_focus_owner(), menu.get_node("MenuContainer/StartButton"))
+
+	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	assert_true(menu.get_node("CharacterSelectionPanel").visible)
+
+func test_reset_for_new_run_returns_from_ship_selection_to_main_menu() -> void:
+	var menu := await _menu()
+	watch_signals(menu)
+	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+	(menu.get_node("CharacterSelectionPanel/MarginContainer/VBoxContainer/Actions/ContinueButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	menu.reset_for_new_run()
+	await get_tree().process_frame
+
+	assert_true(menu.visible)
+	assert_true(menu.get_node("MenuContainer").visible)
+	assert_false(menu.get_node("ControlsPanel").visible)
+	assert_false(menu.get_node("CharacterSelectionPanel").visible)
+	assert_false(menu.get_node("ShipSelectionPanel").visible)
+	assert_eq(menu._state, MainMenu.MenuState.MAIN)
+	assert_eq(menu.get_viewport().gui_get_focus_owner(), menu.get_node("MenuContainer/StartButton"))
+	assert_false(menu._start_requested)
+
+	(menu.get_node("MenuContainer/StartButton") as Button).emit_signal("pressed")
+	await get_tree().process_frame
+
+	assert_true(menu.get_node("CharacterSelectionPanel").visible)
+	assert_signal_not_emitted(menu, &"start_game_requested")
+
 func test_selected_ids_reach_player_before_session_starts() -> void:
 	var main := MAIN_SCENE.instantiate()
 	add_child_autofree(main)

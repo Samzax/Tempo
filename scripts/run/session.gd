@@ -77,6 +77,17 @@ func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAUL
 	run_state.current_node_id = sector.start_node_id
 	_enter_node(sector.start_node_id)
 
+## Descarta todos os objetos e referencias pertencentes a execucao atual.
+func reset_run() -> void:
+	_dispose_active_room()
+	_hyperspace.hide()
+	run_state = null
+	sector = null
+	_room_active = false
+	_awaiting_boss_advance = false
+	_has_started = false
+	_engineer_deploy_sequence = 0
+
 func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	if _room_active or sector == null or sector.get_node(node_id) == null:
 		return
