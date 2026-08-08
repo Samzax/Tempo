@@ -40,13 +40,16 @@ func test_main_scene_starts_player_and_camera_at_room_center_without_sprite_scal
 	var background := main.get_node("PhaseBackground") as Sprite2D
 
 	assert_eq(camera.position, expected_center)
+	assert_eq(camera.zoom, Vector2.ONE)
 	assert_eq(player.position, expected_center)
 	assert_eq(player.global_position, expected_center)
 	assert_eq(player.scale, Vector2.ONE)
 	assert_eq(visual_root.scale, Vector2.ONE)
 	assert_eq(animated_sprite.scale, Vector2.ONE)
 	assert_eq(background.position, expected_center)
-	assert_eq(background.scale, Vector2.ONE)
+	# A textura de 480x270 usa escala 1.5 para cobrir a sala 720x405;
+	# isso e composicao do fundo, nao zoom da Camera2D.
+	assert_eq(background.scale, Vector2(1.5, 1.5))
 
 func test_active_session_camera_does_not_follow_player_movement() -> void:
 	var main := MAIN_SCENE.instantiate()
@@ -95,7 +98,30 @@ func test_session_start_new_run_configures_real_room_geometry() -> void:
 	assert_eq(camera.limit_right, 720)
 	assert_eq(camera.limit_bottom, 405)
 	assert_eq(camera.global_position, ARENA.get_center())
+	assert_eq(camera.zoom, Vector2.ONE)
 	assert_eq(camera.get_viewport_rect().size, VIEWPORT_SIZE)
+
+func test_session_never_follows_player_from_start_or_physics_cycle() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/run/session.gd")
+	var start_body := _function_body(source, "start_new_run")
+	var physics_body := _function_body(source, "_physics_process")
+
+	assert_true(not start_body.is_empty(), "Session.start_new_run deve existir para a guarda textual ser efetiva")
+	if physics_body.is_empty():
+		assert_false(source.contains("func _physics_process"))
+
+	for body in [start_body, physics_body]:
+		assert_false(body.contains("_camera.global_position = _player.global_position"))
+		assert_false(body.contains("_camera.position = _player.position"))
+
+func _function_body(source: String, function_name: String) -> String:
+	var start := source.find("func " + function_name)
+	if start == -1:
+		return ""
+	var next_function := source.find("\nfunc ", start + 1)
+	if next_function == -1:
+		next_function = source.length()
+	return source.substr(start, next_function - start)
 
 func test_bullet_keeps_room_bounds_while_crossing_viewport_extent() -> void:
 	var bullet_scene := preload("res://scenes/projectiles/bullet.tscn")
