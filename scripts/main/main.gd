@@ -45,6 +45,7 @@ func _on_start_game_requested(ship_id: StringName, character_id: StringName) -> 
 	if not player.configure_selection(selected_ship, RunManager.selected_character_id):
 		return
 	_reset_player_for_new_run(player)
+	GameState.reset_for_new_run()
 	_gameplay_started = true
 	_world.show()
 	_world.process_mode = Node.PROCESS_MODE_INHERIT
@@ -68,9 +69,7 @@ func _on_pause_back_to_title_requested() -> void:
 	_hud.hide()
 	_reset_hud_for_new_run()
 	_dev_sandbox.set_enabled(false)
-	GameState.score = 0
-	GameState.stage = 1
-	GameState.player_lives = 3
+	GameState.reset_for_new_run()
 	_main_menu.reset_for_new_run()
 
 func _clear_runtime_children(container: Node) -> void:

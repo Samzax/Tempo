@@ -71,6 +71,7 @@ func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAUL
 		if current_character == null or current_character.id != character_id:
 			_player.call(&"configure_character", character_id)
 	_has_started = true
+	GameState.reset_for_new_run()
 	RunManager.start_run(seed_value)
 	run_state = RunState.new()
 	run_state.run_seed = seed_value
@@ -235,6 +236,7 @@ func sandbox_warp(seed_value: int, sector_index: int, node_id: int, node_type: i
 	if target_node == null or target_node.node_type != node_type:
 		return false
 	_dispose_active_room()
+	GameState.reset_for_new_run()
 	RunManager.start_run(seed_value)
 	run_state = RunState.new()
 	run_state.run_seed = seed_value

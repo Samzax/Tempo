@@ -3,6 +3,7 @@ extends Node
 ## algumas variações a partir do mesmo cenário de inimigo (dados diferentes).
 
 const ENEMY := preload("res://scenes/enemies/enemy.tscn")
+const HUNTER := preload("res://scenes/enemies/hunter.tscn")
 
 signal enemy_spawned(enemy: Enemy)
 signal spawns_finished
@@ -11,10 +12,12 @@ signal spawns_failed(reason: String)
 enum State { IDLE, RUNNING, FINISHED }
 
 @export var interval: float = 1.1
+@export_range(1, 100, 1) var hunter_spawn_every: int = 5
 
 var _t: float = 0.0
 var _container: Node = null
 var _spawn_index: int = 0
+var _regular_spawn_index: int = 0
 var _spawn_limit: int = 0
 var _spawns_emitted: int = 0
 var _finished_emitted: bool = false
@@ -38,6 +41,7 @@ func start(spawn_limit: int) -> bool:
 	_spawn_limit = spawn_limit
 	_spawns_emitted = 0
 	_spawn_index = 0
+	_regular_spawn_index = 0
 	_finished_emitted = false
 	_t = 0.0
 	if _spawn_limit <= 0:
@@ -76,10 +80,24 @@ func _spawn() -> Enemy:
 	if _container == null:
 		_fail_spawns("SpawnDirector lost its enemies_container.")
 		return null
-	var e := ENEMY.instantiate() as Enemy
+	var is_hunter := hunter_spawn_every > 0 and (_spawn_index + 1) % hunter_spawn_every == 0
+	var e := (HUNTER if is_hunter else ENEMY).instantiate() as Enemy
 	if e == null:
 		return null
-	match _spawn_index % 3:
+	if not is_hunter:
+		_configure_regular_enemy(e)
+		_regular_spawn_index += 1
+	_spawn_index += 1
+	e.set_room_bounds(_room_bounds)
+	e.global_position = Vector2(
+		RunManager.rng.randf_range(_room_bounds.position.x + 24.0, _room_bounds.end.x - 24.0),
+		_room_bounds.position.y - 16.0
+	)
+	_container.add_child(e)
+	return e
+
+func _configure_regular_enemy(e: Enemy) -> void:
+	match _regular_spawn_index % 3:
 		0:  # perseguidor vermelho
 			e.movement = Enemy.Movement.CHASE
 			e.speed = 55.0
@@ -95,14 +113,6 @@ func _spawn() -> Enemy:
 			e.speed = 80.0
 			e.max_health = 3
 			e.tint = Color(0.75, 0.5, 1.0)
-	_spawn_index += 1
-	e.set_room_bounds(_room_bounds)
-	e.global_position = Vector2(
-		RunManager.rng.randf_range(_room_bounds.position.x + 24.0, _room_bounds.end.x - 24.0),
-		_room_bounds.position.y - 16.0
-	)
-	_container.add_child(e)
-	return e
 
 func _finish_spawns() -> void:
 	if _finished_emitted:

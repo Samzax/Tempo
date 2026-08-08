@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/hunter.gd" id="1_hunter"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemy.png" id="2_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
+
+[sub_resource type="CircleShape2D" id="Circle_hunter"]
+radius = 8.0
+
+[node name="Hunter" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("1_hunter")
+max_health = 6.0
+speed = 65.0
+contact_damage = 1.0
+tint = Color(0.55, 0.9, 1, 1)
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("3_health")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Circle_hunter")
