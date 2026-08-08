@@ -15,11 +15,15 @@ const BLINK_BASE_COOLDOWN := 0.9
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
 const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
 
-@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
-@onready var thruster: CPUParticles2D = $Thruster
+@onready var visual_root: Node2D = $VisualRoot
+@onready var sprite: AnimatedSprite2D = $VisualRoot/AnimatedSprite2D
+@onready var thruster: CPUParticles2D = $VisualRoot/Thruster
+@onready var thrusters: Array[CPUParticles2D] = [$VisualRoot/Thruster, $VisualRoot/ThrusterTop, $VisualRoot/ThrusterLeft, $VisualRoot/ThrusterRight]
 @onready var muzzle: Marker2D = $Muzzle
 @onready var health: HealthComponent = $HealthComponent
 @onready var hurtbox: Area2D = $Hurtbox
+@onready var body_collision: CollisionShape2D = $CollisionShape2D
+@onready var hurtbox_collision: CollisionShape2D = $Hurtbox/CollisionShape2D
 
 enum AimSource { NONE, MOUSE, JOYPAD }
 
@@ -44,6 +48,7 @@ var _stats: StatBlock
 var _dispatcher: EffectDispatcher
 var _inventory: Inventory
 var _base_sprite_frames: SpriteFrames = null
+var _base_body_shape: Shape2D = null
 var _bounds: Vector2 = Vector2(
 	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
 	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
@@ -104,12 +109,31 @@ func _configure_loadout() -> void:
 	_ability_q = AbilityCatalog.get_ability(ship.ability_q) if ship != null and not ship.ability_q.is_empty() else null
 	_ability_e = AbilityCatalog.get_ability(character.ability_e) if character != null and not character.ability_e.is_empty() else null
 	thruster.color = character.thrust_color
+	for omni_thruster in thrusters:
+		omni_thruster.color = character.thrust_color
+	_reset_ship_visual_state()
 	_apply_hull_texture()
+	_configure_ship_geometry()
+	muzzle.visible = ship == null or ship.has_muzzle
 	_dispatcher = EffectDispatcher.new(self, _gather_effects())
 	_inventory = Inventory.new(_stats, _dispatcher)
 	if is_instance_valid(health):
 		health.max_health = _stats.get_stat(&"max_health")
 		health.health = health.max_health
+
+## Restaura o estado que pode ter sido alterado por uma nave omni antes de
+## aplicar o novo casco. Isso tambem mantem a troca para naves legadas segura.
+func _reset_ship_visual_state() -> void:
+	visual_root.rotation = 0.0
+	sprite.modulate = Color.WHITE
+	sprite.animation = &"neutral"
+	sprite.play(&"neutral")
+	thruster.position = Vector2(0, 12) if _is_omni_ship() else Vector2(0, 10)
+	for current_thruster in thrusters:
+		current_thruster.emitting = false
+	$VisualRoot/ThrusterTop.position = Vector2(0, -12)
+	$VisualRoot/ThrusterLeft.position = Vector2(-12, 0)
+	$VisualRoot/ThrusterRight.position = Vector2(12, 0)
 
 ## Restaura os frames base e, quando houver textura, troca somente o atlas de cada frame.
 ## Regioes, animacoes e o casco sem rotacao sao preservados.
@@ -126,6 +150,19 @@ func _apply_hull_texture() -> void:
 	if frames == null:
 		return
 	if ship != null and ship.hull_texture != null:
+		if ship.movement_style == "omni":
+			if ship.hull_texture.get_size() != Vector2(ship.frame_size):
+				push_warning("A textura omni precisa ter exatamente o frame_size configurado.")
+				sprite.sprite_frames = frames
+				return
+			frames.clear_all()
+			frames.add_animation(&"neutral")
+			frames.add_frame(&"neutral", ship.hull_texture)
+			frames.set_animation_loop(&"neutral", true)
+			frames.set_animation_speed(&"neutral", 1.0)
+			sprite.sprite_frames = frames
+			sprite.play(&"neutral")
+			return
 		for animation_name in frames.get_animation_names():
 			for frame_index in frames.get_frame_count(animation_name):
 				var old_texture := frames.get_frame_texture(animation_name, frame_index)
@@ -136,6 +173,22 @@ func _apply_hull_texture() -> void:
 				replacement.atlas = ship.hull_texture
 				frames.set_frame(animation_name, frame_index, replacement)
 	sprite.sprite_frames = frames
+
+func _configure_ship_geometry() -> void:
+	if _base_body_shape == null and body_collision.shape != null:
+		_base_body_shape = body_collision.shape.duplicate()
+	if ship == null:
+		return
+	var radius := ship.hurtbox_radius
+	var hurt_shape := CircleShape2D.new()
+	hurt_shape.radius = radius
+	hurtbox_collision.shape = hurt_shape
+	if ship.collision_shape_type == "circle":
+		var body_shape := CircleShape2D.new()
+		body_shape.radius = radius
+		body_collision.shape = body_shape
+	elif _base_body_shape != null:
+		body_collision.shape = _base_body_shape.duplicate()
 
 ## Substitui o buff ativo da habilidade para evitar colisao de source_id e
 ## acúmulo acidental ao reativar uma habilidade ainda ativa.
@@ -207,15 +260,20 @@ func _physics_process(delta: float) -> void:
 	_dispatcher.tick(delta)
 	_tick_timers(delta)
 	_update_aim()
-	rotation = _aim_vector.angle() + PI / 2.0
-	var is_thrusting := Input.is_action_pressed("move_up")
+	var omni := _is_omni_ship()
+	if not omni:
+		rotation = _aim_vector.angle() + PI / 2.0
+	else:
+		rotation = 0.0
+	var movement_direction := _omni_movement_direction() if omni else _aim_vector
+	var is_thrusting := movement_direction != Vector2.ZERO if omni else Input.is_action_pressed("move_up")
 	var blink_consumed := _handle_blink_input()
 	_handle_ability_input()
 
 	if not blink_consumed:
 		velocity = AsteroidsMotion.calculate_velocity(
 			velocity,
-			_aim_vector,
+			movement_direction,
 			is_thrusting,
 			_stats.get_stat(&"acceleration"),
 			_stats.get_stat(&"friction"),
@@ -226,12 +284,21 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		_clamp_to_bounds()
 	_refresh_mouse_aim()
-	rotation = _aim_vector.angle() + PI / 2.0
+	if not omni:
+		rotation = _aim_vector.angle() + PI / 2.0
 	_check_contact()
-	_update_bank()
-	_update_thruster()
+	_update_bank(movement_direction if omni else Vector2.ZERO)
+	_update_thruster(movement_direction if omni else Vector2.DOWN)
 	_update_invuln_visual()
-	_handle_fire(delta)
+	if ship == null or ship.has_muzzle:
+		_handle_fire(delta)
+
+func _is_omni_ship() -> bool:
+	return ship != null and ship.movement_style == "omni"
+
+## Usa a mesma convencao de eixos do blink: esquerda, direita, cima, baixo.
+func _omni_movement_direction() -> Vector2:
+	return Input.get_vector("move_left", "move_right", "move_up", "move_down")
 
 ## Detecta o mouse antes da interface para preservar a troca de fonte da mira.
 func _input(event: InputEvent) -> void:
@@ -405,17 +472,33 @@ func _clamp_to_bounds() -> void:
 	global_position.y = clampf(global_position.y, m, _bounds.y - m)
 
 ## Mantém a pose neutra: A/S/D não geram strafe nem inclinação.
-func _update_bank() -> void:
+func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
+	if _is_omni_ship():
+		var target := clampf(omni_direction.x * deg_to_rad(3.0), -deg_to_rad(3.0), deg_to_rad(3.0))
+		visual_root.rotation = lerpf(visual_root.rotation, target, 0.2)
+		return
+	visual_root.rotation = 0.0
 	if sprite.animation != &"neutral":
 		sprite.play(&"neutral")
 
 ## O propulsor estica e intensifica conforme a velocidade atual.
-func _update_thruster() -> void:
+func _update_thruster(omni_direction: Vector2 = Vector2.DOWN) -> void:
 	var ratio := clampf(velocity.length() / _stats.get_stat(&"max_speed"), 0.0, 1.0)
-	thruster.initial_velocity_min = 20.0 + ratio * 40.0
-	thruster.initial_velocity_max = 50.0 + ratio * 70.0
-	thruster.scale_amount_min = 0.8 + ratio * 0.4
-	thruster.scale_amount_max = 1.4 + ratio * 0.8
+	for current_thruster in thrusters:
+		var active := current_thruster == thruster if not _is_omni_ship() else _is_thruster_active(current_thruster, omni_direction)
+		current_thruster.emitting = active and (not _is_omni_ship() or omni_direction != Vector2.ZERO)
+		current_thruster.initial_velocity_min = 20.0 + ratio * 40.0
+		current_thruster.initial_velocity_max = 50.0 + ratio * 70.0
+		current_thruster.scale_amount_min = 0.8 + ratio * 0.4
+		current_thruster.scale_amount_max = 1.4 + ratio * 0.8
+
+func _is_thruster_active(current_thruster: CPUParticles2D, direction: Vector2) -> bool:
+	return (
+		(current_thruster == thruster and direction.y < 0.0)
+		or (current_thruster == $VisualRoot/ThrusterTop and direction.y > 0.0)
+		or (current_thruster == $VisualRoot/ThrusterLeft and direction.x > 0.0)
+		or (current_thruster == $VisualRoot/ThrusterRight and direction.x < 0.0)
+	)
 
 ## Pisca a nave enquanto invulnerável (feedback dos i-frames).
 func _update_invuln_visual() -> void:
@@ -440,7 +523,7 @@ func _handle_fire(delta: float) -> void:
 		_fire_cooldown = 1.0 / _stats.get_stat(&"fire_rate")
 
 func _fire() -> void:
-	if _projectiles == null:
+	if _projectiles == null or (ship != null and not ship.has_muzzle):
 		return
 	var tier := clampi(_stats.get_stat_int(&"aim_tier"), 0, 3)
 	var fire_dir := _aim_vector

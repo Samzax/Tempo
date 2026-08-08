@@ -63,11 +63,10 @@ func test_textured_ship_switch_back_restores_base_sprite_frames() -> void:
 	assert_not_null(base_frame)
 
 	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_bruta")))
-	var textured_frame := player.sprite.sprite_frames.get_frame_texture(&"neutral", 0) as AtlasTexture
+	var textured_frame := player.sprite.sprite_frames.get_frame_texture(&"neutral", 0)
 	assert_ne(player.sprite.sprite_frames, base_frames)
 	assert_not_null(textured_frame)
-	assert_eq(textured_frame.atlas.resource_path, "res://assets/sprites/bruta.png")
-	assert_eq(textured_frame.region, Rect2(0, 0, 16, 24))
+	assert_eq(textured_frame, ShipCatalog.get_ship(&"nave_bruta").hull_texture)
 
 	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_base")))
 	var restored_frame := player.sprite.sprite_frames.get_frame_texture(&"neutral", 0) as AtlasTexture

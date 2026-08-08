@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="ShipDef" load_steps=7 format=3 uid="uid://c6r8v1k4m9y2d"]
 
 [ext_resource type="Script" uid="uid://dxj8iu0hungha" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
-[ext_resource type="Texture2D" uid="uid://bq3d6m8nw2x7a" path="res://assets/sprites/bruta.png" id="2_texture"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bruta-hull.png" id="2_texture"]
 [ext_resource type="Script" uid="uid://ejapxfmnbiux" path="res://scripts/stats/base_stat_value.gd" id="3_base_stat"]
 
 [sub_resource type="Resource" id="BaseStatValue_health"]
@@ -31,3 +31,8 @@ display_name = "Bruta"
 hull_texture = ExtResource("2_texture")
 base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_acceleration"), SubResource("BaseStatValue_damage")])
 ability_q = &"sobrecarga"
+movement_style = "omni"
+frame_size = Vector2i(32, 32)
+hurtbox_radius = 10.0
+collision_shape_type = "circle"
+has_muzzle = false

@@ -88,7 +88,9 @@ collision_layer = 2
 collision_mask = 1
 script = ExtResource("2_player")
 
-[node name="Thruster" type="CPUParticles2D" parent="."]
+[node name="VisualRoot" type="Node2D" parent="."]
+
+[node name="Thruster" type="CPUParticles2D" parent="VisualRoot"]
 position = Vector2(0, 10)
 amount = 22
 lifetime = 0.35
@@ -102,7 +104,49 @@ scale_amount_min = 0.8
 scale_amount_max = 1.6
 color_ramp = SubResource("Gradient_thrust")
 
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+[node name="ThrusterTop" type="CPUParticles2D" parent="VisualRoot"]
+position = Vector2(0, -12)
+amount = 22
+lifetime = 0.35
+local_coords = false
+direction = Vector2(0, -1)
+spread = 15.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 20.0
+initial_velocity_max = 60.0
+scale_amount_min = 0.8
+scale_amount_max = 1.6
+color_ramp = SubResource("Gradient_thrust")
+
+[node name="ThrusterLeft" type="CPUParticles2D" parent="VisualRoot"]
+position = Vector2(-12, 0)
+amount = 22
+lifetime = 0.35
+local_coords = false
+direction = Vector2(-1, 0)
+spread = 15.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 20.0
+initial_velocity_max = 60.0
+scale_amount_min = 0.8
+scale_amount_max = 1.6
+color_ramp = SubResource("Gradient_thrust")
+
+[node name="ThrusterRight" type="CPUParticles2D" parent="VisualRoot"]
+position = Vector2(12, 0)
+amount = 22
+lifetime = 0.35
+local_coords = false
+direction = Vector2(1, 0)
+spread = 15.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 20.0
+initial_velocity_max = 60.0
+scale_amount_min = 0.8
+scale_amount_max = 1.6
+color_ramp = SubResource("Gradient_thrust")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="VisualRoot"]
 sprite_frames = SubResource("SpriteFrames_player")
 animation = &"neutral"
 autoplay = "neutral"
