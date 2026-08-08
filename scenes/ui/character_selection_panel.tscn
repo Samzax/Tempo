@@ -1,0 +1,71 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/character_selection_panel.gd" id="1_character_selection"]
+
+[node name="CharacterSelectionPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(360, 230)
+script = ExtResource("1_character_selection")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Selecionar Personagem"
+horizontal_alignment = 1
+
+[node name="CharacterContent" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="PortraitRect" type="TextureRect" parent="MarginContainer/VBoxContainer/CharacterContent"]
+custom_minimum_size = Vector2(112, 112)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Details" type="VBoxContainer" parent="MarginContainer/VBoxContainer/CharacterContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CharacterOptionButton" type="OptionButton" parent="MarginContainer/VBoxContainer/CharacterContent/Details"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="MarginContainer/VBoxContainer/CharacterContent/Details"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+
+[node name="DescriptionLabel" type="RichTextLabel" parent="MarginContainer/VBoxContainer/CharacterContent/Details"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = false
+fit_content = true
+scroll_active = false
+
+[node name="Actions" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 8
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/Actions"]
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+text = "Voltar"
+
+[node name="ContinueButton" type="Button" parent="MarginContainer/VBoxContainer/Actions"]
+custom_minimum_size = Vector2(120, 32)
+layout_mode = 2
+text = "Continuar"
