@@ -11,14 +11,18 @@ var _velocity: Vector2 = Vector2.UP * speed
 var _life: float = 0.0
 var _active: bool = false
 var _shooter: Node = null
-var _bounds: Vector2 = Vector2(
-	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
-	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
-)
+var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 
 func _ready() -> void:
 	body_entered.connect(_on_hit)
 	area_entered.connect(_on_hit)
+
+## Recebe a geometria da sala antes de o projétil ser ativado pelo pool.
+func set_room_bounds(bounds: Rect2) -> void:
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		push_error("Bullet requires positive room bounds.")
+		return
+	_room_bounds = bounds
 
 ## (Re)inicializa o projétil ao ser tirado do pool.
 func activate(pos: Vector2, dir: Vector2, shooter: Node) -> void:
@@ -38,8 +42,8 @@ func _physics_process(delta: float) -> void:
 	_life -= delta
 	var m := 16.0
 	if _life <= 0.0 \
-			or global_position.y < -m or global_position.y > _bounds.y + m \
-			or global_position.x < -m or global_position.x > _bounds.x + m:
+			or global_position.y < _room_bounds.position.y - m or global_position.y > _room_bounds.end.y + m \
+			or global_position.x < _room_bounds.position.x - m or global_position.x > _room_bounds.end.x + m:
 		_despawn()
 
 func _on_hit(other: Node) -> void:

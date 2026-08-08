@@ -77,7 +77,7 @@ func test_blink_with_move_up_pressed_keeps_velocity_zero_for_the_frame() -> void
 
 func test_blink_destination_is_clamped_near_arena_edges() -> void:
 	var player: Player = await _player()
-	player._bounds = Vector2(100.0, 80.0)
+	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(100.0, 80.0)))
 	player.global_position = Vector2(12.0, 68.0)
 	player._aim_vector = Vector2(-1.0, 1.0).normalized()
 	Input.action_press(&"aim_right")
@@ -90,7 +90,7 @@ func test_blink_destination_is_clamped_near_arena_edges() -> void:
 
 func test_position_is_clamped_to_arena_bounds() -> void:
 	var player: Player = await _player()
-	player._bounds = Vector2(100.0, 80.0)
+	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(100.0, 80.0)))
 	player.global_position = Vector2(-20.0, 120.0)
 	player._clamp_to_bounds()
 

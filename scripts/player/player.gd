@@ -49,10 +49,7 @@ var _dispatcher: EffectDispatcher
 var _inventory: Inventory
 var _base_sprite_frames: SpriteFrames = null
 var _base_body_shape: Shape2D = null
-var _bounds: Vector2 = Vector2(
-	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
-	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
-)
+var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 
 func _ready() -> void:
 	if ship == null:
@@ -100,6 +97,14 @@ func configure_character(character_id: StringName) -> void:
 	character = CharacterDef.resolve_id(character_id)
 	if is_node_ready():
 		_configure_loadout()
+
+## Configura os limites da arena atual e o ponto de renascimento no seu centro.
+func set_room_bounds(bounds: Rect2) -> void:
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		push_error("Player requires positive room bounds.")
+		return
+	_room_bounds = bounds
+	_spawn_point = bounds.get_center()
 
 func _configure_loadout() -> void:
 	if character == null:
@@ -377,8 +382,8 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	var origin := global_position
 	var m := 10.0
 	var dest := origin + bdir * _stats.get_stat(&"blink_distance")
-	dest.x = clampf(dest.x, m, _bounds.x - m)
-	dest.y = clampf(dest.y, m, _bounds.y - m)
+	dest.x = clampf(dest.x, _room_bounds.position.x + m, _room_bounds.end.x - m)
+	dest.y = clampf(dest.y, _room_bounds.position.y + m, _room_bounds.end.y - m)
 
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
@@ -465,11 +470,11 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 	_invuln_timer = _stats.get_stat(&"respawn_invuln")
 	_spawn_teleport_fx(_spawn_point)
 
-## Mantém a nave dentro da área visível (arena de tela única).
+## Mantém a nave dentro da arena atual.
 func _clamp_to_bounds() -> void:
 	var m := 10.0
-	global_position.x = clampf(global_position.x, m, _bounds.x - m)
-	global_position.y = clampf(global_position.y, m, _bounds.y - m)
+	global_position.x = clampf(global_position.x, _room_bounds.position.x + m, _room_bounds.end.x - m)
+	global_position.y = clampf(global_position.y, _room_bounds.position.y + m, _room_bounds.end.y - m)
 
 ## Mantém a pose neutra: A/S/D não geram strafe nem inclinação.
 func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
@@ -534,6 +539,7 @@ func _fire() -> void:
 	var b := Pools.acquire(BULLET)
 	if b.get_parent() == null:
 		_projectiles.add_child(b)
+	b.set_room_bounds(_room_bounds)
 	b.activate(muzzle.global_position, fire_dir, self)
 	_dispatcher.dispatch(&"on_fire", null, 0)
 

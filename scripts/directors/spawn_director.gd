@@ -19,10 +19,7 @@ var _spawn_limit: int = 0
 var _spawns_emitted: int = 0
 var _finished_emitted: bool = false
 var _state: State = State.IDLE
-var _bounds: Vector2 = Vector2(
-	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
-	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
-)
+var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 
 func _ready() -> void:
 	_container = get_tree().get_first_node_in_group("enemies_container")
@@ -51,6 +48,13 @@ func start(spawn_limit: int) -> bool:
 
 func stop() -> void:
 	set_physics_process(false)
+
+## Configura a area horizontal de spawn e a geometria entregue aos inimigos.
+func set_room_bounds(bounds: Rect2) -> void:
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		push_error("SpawnDirector requires positive room bounds.")
+		return
+	_room_bounds = bounds
 
 func _physics_process(delta: float) -> void:
 	if not is_physics_processing():
@@ -92,7 +96,11 @@ func _spawn() -> Enemy:
 			e.max_health = 3
 			e.tint = Color(0.75, 0.5, 1.0)
 	_spawn_index += 1
-	e.global_position = Vector2(RunManager.rng.randf_range(24.0, _bounds.x - 24.0), -16.0)
+	e.set_room_bounds(_room_bounds)
+	e.global_position = Vector2(
+		RunManager.rng.randf_range(_room_bounds.position.x + 24.0, _room_bounds.end.x - 24.0),
+		_room_bounds.position.y - 16.0
+	)
 	_container.add_child(e)
 	return e
 

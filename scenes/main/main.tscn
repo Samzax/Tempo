@@ -16,17 +16,18 @@ script = ExtResource("1_main")
 
 [node name="PhaseBackground" type="Sprite2D" parent="."]
 z_index = -100
-position = Vector2(240, 135)
 texture = ExtResource("5_background")
+position = Vector2(360, 202.5)
+scale = Vector2(1.5, 1.5)
 
 [node name="World" type="Node2D" parent="."]
 process_mode = 4
 
 [node name="Camera2D" type="Camera2D" parent="World"]
-position = Vector2(240, 135)
+position = Vector2(360, 202.5)
 
 [node name="Player" parent="World" instance=ExtResource("2_player")]
-position = Vector2(240, 135)
+position = Vector2(360, 202.5)
 
 [node name="Projectiles" type="Node2D" parent="World" groups=["projectiles"]]
 
@@ -35,6 +36,7 @@ position = Vector2(240, 135)
 [node name="Session" type="Node" parent="."]
 script = ExtResource("11_session")
 player_path = NodePath("../World/Player")
+camera_path = NodePath("../World/Camera2D")
 room_host_path = NodePath("RoomHost")
 hyperspace_path = NodePath("HyperspaceUI/Map")
 

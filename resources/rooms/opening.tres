@@ -6,6 +6,7 @@
 script = ExtResource("1_room_def")
 id = &"opening"
 room_type = 0
+size = Vector2(720, 405)
 camera_policy = 0
 cull_policy = 0
 clear_policy = 0

@@ -9,7 +9,11 @@ enum ClearPolicy { ALL_SPAWNS_RESOLVED }
 @export var id: StringName
 @export var room_type: RoomType = RoomType.OPENING
 @export var scene: PackedScene
+@export var size: Vector2 = Vector2(720, 405)
 @export var camera_policy: CameraPolicy = CameraPolicy.FIXED
 @export var cull_policy: CullPolicy = CullPolicy.DESPAWN_BOTTOM
 @export var clear_policy: ClearPolicy = ClearPolicy.ALL_SPAWNS_RESOLVED
 @export_range(0, 100000, 1) var finite_spawn_count: int = 5
+
+func get_bounds() -> Rect2:
+	return Rect2(Vector2.ZERO, size)

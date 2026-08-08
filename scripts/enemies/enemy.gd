@@ -26,10 +26,7 @@ var _effects: Node = null
 var _phase: float = 0.0
 var _resolved: bool = false
 var _room_cull_policy: int = RoomDef.CullPolicy.DESPAWN_BOTTOM
-var _bounds: Vector2 = Vector2(
-	float(ProjectSettings.get_setting("display/window/size/viewport_width", 480)),
-	float(ProjectSettings.get_setting("display/window/size/viewport_height", 270))
-)
+var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -53,12 +50,19 @@ func _physics_process(delta: float) -> void:
 		Movement.SINE:
 			velocity = Vector2(sin(_phase * 3.0) * speed, speed * 0.6)
 	move_and_slide()
-	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM and global_position.y > _bounds.y + 40.0:
+	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM and global_position.y > _room_bounds.end.y + 40.0:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 
 func set_room_cull_policy(policy: int) -> void:
 	_room_cull_policy = policy
+
+## Recebe os limites da sala antes de entrar em processamento.
+func set_room_bounds(bounds: Rect2) -> void:
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		push_error("Enemy requires positive room bounds.")
+		return
+	_room_bounds = bounds
 
 ## Recebe dano dos projéteis do jogador.
 func take_damage(info: DamageInfo) -> void:

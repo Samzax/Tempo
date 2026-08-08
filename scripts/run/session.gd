@@ -11,12 +11,14 @@ const ENGINEER_DEPLOYABLE := preload("res://scenes/deployables/engineer_deployab
 const ENGINEER_DEPLOYABLE_LIMIT := 3
 
 @export var player_path: NodePath
+@export var camera_path: NodePath
 @export var room_host_path: NodePath
 @export var hyperspace_path: NodePath
 
 var run_state: RunState
 var sector: SectorDef
 var _player: Node2D
+var _camera: Camera2D
 var _room_host: Node
 var _hyperspace: HyperspaceUI
 var _active_room: Node
@@ -29,10 +31,11 @@ var _engineer_deploy_sequence := 0
 func _ready() -> void:
 	add_to_group(&"session")
 	_player = get_node_or_null(player_path) as Node2D
+	_camera = get_node_or_null(camera_path) as Camera2D
 	_room_host = get_node_or_null(room_host_path)
 	_hyperspace = get_node_or_null(hyperspace_path) as HyperspaceUI
-	if _player == null or _room_host == null or _hyperspace == null:
-		push_error("Session requires Player, RoomHost and HyperspaceUI.")
+	if _player == null or _camera == null or _room_host == null or _hyperspace == null:
+		push_error("Session requires Player, Camera2D, RoomHost and HyperspaceUI.")
 		return
 	_hyperspace.node_selected.connect(_on_node_selected)
 	_hyperspace.sector_advance_requested.connect(_on_sector_advance_requested)
@@ -101,14 +104,33 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	var room := ROOM_SCENE.instantiate()
 	var controller := room.get_node("RoomController") as RoomController
 	var chest := room.get_node("RewardChest") as RewardChest
-	controller.room_def = _room_def_for(node_def, is_revisit)
+	var room_def := _room_def_for(node_def, is_revisit)
+	var room_bounds := room_def.get_bounds()
+	controller.room_def = room_def
+	_configure_room_geometry(room, room_bounds)
 	chest.configure(_player, run_state.sector_index, node_id, 0, 0, _pool_for(node_def), run_state.get_offer(run_state.sector_index, node_id, 0, 0))
+	chest.position = Vector2(room_def.size.x * 0.5, room_def.size.y - 52.0)
 	controller.room_cleared.connect(_on_room_cleared.bind(node_def, room_generation))
 	chest.offer_created.connect(run_state.save_offer)
 	chest.offer_requested.connect(_open_offer)
 	_room_host.add_child(room)
 	_active_room = room
-	_player.global_position = Vector2(240, 135)
+	_player.global_position = room_bounds.get_center()
+
+func _physics_process(_delta: float) -> void:
+	if _room_active and is_instance_valid(_player) and is_instance_valid(_camera):
+		_camera.global_position = _player.global_position
+
+func _configure_room_geometry(room: Node, bounds: Rect2) -> void:
+	_player.call(&"set_room_bounds", bounds)
+	_camera.limit_left = int(bounds.position.x)
+	_camera.limit_top = int(bounds.position.y)
+	_camera.limit_right = int(bounds.end.x)
+	_camera.limit_bottom = int(bounds.end.y)
+	_camera.global_position = bounds.get_center()
+	var director := room.get_node_or_null("Directors/SpawnDirector")
+	if director != null and director.has_method(&"set_room_bounds"):
+		director.call(&"set_room_bounds", bounds)
 
 func _on_room_cleared(node_def: SectorNode, room_generation: int) -> void:
 	if room_generation != _room_generation or not _room_active:
