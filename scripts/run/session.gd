@@ -117,10 +117,6 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	_active_room = room
 	_player.global_position = room_bounds.get_center()
 
-func _physics_process(_delta: float) -> void:
-	if _room_active and is_instance_valid(_player) and is_instance_valid(_camera):
-		_camera.global_position = _player.global_position
-
 func _configure_room_geometry(room: Node, bounds: Rect2) -> void:
 	_player.call(&"set_room_bounds", bounds)
 	_camera.limit_left = int(bounds.position.x)
