@@ -5,6 +5,8 @@ extends CharacterBody2D
 ## propulsor reativo, disparo primário (Espaço) e blink (Shift): teleporte
 ## instantâneo com i-frames. Recebe dano por contato com inimigos (respeitando
 ## os i-frames) e renasce no centro ao morrer.
+
+signal health_capacity_changed(max_health: float)
 	
 @export var ship: ShipDef
 @export var character: CharacterDef
@@ -136,8 +138,11 @@ func _configure_loadout() -> void:
 	_dispatcher = EffectDispatcher.new(self, _gather_effects())
 	_inventory = Inventory.new(_stats, _dispatcher)
 	if is_instance_valid(health):
+		var previous_max_health := health.max_health
 		health.max_health = _stats.get_stat(&"max_health")
 		health.health = health.max_health
+		if health.max_health != previous_max_health:
+			health_capacity_changed.emit(health.max_health)
 
 ## Restaura o estado que pode ter sido alterado por uma nave omni antes de
 ## aplicar o novo casco. Isso tambem mantem a troca para naves legadas segura.
@@ -240,8 +245,11 @@ func sandbox_set_stat_override(stat_id: StringName, value: float) -> bool:
 		normalized = float(roundi(normalized))
 	_stats.set_base(stat_id, normalized)
 	if stat_id == &"max_health":
+		var previous_max_health := health.max_health
 		health.max_health = normalized
 		health.health = minf(health.health, health.max_health)
+		if health.max_health != previous_max_health:
+			health_capacity_changed.emit(health.max_health)
 	return true
 
 func sandbox_grant_item(item_id: StringName, amount: int) -> int:
