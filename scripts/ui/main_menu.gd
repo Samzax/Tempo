@@ -50,6 +50,13 @@ func _on_start_button_pressed() -> void:
 	hide()
 	start_game_requested.emit(ship_id, _selected_character_id())
 
+func reset_for_new_run() -> void:
+	_start_requested = false
+	_controls_panel.hide()
+	_menu_container.show()
+	show()
+	call_deferred(&"_focus_start_button")
+
 func _populate_ship_select() -> void:
 	_ship_select.clear()
 	for ship in ShipCatalog.all():

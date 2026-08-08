@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scripts/ui/hyperspace_ui.gd" id="12_hyperspace"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_sandbox.tscn" id="13_sandbox"]
 [ext_resource type="PackedScene" path="res://scenes/ui/main_menu.tscn" id="14_main_menu"]
+[ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="15_pause_menu"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -57,6 +58,8 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("10_item_choice")
+
+[node name="PauseMenu" parent="." instance=ExtResource("15_pause_menu")]
 
 [node name="DevSandbox" parent="." instance=ExtResource("13_sandbox")]
 
