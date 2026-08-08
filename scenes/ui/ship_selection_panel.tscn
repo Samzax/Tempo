@@ -1,0 +1,33 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/ship_selection_panel.gd" id="1_ship_selection_panel"]
+
+[node name="ShipSelectionPanel" type="VBoxContainer"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+script = ExtResource("1_ship_selection_panel")
+
+[node name="TitleLabel" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "SELECIONE A NAVE"
+horizontal_alignment = 1
+
+[node name="ShipOptionButton" type="OptionButton" parent="."]
+custom_minimum_size = Vector2(210, 30)
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BackButton" type="Button" parent="ButtonContainer"]
+custom_minimum_size = Vector2(101, 34)
+layout_mode = 2
+text = "Voltar"
+
+[node name="ContinueButton" type="Button" parent="ButtonContainer"]
+custom_minimum_size = Vector2(101, 34)
+layout_mode = 2
+text = "Continuar"
