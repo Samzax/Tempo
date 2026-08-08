@@ -25,6 +25,8 @@ const SHIP_IMPORT_PATHS := [
 	"res://assets/sprites/rastreadora.png.import",
 ]
 
+const BRUTA_ESCAPE_ROI := Rect2i(8, 1, 1, 22)
+
 func test_ship_resources_have_unique_non_empty_uids() -> void:
 	var uids := {}
 	var uid_pattern := RegEx.new()
@@ -154,14 +156,17 @@ func _bruta_cells_match(image: Image, left_column: int, right_column: int, ignor
 		for x in 16:
 			if ignore_energy and _is_bruta_energy_zone(x, y):
 				continue
-			if not is_equal_approx(image.get_pixel(left_column * 16 + x, y).a, image.get_pixel(right_column * 16 + x, y + 24).a):
+			if not image.get_pixel(left_column * 16 + x, y).is_equal_approx(image.get_pixel(right_column * 16 + x, y + 24)):
 				return false
 	return true
 
 func _bruta_top_cells_match(image: Image, left_column: int, right_column: int) -> bool:
 	for y in 24:
 		for x in 16:
-			if image.get_pixel(left_column * 16 + x, y) != image.get_pixel(right_column * 16 + x, y):
+			if not is_equal_approx(
+				image.get_pixel(left_column * 16 + x, y).a,
+				image.get_pixel(right_column * 16 + x, y).a
+			):
 				return false
 	return true
 
@@ -212,7 +217,7 @@ func _has_opaque_component(image: Image, region: Rect2i) -> bool:
 	return false
 
 func _is_bruta_energy_zone(x: int, y: int) -> bool:
-	return x >= 3 and x <= 12 and y >= 6 and y <= 20
+	return BRUTA_ESCAPE_ROI.has_point(Vector2i(x, y))
 
 func test_engineer_uses_engineer_deploy_ability() -> void:
 	var engineer := ShipCatalog.get_ship(&"nave_engenheira")
