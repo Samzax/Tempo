@@ -24,7 +24,7 @@ texture = ExtResource("2_tex")
 texture_filter = 1
 hframes = 6
 vframes = 4
-scale = Vector2(0.125, 0.125)
+scale = Vector2(1, 1)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("Circle_hunter")

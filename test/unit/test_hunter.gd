@@ -16,6 +16,19 @@ func _damage(amount: float) -> DamageInfo:
 	info.amount = amount
 	return info
 
+func _cell_image(image: Image, frame: int) -> Image:
+	var cell := Rect2i((frame % 6) * 32, (frame / 6) * 32, 32, 32)
+	return image.get_region(cell)
+
+func _alpha_bounds(cell: Image, alpha_threshold: int = 8) -> Rect2i:
+	var bounds := Rect2i()
+	for y in cell.get_height():
+		for x in cell.get_width():
+			if cell.get_pixel(x, y).a8 > alpha_threshold:
+				var pixel := Rect2i(x, y, 1, 1)
+				bounds = pixel if bounds == Rect2i() else bounds.merge(pixel)
+	return bounds
+
 func _session_for_run_paths() -> Session:
 	var session := Session.new()
 	var player := preload("res://scenes/player/player.tscn").instantiate()
@@ -57,13 +70,33 @@ func test_hunter_scene_preserves_spritesheet_and_hitbox_contract() -> void:
 	var texture := hunter.sprite.texture as Texture2D
 	var shape := hunter.collision_shape.shape as CircleShape2D
 	assert_eq(texture.resource_path, "res://assets/sprites/hunter-spritesheet.png")
-	assert_eq(texture.get_width(), 1536)
-	assert_eq(texture.get_height(), 1024)
+	assert_eq(texture.get_width(), 192)
+	assert_eq(texture.get_height(), 128)
 	assert_eq(texture.get_image().get_format(), Image.FORMAT_RGBA8)
 	assert_eq(hunter.sprite.hframes, 6)
 	assert_eq(hunter.sprite.vframes, 4)
-	assert_eq(hunter.sprite.scale, Vector2(0.125, 0.125))
+	assert_eq(hunter.sprite.scale, Vector2(1, 1))
 	assert_almost_eq(shape.radius, 8.0, 0.001)
+
+func test_hunter_spritesheet_has_alpha_in_used_frames_and_none_in_empty_frames() -> void:
+	var hunter := await _hunter()
+	var image := (hunter.sprite.texture as Texture2D).get_image()
+	for frame in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 18, 19, 20, 21]:
+		var cell := _cell_image(image, frame)
+		assert_true(_alpha_bounds(cell).size.x > 0, "frame %d has no alpha pixels" % frame)
+	for frame in [10, 11, 15, 16, 17, 22, 23]:
+		assert_eq(_alpha_bounds(_cell_image(image, frame)), Rect2i(), "frame %d is not empty" % frame)
+
+func test_hunter_used_frames_are_contained_by_their_32_pixel_cells() -> void:
+	var hunter := await _hunter()
+	var image := (hunter.sprite.texture as Texture2D).get_image()
+	for frame in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 18, 19, 20, 21]:
+		var cell := _cell_image(image, frame)
+		var bounds := _alpha_bounds(cell)
+		assert_true(bounds.position.x >= 0 and bounds.position.y >= 0, "frame %d leaks before cell" % frame)
+		assert_true(bounds.end.x <= 32 and bounds.end.y <= 32, "frame %d leaks past cell" % frame)
+		assert_lte(bounds.size.x, 32, "frame %d is wider than its cell" % frame)
+		assert_lte(bounds.size.y, 32, "frame %d is taller than its cell" % frame)
 
 func test_hunter_state_frames_follow_animation_ranges() -> void:
 	var hunter := await _hunter()
