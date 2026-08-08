@@ -21,6 +21,6 @@ director_path = NodePath("../Directors/SpawnDirector")
 room_root_path = NodePath("..")
 
 [node name="RewardChest" type="Node2D" parent="."]
-position = Vector2(240, 218)
+position = Vector2(360, 353)
 script = ExtResource("3_chest")
 room_controller_path = NodePath("../RoomController")
