@@ -3,6 +3,7 @@ extends GutTest
 const HUNTER_SCENE := preload("res://scenes/enemies/hunter.tscn")
 const HUNTER_SCRIPT := preload("res://scripts/enemies/hunter.gd")
 const SPAWN_DIRECTOR := preload("res://scripts/directors/spawn_director.gd")
+const ENEMY_SCENE := preload("res://scenes/enemies/enemy.tscn")
 
 func _hunter() -> Node:
 	var hunter: Node = HUNTER_SCENE.instantiate()
@@ -50,6 +51,40 @@ func test_hunter_cycles_through_attack_states_using_exported_durations() -> void
 	assert_eq(hunter.attack_state, HUNTER_SCRIPT.AttackState.RECOVER)
 	hunter._physics_process(0.06)
 	assert_eq(hunter.attack_state, HUNTER_SCRIPT.AttackState.CHASE)
+
+func test_hunter_scene_preserves_spritesheet_and_hitbox_contract() -> void:
+	var hunter := await _hunter()
+	var texture := hunter.sprite.texture as Texture2D
+	var shape := hunter.collision_shape.shape as CircleShape2D
+	assert_eq(texture.resource_path, "res://assets/sprites/hunter-spritesheet.png")
+	assert_eq(texture.get_width(), 1536)
+	assert_eq(texture.get_height(), 1024)
+	assert_eq(texture.get_image().get_format(), Image.FORMAT_RGBA8)
+	assert_eq(hunter.sprite.hframes, 6)
+	assert_eq(hunter.sprite.vframes, 4)
+	assert_eq(hunter.sprite.scale, Vector2(0.125, 0.125))
+	assert_almost_eq(shape.radius, 8.0, 0.001)
+
+func test_hunter_state_frames_follow_animation_ranges() -> void:
+	var hunter := await _hunter()
+	hunter.telegraph_duration = 0.4
+	hunter.dash_duration = 0.3
+	hunter.recover_duration = 0.4
+	hunter.enter_attack_state(HUNTER_SCRIPT.AttackState.CHASE)
+	hunter._physics_process(0.51)
+	assert_true(hunter.sprite.frame >= 0 and hunter.sprite.frame <= 5)
+	hunter.enter_attack_state(HUNTER_SCRIPT.AttackState.RECOVER)
+	hunter._physics_process(0.21)
+	assert_true(hunter.sprite.frame >= 0 and hunter.sprite.frame <= 5)
+	hunter.enter_attack_state(HUNTER_SCRIPT.AttackState.TELEGRAPH)
+	hunter._physics_process(0.21)
+	assert_true(hunter.sprite.frame >= 6 and hunter.sprite.frame <= 9)
+	assert_eq(hunter.sprite.modulate, hunter.tint.lightened(0.35))
+	assert_true(is_instance_valid(hunter._telegraph_tween))
+	hunter.enter_attack_state(HUNTER_SCRIPT.AttackState.DASH)
+	hunter._physics_process(0.16)
+	assert_true(hunter.sprite.frame >= 12 and hunter.sprite.frame <= 14)
+	assert_almost_eq(hunter.rotation, 0.0, 0.001)
 
 func test_telegraph_pulses_and_dash_keeps_captured_direction() -> void:
 	var hunter := await _hunter()
@@ -136,6 +171,33 @@ func test_hunter_reward_is_configurable_and_defaults_to_one() -> void:
 	hunter.temporal_echo_reward = 3
 	hunter.take_damage(_damage(hunter.health.max_health))
 	assert_eq(GameState.temporal_echoes, 3)
+
+func test_hunter_death_disables_collision_animates_frames_and_frees_after_last_frame() -> void:
+	var hunter := await _hunter()
+	GameState.reset_for_new_run()
+	hunter._on_died(_damage(999.0))
+	assert_true(hunter._dead)
+	assert_eq(hunter.collision_layer, 0)
+	assert_eq(hunter.collision_mask, 0)
+	await get_tree().physics_frame
+	assert_true(hunter.collision_shape.disabled)
+	assert_eq(hunter.sprite.frame, 18)
+	assert_true(is_instance_valid(hunter))
+	for expected_frame in [19, 20, 21, 21]:
+		hunter._physics_process(0.1)
+		assert_eq(hunter.sprite.frame, expected_frame)
+	assert_true(is_instance_valid(hunter))
+	hunter._physics_process(0.1)
+	assert_true(hunter.is_queued_for_deletion())
+	assert_eq(GameState.temporal_echoes, 1)
+
+func test_regular_enemy_keeps_immediate_death_behavior() -> void:
+	var enemy := ENEMY_SCENE.instantiate() as Enemy
+	add_child_autofree(enemy)
+	await get_tree().process_frame
+	enemy._on_died(_damage(999.0))
+	assert_true(enemy.is_queued_for_deletion())
+	assert_false(enemy is Hunter)
 
 func test_hunter_zero_reward_does_not_credit_echoes() -> void:
 	var hunter := await _hunter()

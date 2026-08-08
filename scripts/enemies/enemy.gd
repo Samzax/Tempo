@@ -71,13 +71,18 @@ func take_damage(info: DamageInfo) -> void:
 	health.apply_damage(info)
 
 func _on_died(fatal_info: DamageInfo) -> void:
+	_resolve_death(fatal_info)
+	queue_free()
+
+## Resolve os efeitos compartilhados da morte. Variacoes que exibem uma animacao
+## de morte podem chamar isto e adiar a liberacao do no.
+func _resolve_death(fatal_info: DamageInfo) -> void:
 	if _resolved:
 		return
 	GameState.score += score_value
 	EventBus.enemy_died.emit(self, fatal_info)
 	_spawn_burst()
 	_resolve(ResolveReason.DIED)
-	queue_free()
 
 func _resolve(reason: int) -> void:
 	if _resolved:

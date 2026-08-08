@@ -13,15 +13,29 @@ enum AttackState { CHASE, TELEGRAPH, DASH, RECOVER }
 @export_range(1.0, 2000.0, 1.0) var dash_speed: float = 300.0
 @export_range(0, 100, 1) var temporal_echo_reward: int = 1
 
+const CHASE_FRAME_COUNT := 6
+const TELEGRAPH_FIRST_FRAME := 6
+const TELEGRAPH_FRAME_COUNT := 4
+const DASH_FIRST_FRAME := 12
+const DASH_FRAME_COUNT := 3
+const DEATH_FIRST_FRAME := 18
+const DEATH_FRAME_COUNT := 4
+const DEATH_FRAME_DURATION := 0.1
+
 var dash_direction := Vector2.DOWN
 var _state_elapsed := 0.0
 var _attack_cooldown := 0.0
 var _telegraph_tween: Tween
 var _dead := false
 var _reward_granted := false
+var _death_elapsed := 0.0
+var _sprite_base_scale := Vector2.ONE
+
+@onready var collision_shape: CollisionShape2D = $CollisionShape2D
 
 func _ready() -> void:
 	super()
+	_sprite_base_scale = sprite.scale
 	_attack_cooldown = attack_cooldown_duration
 	_enter_state(attack_state)
 
@@ -31,6 +45,7 @@ func _exit_tree() -> void:
 func _physics_process(delta: float) -> void:
 	if _dead:
 		velocity = Vector2.ZERO
+		_advance_death_animation(delta)
 		return
 	var dash_finished := false
 	var state_elapsed_before := _state_elapsed
@@ -59,6 +74,7 @@ func _physics_process(delta: float) -> void:
 	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM and global_position.y > _room_bounds.end.y + 40.0:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
+	_update_sprite_frame()
 
 func _process_chase(delta: float) -> void:
 	if is_instance_valid(_player):
@@ -89,6 +105,7 @@ func _enter_state(next_state: AttackState) -> void:
 			velocity = dash_direction * dash_speed
 		AttackState.RECOVER:
 			velocity = Vector2.ZERO
+	_update_sprite_frame()
 
 func _capture_dash_direction() -> void:
 	if is_instance_valid(_player):
@@ -101,15 +118,15 @@ func _start_telegraph_pulse() -> void:
 	sprite.modulate = tint.lightened(0.35)
 	_telegraph_tween = create_tween()
 	_telegraph_tween.set_loops()
-	_telegraph_tween.tween_property(sprite, "scale", Vector2(1.28, 1.28), 0.11)
-	_telegraph_tween.tween_property(sprite, "scale", Vector2.ONE, 0.11)
+	_telegraph_tween.tween_property(sprite, "scale", _sprite_base_scale * 1.28, 0.11)
+	_telegraph_tween.tween_property(sprite, "scale", _sprite_base_scale, 0.11)
 
 func _stop_telegraph_pulse() -> void:
 	if is_instance_valid(_telegraph_tween):
 		_telegraph_tween.kill()
 	_telegraph_tween = null
 	if is_instance_valid(sprite):
-		sprite.scale = Vector2.ONE
+		sprite.scale = _sprite_base_scale
 		sprite.modulate = tint
 
 func _on_died(fatal_info: DamageInfo) -> void:
@@ -117,11 +134,44 @@ func _on_died(fatal_info: DamageInfo) -> void:
 		return
 	_dead = true
 	_cancel_attack_cycle()
+	collision_layer = 0
+	collision_mask = 0
+	collision_shape.set_deferred("disabled", true)
 	if not _reward_granted and temporal_echo_reward > 0:
 		_reward_granted = true
 		GameState.add_temporal_echoes(temporal_echo_reward)
-	super(fatal_info)
+	_resolve_death(fatal_info)
+	_death_elapsed = 0.0
+	sprite.frame = DEATH_FIRST_FRAME
+
+func take_damage(info: DamageInfo) -> void:
+	if _dead:
+		return
+	super(info)
 
 func _cancel_attack_cycle() -> void:
 	velocity = Vector2.ZERO
 	_stop_telegraph_pulse()
+
+func _update_sprite_frame() -> void:
+	if _dead:
+		return
+	match attack_state:
+		AttackState.CHASE, AttackState.RECOVER:
+			sprite.frame = int(_state_elapsed * 10.0) % CHASE_FRAME_COUNT
+		AttackState.TELEGRAPH:
+			sprite.frame = TELEGRAPH_FIRST_FRAME + _frame_for_duration(TELEGRAPH_FRAME_COUNT, telegraph_duration)
+		AttackState.DASH:
+			sprite.frame = DASH_FIRST_FRAME + _frame_for_duration(DASH_FRAME_COUNT, dash_duration)
+
+func _frame_for_duration(frame_count: int, duration: float) -> int:
+	if duration <= 0.0:
+		return frame_count - 1
+	return mini(frame_count - 1, int((_state_elapsed / duration) * frame_count))
+
+func _advance_death_animation(delta: float) -> void:
+	_death_elapsed += delta
+	var frame_offset := mini(DEATH_FRAME_COUNT - 1, int(_death_elapsed / DEATH_FRAME_DURATION))
+	sprite.frame = DEATH_FIRST_FRAME + frame_offset
+	if _death_elapsed >= DEATH_FRAME_COUNT * DEATH_FRAME_DURATION:
+		queue_free()
