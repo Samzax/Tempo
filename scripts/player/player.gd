@@ -28,7 +28,8 @@ const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
 enum AimSource { NONE, MOUSE, JOYPAD }
 enum SpinState { IDLE, MOVING, SPINNING }
 
-const OMNI_STOP_SPEED := 5.0
+## Velocidade que dispara a pirueta durante a desaceleracao final.
+const SPIN_TRIGGER_SPEED := 30.0
 const OMNI_MOVING_SPEED := 50.0
 const OMNI_STOP_SPIN_DURATION := 0.35
 const OMNI_STOP_SPIN_ANTICIPATION := 0.15
@@ -319,7 +320,7 @@ func _is_omni_ship() -> bool:
 func _omni_movement_direction() -> Vector2:
 	return Input.get_vector("move_left", "move_right", "move_up", "move_down")
 
-## Faz a Bruta girar somente depois de uma parada real apos movimento significativo.
+## Faz a Bruta girar na desaceleracao final apos movimento significativo.
 ## O giro vive apenas no VisualRoot para nunca afetar colisao ou orientacao fisica.
 func _update_omni_stop_spin(delta: float, omni_direction: Vector2) -> void:
 	if not _is_omni_ship():
@@ -344,7 +345,7 @@ func _update_omni_stop_spin(delta: float, omni_direction: Vector2) -> void:
 		_omni_stop_spin_state = SpinState.MOVING
 		return
 
-	if _omni_stop_spin_state == SpinState.MOVING and velocity.length() <= OMNI_STOP_SPEED and omni_direction == Vector2.ZERO:
+	if _omni_stop_spin_state == SpinState.MOVING and velocity.length() <= SPIN_TRIGGER_SPEED and omni_direction == Vector2.ZERO:
 		_omni_stop_spin_state = SpinState.SPINNING
 		_omni_stop_spin_elapsed = 0.0
 		_omni_stop_spin_direction = _omni_stop_spin_next_direction

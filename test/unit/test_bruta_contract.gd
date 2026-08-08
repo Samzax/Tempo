@@ -191,24 +191,28 @@ func test_bruta_spawn_stopped_does_not_start_spin() -> void:
 
 	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
 
-func test_bruta_micro_movement_below_threshold_does_not_start_spin() -> void:
+func test_bruta_movement_below_omni_threshold_does_not_start_spin() -> void:
 	var player: Player = await _bruta_player()
 	player.velocity = Vector2(49.9, 0.0)
 	player._update_omni_stop_spin(0.0, Vector2.ZERO)
-	player.velocity = Vector2(5.0, 0.0)
-	player._update_omni_stop_spin(0.1, Vector2.ZERO)
 
+	assert_eq(player._omni_stop_spin_state, Player.SpinState.IDLE)
 	assert_almost_eq(player.visual_root.rotation, 0.0, 0.0001)
 
 func test_bruta_significant_movement_then_stop_starts_spin() -> void:
 	var player: Player = await _bruta_player()
 	player.velocity = Vector2(50.0, 0.0)
 	player._update_omni_stop_spin(0.0, Vector2.RIGHT)
-	player.velocity = Vector2(5.0, 0.0)
+	player.velocity = Vector2(30.1, 0.0)
 	player._update_omni_stop_spin(0.0, Vector2.ZERO)
-	player._update_omni_stop_spin(0.01, Vector2.ZERO)
+	player.velocity = Vector2(29.9, 0.0)
+	player._update_omni_stop_spin(0.0, Vector2.ZERO)
 
+	assert_eq(player._omni_stop_spin_state, Player.SpinState.SPINNING)
+	player._update_omni_stop_spin(0.05, Vector2.ZERO)
 	assert_ne(player.visual_root.rotation, 0.0)
+	player._update_omni_stop_spin(0.30, Vector2.ZERO)
+	assert_eq(player.visual_root.rotation, 0.0)
 
 func test_bruta_spin_rotates_only_visual_root() -> void:
 	var player: Player = await _bruta_player()
