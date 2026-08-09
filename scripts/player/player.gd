@@ -14,7 +14,6 @@ signal health_capacity_changed(max_health: float)
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 const INTERCEPTOR_BLINK_TRAIL := preload("res://scenes/effects/interceptor_blink_trail.tscn")
-const INTERCEPTOR_DETAIL_LINES := preload("res://scenes/effects/interceptor_detail_lines.tscn")
 const BLINK_BASE_COOLDOWN := 0.9
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
 const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
@@ -62,7 +61,6 @@ var _dispatcher: EffectDispatcher
 var _inventory: Inventory
 var _base_sprite_frames: SpriteFrames = null
 var _base_body_shape: Shape2D = null
-var _detail_lines: Node2D = null
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 var _omni_stop_spin_state: SpinState = SpinState.IDLE
 var _omni_stop_spin_elapsed := 0.0
@@ -137,7 +135,6 @@ func _configure_loadout() -> void:
 	_reset_ship_visual_state()
 	_apply_hull_texture()
 	_configure_ship_geometry()
-	_configure_detail_lines()
 	muzzle.visible = ship == null or ship.has_muzzle
 	_dispatcher = EffectDispatcher.new(self, _gather_effects())
 	_inventory = Inventory.new(_stats, _dispatcher)
@@ -223,28 +220,6 @@ func _configure_ship_geometry() -> void:
 		body_collision.shape = body_shape
 	elif _base_body_shape != null:
 		body_collision.shape = _base_body_shape.duplicate()
-
-## Anexa somente a camada visual opt-in ao VisualRoot, sem participar da fisica.
-func _configure_detail_lines() -> void:
-	if is_instance_valid(_detail_lines):
-		_detail_lines.queue_free()
-		_detail_lines = null
-	if ship == null or not ship.detail_lines_enabled:
-		return
-	_detail_lines = INTERCEPTOR_DETAIL_LINES.instantiate() as Node2D
-	if _detail_lines == null:
-		return
-	visual_root.add_child(_detail_lines)
-	_detail_lines.call(
-		&"configure",
-		character.thrust_color,
-		ship.detail_lines_pulse_frequency,
-		ship.detail_lines_alpha_min,
-		ship.detail_lines_alpha_max,
-		ship.detail_lines_width,
-		Vector2(ship.frame_size) if ship != null else Vector2(16, 24),
-		ship.detail_lines_visual_scale,
-	)
 
 ## Substitui o buff ativo da habilidade para evitar colisao de source_id e
 ## acúmulo acidental ao reativar uma habilidade ainda ativa.
@@ -505,7 +480,6 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	dest.x = clampf(dest.x, _room_bounds.position.x + m, _room_bounds.end.x - m)
 	dest.y = clampf(dest.y, _room_bounds.position.y + m, _room_bounds.end.y - m)
 
-	_boost_detail_lines_for_blink()
 	_resolve_blink_trail_damage(origin, dest)
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
@@ -698,11 +672,6 @@ func _spawn_interceptor_blink_trail(origin: Vector2, dest: Vector2) -> void:
 	var fx := INTERCEPTOR_BLINK_TRAIL.instantiate()
 	_effects.add_child(fx)
 	fx.configure(origin, dest, character.thrust_color, ship.blink_trail_width, ship.blink_trail_duration)
-
-## O boost pertence a camada visual local e nao afeta a resolucao instantanea do blink.
-func _boost_detail_lines_for_blink() -> void:
-	if is_instance_valid(_detail_lines) and _detail_lines.has_method(&"boost_for_blink"):
-		_detail_lines.boost_for_blink()
 
 ## Dispara enquanto Espaço estiver pressionado, respeitando a cadência.
 func _handle_fire(delta: float) -> void:

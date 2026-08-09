@@ -30,11 +30,6 @@ func before_each() -> void:
 	_ship.blink_trail_damage = 4.5
 	_ship.blink_trail_width = 10.0
 	_ship.blink_trail_duration = 0.2
-	_ship.detail_lines_enabled = true
-	_ship.detail_lines_pulse_frequency = 2.0
-	_ship.detail_lines_alpha_min = 0.2
-	_ship.detail_lines_alpha_max = 0.8
-	_ship.detail_lines_width = 2.0
 	_ship.frame_size = Vector2i(64, 64)
 	_character = CharacterDef.new()
 	_character.id = &"test_pilot"
@@ -129,89 +124,6 @@ func test_real_base_ship_preserves_every_scene_atlas_region_at_legacy_size() -> 
 	var player := _instantiate_player_with_real_ship(base)
 	await get_tree().process_frame
 	_assert_hull_atlas_regions(player, Vector2i(16, 24))
-
-func test_detail_lines_configure_base_frame_preserves_points_and_width() -> void:
-	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
-	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(16, 24))
-	assert_eq(lines.lines[0].points, PackedVector2Array([Vector2(-5, -8), Vector2(-2, -2), Vector2(-5, 5)]))
-	assert_eq(lines.lines[1].points, PackedVector2Array([Vector2(0, -9), Vector2(0, 7)]))
-	assert_eq(lines.lines[2].points, PackedVector2Array([Vector2(5, -8), Vector2(2, -2), Vector2(5, 5)]))
-	assert_eq(lines._base_width, 2.0)
-
-func test_detail_lines_configure_64_frame_scales_geometry_and_width_from_x() -> void:
-	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
-	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(64, 64))
-	assert_eq(lines.lines[0].points, PackedVector2Array([Vector2(-20, -64.0 / 3.0), Vector2(-8, -16.0 / 3.0), Vector2(-20, 40.0 / 3.0)]))
-	assert_eq(lines.lines[1].points, PackedVector2Array([Vector2(0, -24), Vector2(0, 56.0 / 3.0)]))
-	assert_eq(lines.lines[2].points, PackedVector2Array([Vector2(20, -64.0 / 3.0), Vector2(8, -16.0 / 3.0), Vector2(20, 40.0 / 3.0)]))
-	assert_eq(lines._base_width, 8.0)
-	lines.boost_for_blink()
-	lines._process(0.01)
-	assert_almost_eq(lines.lines[0].width, 8.0 * (1.0 + sin(0.01 / lines.BLINK_BOOST_DURATION * PI) * 0.16), 0.0001)
-
-func test_detail_lines_default_visual_scale_preserves_legacy_64_frame_geometry() -> void:
-	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
-	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(64, 64), 1.0)
-	assert_eq(lines.lines[0].points, PackedVector2Array([Vector2(-20, -64.0 / 3.0), Vector2(-8, -16.0 / 3.0), Vector2(-20, 40.0 / 3.0)]))
-	assert_eq(lines.lines[1].points, PackedVector2Array([Vector2(0, -24), Vector2(0, 56.0 / 3.0)]))
-	assert_eq(lines.lines[2].points, PackedVector2Array([Vector2(20, -64.0 / 3.0), Vector2(8, -16.0 / 3.0), Vector2(20, 40.0 / 3.0)]))
-	assert_eq(lines._base_width, 8.0)
-
-func test_detail_lines_reconfigure_does_not_accumulate_scale() -> void:
-	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
-	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(64, 64))
-	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(16, 24))
-	assert_eq(lines.lines[0].points, PackedVector2Array([Vector2(-5, -8), Vector2(-2, -2), Vector2(-5, 5)]))
-	assert_eq(lines.lines[1].points, PackedVector2Array([Vector2(0, -9), Vector2(0, 7)]))
-	assert_eq(lines.lines[2].points, PackedVector2Array([Vector2(5, -8), Vector2(2, -2), Vector2(5, 5)]))
-	assert_eq(lines._base_width, 2.0)
-
-func test_opt_in_detail_lines_use_character_color_pulse_and_blink_boost() -> void:
-	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
-	var body_shape := _player.body_collision.shape
-	var hurtbox_shape := _player.hurtbox_collision.shape
-	assert_true(_ship.detail_lines_enabled)
-	assert_eq(lines.lines.size(), 3)
-	assert_eq(lines.get_children().filter(func(child): return child is Line2D).size(), 3)
-	var expected_points: Array[PackedVector2Array] = [
-		PackedVector2Array([Vector2(-9, -9.6), Vector2(-3.6, -2.4), Vector2(-9, 6.0)]),
-		PackedVector2Array([Vector2(0, -10.8), Vector2(0, 8.4)]),
-		PackedVector2Array([Vector2(9, -9.6), Vector2(3.6, -2.4), Vector2(9, 6.0)]),
-	]
-	var before: float = 3.6
-	var alpha_before: float = lines.lines[0].default_color.a
-	for index in lines.lines.size():
-		var line: Line2D = lines.lines[index]
-		assert_eq(line.points, expected_points[index])
-		assert_eq(line.width, before)
-		assert_eq(line.default_color, Color(_character.thrust_color.r, _character.thrust_color.g, _character.thrust_color.b, alpha_before))
-	lines._process(0.13)
-	var expected_pulse_alpha: float = lerpf(_ship.detail_lines_alpha_min, _ship.detail_lines_alpha_max, 0.5 + 0.5 * sin(lines._elapsed * TAU * _ship.detail_lines_pulse_frequency))
-	for line in lines.lines:
-		assert_almost_eq(line.default_color.a, expected_pulse_alpha, 0.0001)
-		assert_eq(line.default_color, Color(_character.thrust_color.r, _character.thrust_color.g, _character.thrust_color.b, line.default_color.a))
-		assert_eq(line.width, before)
-	_player._boost_detail_lines_for_blink()
-	lines._process(0.01)
-	var boost_amount: float = sin(0.01 / lines.BLINK_BOOST_DURATION * PI)
-	var expected_boosted_width: float = before * (1.0 + boost_amount * (lines.BLINK_WIDTH_MULTIPLIER - 1.0))
-	var expected_boosted_alpha: float = clampf(lerpf(_ship.detail_lines_alpha_min, _ship.detail_lines_alpha_max, 0.5 + 0.5 * sin(lines._elapsed * TAU * _ship.detail_lines_pulse_frequency)) + boost_amount * 0.2, 0.0, 1.0)
-	for line in lines.lines:
-		assert_gt(line.width, before)
-		assert_almost_eq(line.width, expected_boosted_width, 0.0001)
-		assert_almost_eq(line.default_color.a, expected_boosted_alpha, 0.0001)
-		assert_eq(line.default_color, Color(_character.thrust_color.r, _character.thrust_color.g, _character.thrust_color.b, line.default_color.a))
-	var boosted_width: float = lines.lines[0].width
-	lines._process(0.5)
-	for line in lines.lines:
-		assert_eq(line.width, before)
-	assert_gt(boosted_width, lines.lines[0].width)
-	assert_eq(lines.find_children("*", "CollisionObject2D", true, false).size(), 0)
-	assert_eq(_player.velocity, Vector2.ZERO)
-	assert_eq(_player.collision_layer, 2)
-	assert_eq(_player.collision_mask, 1)
-	assert_eq(_player.body_collision.shape, body_shape)
-	assert_eq(_player.hurtbox_collision.shape, hurtbox_shape)
 
 func test_projectile_consumes_statblock_damage() -> void:
 	_player._stats.set_base(&"damage", 7.25)

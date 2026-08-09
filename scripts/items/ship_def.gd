@@ -18,14 +18,6 @@ extends ProviderDef
 @export_range(0.0, 100.0, 0.1) var blink_trail_damage: float = 0.0
 @export_range(0.0, 128.0, 0.5) var blink_trail_width: float = 0.0
 @export_range(0.01, 2.0, 0.01) var blink_trail_duration: float = 0.18
-## Camada opt-in de linhas coloridas sobre o casco. Defaults neutros a mantem inativa.
-@export var detail_lines_enabled: bool = false
-@export_range(0.0, 30.0, 0.1) var detail_lines_pulse_frequency: float = 0.0
-@export_range(0.0, 1.0, 0.01) var detail_lines_alpha_min: float = 0.0
-@export_range(0.0, 1.0, 0.01) var detail_lines_alpha_max: float = 0.0
-@export_range(0.0, 16.0, 0.1) var detail_lines_width: float = 0.0
-@export_range(0.01, 1.0, 0.01) var detail_lines_visual_scale: float = 1.0
-
 ## Devolve os erros de autoria encontrados nesta nave.
 func validate_content() -> Array[String]:
 	var errors := super()
@@ -44,19 +36,6 @@ func validate_content() -> Array[String]:
 			errors.append("Rastro do blink habilitado precisa de largura positiva.")
 		if blink_trail_duration <= 0.0:
 			errors.append("Rastro do blink habilitado precisa de duracao positiva.")
-	if detail_lines_enabled:
-		if detail_lines_pulse_frequency <= 0.0:
-			errors.append("Linhas de detalhe habilitadas precisam de frequencia positiva.")
-		if detail_lines_alpha_min <= 0.0:
-			errors.append("Linhas de detalhe habilitadas precisam de alpha minimo positivo.")
-		if detail_lines_alpha_max <= 0.0:
-			errors.append("Linhas de detalhe habilitadas precisam de alpha maximo positivo.")
-		if detail_lines_alpha_min > detail_lines_alpha_max:
-			errors.append("Linhas de detalhe precisam ter alpha minimo menor ou igual ao maximo.")
-		if detail_lines_width <= 0.0:
-			errors.append("Linhas de detalhe habilitadas precisam de largura positiva.")
-		if detail_lines_visual_scale < 0.01 or detail_lines_visual_scale > 1.0:
-			errors.append("Linhas de detalhe habilitadas precisam de escala visual entre 0.01 e 1.0.")
 	var seen_stats: Dictionary = {}
 	for base_stat_index in base_stats.size():
 		var base_stat := base_stats[base_stat_index]
