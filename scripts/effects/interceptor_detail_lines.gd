@@ -5,6 +5,7 @@ extends Node2D
 
 const BLINK_BOOST_DURATION := 0.42
 const BLINK_WIDTH_MULTIPLIER := 1.16
+const BASE_FRAME_SIZE := Vector2(16, 24)
 
 var _thrust_color := Color.WHITE
 var _pulse_frequency := 1.0
@@ -13,15 +14,31 @@ var _alpha_max := 0.75
 var _base_width := 1.0
 var _elapsed := 0.0
 var _blink_boost_elapsed := BLINK_BOOST_DURATION
+var _base_points: Array[PackedVector2Array] = []
+
+func _ready() -> void:
+	for line in lines:
+		_base_points.append(line.points.duplicate())
 
 ## Configuracao publica para que a camada possa ser usada por qualquer ShipDef opt-in.
-func configure(thrust_color: Color, pulse_frequency: float, alpha_min: float, alpha_max: float, line_width: float) -> void:
+func configure(thrust_color: Color, pulse_frequency: float, alpha_min: float, alpha_max: float, line_width: float, frame_size: Vector2 = Vector2(16, 24), visual_scale: float = 1.0) -> void:
 	_thrust_color = thrust_color
 	_pulse_frequency = maxf(pulse_frequency, 0.001)
 	_alpha_min = clampf(alpha_min, 0.0, 1.0)
 	_alpha_max = clampf(maxf(alpha_max, _alpha_min), 0.0, 1.0)
-	_base_width = maxf(line_width, 0.01)
+	var safe_visual_scale := maxf(visual_scale, 0.001)
+	var scale_x := maxf(frame_size.x / BASE_FRAME_SIZE.x, 0.001) * safe_visual_scale
+	var scale_y := maxf(frame_size.y / BASE_FRAME_SIZE.y, 0.001) * safe_visual_scale
+	_apply_scaled_points(scale_x, scale_y)
+	_base_width = maxf(line_width * scale_x, 0.01)
 	_apply_pulse()
+
+func _apply_scaled_points(scale_x: float, scale_y: float) -> void:
+	for index in mini(lines.size(), _base_points.size()):
+		var scaled_points := PackedVector2Array()
+		for point in _base_points[index]:
+			scaled_points.append(Vector2(point.x * scale_x, point.y * scale_y))
+		lines[index].points = scaled_points
 
 ## Inicia uma janela local de pre/durante/pos feedback visual para um blink valido.
 func boost_for_blink() -> void:

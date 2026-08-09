@@ -236,6 +236,8 @@ func _configure_detail_lines() -> void:
 		ship.detail_lines_alpha_min,
 		ship.detail_lines_alpha_max,
 		ship.detail_lines_width,
+		Vector2(ship.frame_size) if ship != null else Vector2(16, 24),
+		1.0,
 	)
 
 ## Substitui o buff ativo da habilidade para evitar colisao de source_id e
