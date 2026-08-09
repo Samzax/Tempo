@@ -180,6 +180,20 @@ func test_interstellar_is_the_fastest_ship() -> void:
 		for ship in ShipCatalog.all():
 			assert_gte(_base_stat_value(fastest, &"max_speed"), _base_stat_value(ship, &"max_speed"))
 
+func test_ship_thrusters_enabled_match_expected_resources() -> void:
+	var interceptadora := load(SHIP_PATHS[&"nave_interceptadora"]) as ShipDef
+	assert_not_null(interceptadora)
+	if interceptadora != null:
+		assert_false(interceptadora.thrusters_enabled)
+	var base := load(SHIP_PATHS[&"nave_base"]) as ShipDef
+	assert_not_null(base)
+	if base != null:
+		assert_true(base.thrusters_enabled)
+	var bruta := load(SHIP_PATHS[&"nave_bruta"]) as ShipDef
+	assert_not_null(bruta)
+	if bruta != null:
+		assert_true(bruta.thrusters_enabled)
+
 func _base_stat_value(ship: ShipDef, stat: StringName) -> float:
 	for base_stat in ship.base_stats:
 		if base_stat != null and base_stat.stat == stat:

@@ -12,6 +12,7 @@ extends ProviderDef
 @export_range(1.0, 32.0, 0.5) var hurtbox_radius: float = 8.0
 @export_enum("capsule", "circle") var collision_shape_type: String = "capsule"
 @export var has_muzzle: bool = true
+@export var thrusters_enabled: bool = true
 ## Contrato opt-in para o rastro ofensivo do blink. Os defaults permanecem inertes.
 @export var blink_trail_enabled: bool = false
 @export_range(0.0, 100.0, 0.1) var blink_trail_damage: float = 0.0

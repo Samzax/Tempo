@@ -616,6 +616,10 @@ func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
 
 ## O propulsor estica e intensifica conforme a velocidade atual.
 func _update_thruster(omni_direction: Vector2 = Vector2.DOWN) -> void:
+	if ship != null and not ship.thrusters_enabled:
+		for current_thruster in thrusters:
+			current_thruster.emitting = false
+		return
 	if _is_omni_ship() and _omni_stop_spin_state == SpinState.SPINNING:
 		for current_thruster in thrusters:
 			current_thruster.emitting = true
