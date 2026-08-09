@@ -3,8 +3,33 @@ extends Resource
 
 enum RoomType { OPENING, COMBAT, BOSS }
 enum CameraPolicy { FIXED }
-enum CullPolicy { DESPAWN_BOTTOM, NONE }
+enum CullPolicy { DESPAWN_BOTTOM, NONE, DESPAWN_ALL_BORDERS }
 enum ClearPolicy { ALL_SPAWNS_RESOLVED }
+
+## Descricao imutavel de uma onda. A agenda concreta fica no SpawnDirector;
+## isto mantem RoomDef como o contrato de conteudo da sala.
+class WaveSpec extends RefCounted:
+	var common_count: int
+	var hunter_count: int
+	var max_active: int
+	var cadence: float
+	var paired_commons: bool
+
+	func _init(common: int = 0, hunters: int = 0, active_limit: int = 1, interval: float = 1.1, paired: bool = false) -> void:
+		common_count = common
+		hunter_count = hunters
+		max_active = active_limit
+		cadence = interval
+		paired_commons = paired
+
+func get_phase_one_waves() -> Array[WaveSpec]:
+	return [
+		WaveSpec.new(6, 0, 2, 2.4, true),
+		WaveSpec.new(18, 0, 6, 1.5),
+		WaveSpec.new(0, 2, 2, 0.25),
+		WaveSpec.new(18, 4, 8, 1.1),
+		WaveSpec.new(18, 12, 12, 0.75),
+	]
 
 @export var id: StringName
 @export var room_type: RoomType = RoomType.OPENING
@@ -14,6 +39,16 @@ enum ClearPolicy { ALL_SPAWNS_RESOLVED }
 @export var cull_policy: CullPolicy = CullPolicy.DESPAWN_BOTTOM
 @export var clear_policy: ClearPolicy = ClearPolicy.ALL_SPAWNS_RESOLVED
 @export_range(0, 100000, 1) var finite_spawn_count: int = 5
+## Nao e exportada: as cinco ondas sao construidas programaticamente para evitar
+## recursos auxiliares e preservar as salas legadas baseadas em finite_spawn_count.
+var wave_specs: Array[WaveSpec] = []
 
 func get_bounds() -> Rect2:
 	return Rect2(Vector2.ZERO, size)
+
+func has_waves() -> bool:
+	return not wave_specs.is_empty()
+
+func configure_phase_one_waves() -> void:
+	wave_specs = get_phase_one_waves()
+	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS

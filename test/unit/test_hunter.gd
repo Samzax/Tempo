@@ -239,6 +239,19 @@ func test_hunter_zero_reward_does_not_credit_echoes() -> void:
 	hunter.take_damage(_damage(hunter.health.max_health))
 	assert_eq(GameState.temporal_echoes, 0)
 
+func test_hunter_uses_four_border_culling_policy_after_room_entry() -> void:
+	var hunter := await _hunter()
+	var phase_one_room := RoomDef.new()
+	phase_one_room.configure_phase_one_waves()
+	hunter.set_room_cull_policy(phase_one_room.cull_policy)
+	hunter.set_room_bounds(Rect2(Vector2.ZERO, Vector2(720, 405)))
+	hunter.global_position = Vector2(360, 40)
+	hunter.set_physics_process(true)
+	hunter._physics_process(0.0)
+	hunter.global_position = Vector2(-50, 202)
+	hunter._physics_process(0.0)
+	assert_true(hunter.is_queued_for_deletion())
+
 func test_zero_and_negative_echo_values_do_not_change_balance() -> void:
 	GameState.reset_for_new_run()
 	watch_signals(GameState)

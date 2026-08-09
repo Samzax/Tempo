@@ -27,6 +27,8 @@ var _phase: float = 0.0
 var _resolved: bool = false
 var _room_cull_policy: int = RoomDef.CullPolicy.DESPAWN_BOTTOM
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
+var _entry_inward := Vector2.DOWN
+var _has_entered_room := false
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -38,19 +40,25 @@ func _ready() -> void:
 	_effects = get_tree().get_first_node_in_group("effects")
 
 func _physics_process(delta: float) -> void:
+	if _should_cull():
+		_resolve(ResolveReason.CULLED)
+		queue_free()
+		return
 	_phase += delta
 	match movement:
 		Movement.CHASE:
 			if is_instance_valid(_player):
 				velocity = global_position.direction_to(_player.global_position) * speed
 			else:
-				velocity = Vector2.DOWN * speed
+				velocity = _entry_inward * speed
 		Movement.DESCEND:
-			velocity = Vector2.DOWN * speed
+			velocity = _entry_inward * speed
 		Movement.SINE:
-			velocity = Vector2(sin(_phase * 3.0) * speed, speed * 0.6)
+			velocity = _entry_inward * speed * 0.6 + _entry_inward.rotated(PI * 0.5) * sin(_phase * 3.0) * speed
 	move_and_slide()
-	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM and global_position.y > _room_bounds.end.y + 40.0:
+	if _room_bounds.grow(16.0).has_point(global_position):
+		_has_entered_room = true
+	if _should_cull():
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 
@@ -63,6 +71,18 @@ func set_room_bounds(bounds: Rect2) -> void:
 		push_error("Enemy requires positive room bounds.")
 		return
 	_room_bounds = bounds
+
+func set_entry_inward(direction: Vector2) -> void:
+	if direction == Vector2.ZERO:
+		return
+	_entry_inward = direction.normalized()
+
+func _should_cull() -> bool:
+	if _room_cull_policy == RoomDef.CullPolicy.NONE:
+		return false
+	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM:
+		return global_position.y > _room_bounds.end.y + 40.0
+	return _has_entered_room and not _room_bounds.grow(40.0).has_point(global_position)
 
 ## Recebe dano dos projéteis do jogador.
 func take_damage(info: DamageInfo) -> void:

@@ -145,6 +145,11 @@ func _finish_room_clear(node_def: SectorNode, room_generation: int) -> void:
 	if room_generation != _room_generation:
 		return
 	_persist_active_offer()
+	if _is_phase_one_wave_node(node_def):
+		# A Fase 1 aprovada nao possui chefe: a limpeza apos W5 avanca de
+		# setor diretamente, sem armar o fluxo de chefe.
+		_advance_after_boss()
+		return
 	if node_def.node_type == SectorNode.NodeType.BOSS:
 		_awaiting_boss_advance = true
 		_hyperspace.present_sector_advance(sector, run_state.completed_nodes, run_state.sector_index >= 2)
@@ -269,8 +274,14 @@ func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 	var def := RoomDef.new()
 	def.id = StringName(str(node_def.id))
 	def.room_type = RoomDef.RoomType.BOSS if node_def.node_type == SectorNode.NodeType.BOSS else (RoomDef.RoomType.OPENING if node_def.node_type == SectorNode.NodeType.OPENING else RoomDef.RoomType.COMBAT)
-	def.finite_spawn_count = 0 if is_revisit else 5
+	if is_revisit:
+		def.finite_spawn_count = 0
+	elif _is_phase_one_wave_node(node_def):
+		def.configure_phase_one_waves()
 	return def
+
+func _is_phase_one_wave_node(node_def: SectorNode) -> bool:
+	return run_state != null and run_state.sector_index == 0 and node_def.node_type == SectorNode.NodeType.OPENING
 
 func _pool_for(node_def: SectorNode) -> ItemPoolDef:
 	return BOSS_POOL if node_def.node_type == SectorNode.NodeType.BOSS else COMBAT_POOL
