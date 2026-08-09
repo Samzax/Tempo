@@ -24,6 +24,7 @@ extends ProviderDef
 @export_range(0.0, 1.0, 0.01) var detail_lines_alpha_min: float = 0.0
 @export_range(0.0, 1.0, 0.01) var detail_lines_alpha_max: float = 0.0
 @export_range(0.0, 16.0, 0.1) var detail_lines_width: float = 0.0
+@export_range(0.01, 1.0, 0.01) var detail_lines_visual_scale: float = 1.0
 
 ## Devolve os erros de autoria encontrados nesta nave.
 func validate_content() -> Array[String]:
@@ -54,6 +55,8 @@ func validate_content() -> Array[String]:
 			errors.append("Linhas de detalhe precisam ter alpha minimo menor ou igual ao maximo.")
 		if detail_lines_width <= 0.0:
 			errors.append("Linhas de detalhe habilitadas precisam de largura positiva.")
+		if detail_lines_visual_scale < 0.01 or detail_lines_visual_scale > 1.0:
+			errors.append("Linhas de detalhe habilitadas precisam de escala visual entre 0.01 e 1.0.")
 	var seen_stats: Dictionary = {}
 	for base_stat_index in base_stats.size():
 		var base_stat := base_stats[base_stat_index]

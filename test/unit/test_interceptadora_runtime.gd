@@ -149,6 +149,14 @@ func test_detail_lines_configure_64_frame_scales_geometry_and_width_from_x() -> 
 	lines._process(0.01)
 	assert_almost_eq(lines.lines[0].width, 8.0 * (1.0 + sin(0.01 / lines.BLINK_BOOST_DURATION * PI) * 0.16), 0.0001)
 
+func test_detail_lines_default_visual_scale_preserves_legacy_64_frame_geometry() -> void:
+	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
+	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(64, 64), 1.0)
+	assert_eq(lines.lines[0].points, PackedVector2Array([Vector2(-20, -64.0 / 3.0), Vector2(-8, -16.0 / 3.0), Vector2(-20, 40.0 / 3.0)]))
+	assert_eq(lines.lines[1].points, PackedVector2Array([Vector2(0, -24), Vector2(0, 56.0 / 3.0)]))
+	assert_eq(lines.lines[2].points, PackedVector2Array([Vector2(20, -64.0 / 3.0), Vector2(8, -16.0 / 3.0), Vector2(20, 40.0 / 3.0)]))
+	assert_eq(lines._base_width, 8.0)
+
 func test_detail_lines_reconfigure_does_not_accumulate_scale() -> void:
 	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
 	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(64, 64))
@@ -166,11 +174,11 @@ func test_opt_in_detail_lines_use_character_color_pulse_and_blink_boost() -> voi
 	assert_eq(lines.lines.size(), 3)
 	assert_eq(lines.get_children().filter(func(child): return child is Line2D).size(), 3)
 	var expected_points: Array[PackedVector2Array] = [
-		PackedVector2Array([Vector2(-20, -64.0 / 3.0), Vector2(-8, -16.0 / 3.0), Vector2(-20, 40.0 / 3.0)]),
-		PackedVector2Array([Vector2(0, -24), Vector2(0, 56.0 / 3.0)]),
-		PackedVector2Array([Vector2(20, -64.0 / 3.0), Vector2(8, -16.0 / 3.0), Vector2(20, 40.0 / 3.0)]),
+		PackedVector2Array([Vector2(-9, -9.6), Vector2(-3.6, -2.4), Vector2(-9, 6.0)]),
+		PackedVector2Array([Vector2(0, -10.8), Vector2(0, 8.4)]),
+		PackedVector2Array([Vector2(9, -9.6), Vector2(3.6, -2.4), Vector2(9, 6.0)]),
 	]
-	var before: float = 8.0
+	var before: float = 3.6
 	var alpha_before: float = lines.lines[0].default_color.a
 	for index in lines.lines.size():
 		var line: Line2D = lines.lines[index]
