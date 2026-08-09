@@ -89,6 +89,25 @@ func test_interceptadora_texture_is_rgba8_320_by_128_with_valid_alpha() -> void:
 				visible_pixels += 1
 	assert_gt(visible_pixels, 0)
 
+func test_interceptadora_neutral_variant_lower_frames_are_not_blue_cyan_dominant() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_interceptadora"]))
+	assert_not_null(image)
+	if image == null:
+		return
+	var visible_pixels := 0
+	var saturated_blue_cyan_pixels := 0
+	for y in range(64, image.get_height()):
+		for x in image.get_width():
+			var color := image.get_pixel(x, y)
+			if color.a > 0.0:
+				visible_pixels += 1
+				var is_blue_dominant := color.b > color.r + 0.20 and color.b > color.g + 0.10
+				var is_cyan_dominant := color.b > color.r + 0.20 and color.g > color.r + 0.20
+				if is_blue_dominant or is_cyan_dominant:
+					saturated_blue_cyan_pixels += 1
+	assert_gt(visible_pixels, 0)
+	assert_eq(saturated_blue_cyan_pixels, 0)
+
 func test_interceptadora_resource_uses_64_by_64_frames() -> void:
 	var ship := load(SHIP_PATHS[&"nave_interceptadora"]) as ShipDef
 	assert_not_null(ship)
