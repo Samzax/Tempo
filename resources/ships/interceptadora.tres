@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ShipDef" load_steps=8 format=3 uid="uid://e9t2x6p4r1k7f"]
+[gd_resource type="Resource" script_class="ShipDef" load_steps=10 format=3 uid="uid://e9t2x6p4r1k7f"]
 
 [ext_resource type="Script" uid="uid://dxj8iu0hungha" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
 [ext_resource type="Texture2D" uid="uid://em6g9qbrz5a2d" path="res://assets/sprites/interceptadora.png" id="2_texture"]
@@ -29,10 +29,29 @@ script = ExtResource("3_base_stat")
 stat = &"blink_haste"
 value = 1.4
 
+[sub_resource type="Resource" id="BaseStatValue_health"]
+script = ExtResource("3_base_stat")
+stat = &"max_health"
+value = 2.0
+
+[sub_resource type="Resource" id="BaseStatValue_damage"]
+script = ExtResource("3_base_stat")
+stat = &"damage"
+value = 0.5
+
 [resource]
 script = ExtResource("1_ship_def")
 id = &"nave_interceptadora"
 display_name = "Interceptadora"
 hull_texture = ExtResource("2_texture")
-base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_acceleration"), SubResource("BaseStatValue_friction"), SubResource("BaseStatValue_blink_distance"), SubResource("BaseStatValue_blink_haste")])
+base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_acceleration"), SubResource("BaseStatValue_friction"), SubResource("BaseStatValue_blink_distance"), SubResource("BaseStatValue_blink_haste"), SubResource("BaseStatValue_health"), SubResource("BaseStatValue_damage")])
 ability_q = &"interceptadora_blink"
+blink_trail_enabled = true
+blink_trail_damage = 0.2
+blink_trail_width = 1.5
+blink_trail_duration = 0.4
+detail_lines_enabled = true
+detail_lines_pulse_frequency = 2.0
+detail_lines_alpha_min = 0.3
+detail_lines_alpha_max = 0.8
+detail_lines_width = 1.0
