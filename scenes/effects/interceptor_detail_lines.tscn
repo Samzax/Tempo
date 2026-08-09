@@ -1,0 +1,22 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/effects/interceptor_detail_lines.gd" id="1_detail_lines"]
+
+[node name="InterceptorDetailLines" type="Node2D"]
+z_index = 2
+script = ExtResource("1_detail_lines")
+
+[node name="LeftLine" type="Line2D" parent="."]
+points = PackedVector2Array(-5, -8, -2, -2, -5, 5)
+antialiased = false
+joint_mode = 2
+
+[node name="CenterLine" type="Line2D" parent="."]
+points = PackedVector2Array(0, -9, 0, 7)
+antialiased = false
+joint_mode = 2
+
+[node name="RightLine" type="Line2D" parent="."]
+points = PackedVector2Array(5, -8, 2, -2, 5, 5)
+antialiased = false
+joint_mode = 2

@@ -13,6 +13,8 @@ signal health_capacity_changed(max_health: float)
 
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
+const INTERCEPTOR_BLINK_TRAIL := preload("res://scenes/effects/interceptor_blink_trail.tscn")
+const INTERCEPTOR_DETAIL_LINES := preload("res://scenes/effects/interceptor_detail_lines.tscn")
 const BLINK_BASE_COOLDOWN := 0.9
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
 const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
@@ -60,6 +62,7 @@ var _dispatcher: EffectDispatcher
 var _inventory: Inventory
 var _base_sprite_frames: SpriteFrames = null
 var _base_body_shape: Shape2D = null
+var _detail_lines: Node2D = null
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 var _omni_stop_spin_state: SpinState = SpinState.IDLE
 var _omni_stop_spin_elapsed := 0.0
@@ -134,6 +137,7 @@ func _configure_loadout() -> void:
 	_reset_ship_visual_state()
 	_apply_hull_texture()
 	_configure_ship_geometry()
+	_configure_detail_lines()
 	muzzle.visible = ship == null or ship.has_muzzle
 	_dispatcher = EffectDispatcher.new(self, _gather_effects())
 	_inventory = Inventory.new(_stats, _dispatcher)
@@ -213,6 +217,26 @@ func _configure_ship_geometry() -> void:
 		body_collision.shape = body_shape
 	elif _base_body_shape != null:
 		body_collision.shape = _base_body_shape.duplicate()
+
+## Anexa somente a camada visual opt-in ao VisualRoot, sem participar da fisica.
+func _configure_detail_lines() -> void:
+	if is_instance_valid(_detail_lines):
+		_detail_lines.queue_free()
+		_detail_lines = null
+	if ship == null or not ship.detail_lines_enabled:
+		return
+	_detail_lines = INTERCEPTOR_DETAIL_LINES.instantiate() as Node2D
+	if _detail_lines == null:
+		return
+	visual_root.add_child(_detail_lines)
+	_detail_lines.call(
+		&"configure",
+		character.thrust_color,
+		ship.detail_lines_pulse_frequency,
+		ship.detail_lines_alpha_min,
+		ship.detail_lines_alpha_max,
+		ship.detail_lines_width,
+	)
 
 ## Substitui o buff ativo da habilidade para evitar colisao de source_id e
 ## acúmulo acidental ao reativar uma habilidade ainda ativa.
@@ -473,6 +497,8 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	dest.x = clampf(dest.x, _room_bounds.position.x + m, _room_bounds.end.x - m)
 	dest.y = clampf(dest.y, _room_bounds.position.y + m, _room_bounds.end.y - m)
 
+	_boost_detail_lines_for_blink()
+	_resolve_blink_trail_damage(origin, dest)
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
 	_reset_omni_stop_spin()
@@ -480,6 +506,7 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))
 	_spawn_teleport_fx(origin)
 	_spawn_teleport_fx(dest)
+	_spawn_interceptor_blink_trail(origin, dest)
 	var cooldown := blink_cooldown_duration()
 	_blink_cd = cooldown
 	_blink_cd_duration = cooldown
@@ -622,6 +649,49 @@ func _spawn_teleport_fx(pos: Vector2) -> void:
 	_effects.add_child(fx)
 	fx.global_position = pos
 
+## Resolve o dano no quadro do blink; o FX posterior nunca participa da fisica.
+func _resolve_blink_trail_damage(origin: Vector2, dest: Vector2) -> void:
+	if ship == null or not ship.blink_trail_enabled or ship.blink_trail_damage <= 0.0 or ship.blink_trail_width <= 0.0 or ship.blink_trail_duration <= 0.0:
+		return
+	var segment := dest - origin
+	var segment_length_squared := segment.length_squared()
+	if segment_length_squared <= 0.001:
+		return
+	var hit_targets: Dictionary = {}
+	var radius := ship.blink_trail_width * 0.5
+	for node in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(node) or node.is_queued_for_deletion() or not node.has_method("take_damage"):
+			continue
+		var target := node as Node2D
+		if target == null:
+			continue
+		var target_id := target.get_instance_id()
+		if hit_targets.has(target_id):
+			continue
+		var projection := clampf((target.global_position - origin).dot(segment) / segment_length_squared, 0.0, 1.0)
+		var closest_point := origin + segment * projection
+		if target.global_position.distance_to(closest_point) > radius:
+			continue
+		hit_targets[target_id] = true
+		var info := DamageInfo.new()
+		info.amount = ship.blink_trail_damage
+		info.source = self
+		info.position = target.global_position
+		info.tags = [&"blink", &"interceptor_blink_trail"]
+		target.take_damage(info)
+
+func _spawn_interceptor_blink_trail(origin: Vector2, dest: Vector2) -> void:
+	if _effects == null or ship == null or not ship.blink_trail_enabled or ship.blink_trail_width <= 0.0 or ship.blink_trail_duration <= 0.0:
+		return
+	var fx := INTERCEPTOR_BLINK_TRAIL.instantiate()
+	_effects.add_child(fx)
+	fx.configure(origin, dest, character.thrust_color, ship.blink_trail_width, ship.blink_trail_duration)
+
+## O boost pertence a camada visual local e nao afeta a resolucao instantanea do blink.
+func _boost_detail_lines_for_blink() -> void:
+	if is_instance_valid(_detail_lines) and _detail_lines.has_method(&"boost_for_blink"):
+		_detail_lines.boost_for_blink()
+
 ## Dispara enquanto Espaço estiver pressionado, respeitando a cadência.
 func _handle_fire(delta: float) -> void:
 	if _fire_cooldown <= 0.0 and Input.is_action_pressed("shoot"):
@@ -641,7 +711,7 @@ func _fire() -> void:
 	if b.get_parent() == null:
 		_projectiles.add_child(b)
 	b.set_room_bounds(_room_bounds)
-	b.activate(muzzle.global_position, fire_dir, self)
+	b.activate(muzzle.global_position, fire_dir, self, _stats.get_stat(&"damage"))
 	_dispatcher.dispatch(&"on_fire", null, 0)
 
 func _gather_effects() -> Array[EffectDef]:

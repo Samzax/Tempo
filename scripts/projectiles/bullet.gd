@@ -25,9 +25,10 @@ func set_room_bounds(bounds: Rect2) -> void:
 	_room_bounds = bounds
 
 ## (Re)inicializa o projétil ao ser tirado do pool.
-func activate(pos: Vector2, dir: Vector2, shooter: Node) -> void:
+func activate(pos: Vector2, dir: Vector2, shooter: Node, damage_amount: float = 1.0) -> void:
 	global_position = pos
 	_shooter = shooter
+	damage = damage_amount
 	_velocity = dir.normalized() * speed
 	rotation = dir.angle() + PI / 2.0
 	_life = lifetime

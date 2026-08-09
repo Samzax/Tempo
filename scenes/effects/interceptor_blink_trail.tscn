@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/effects/interceptor_blink_trail.gd" id="1_trail"]
+
+[node name="InterceptorBlinkTrail" type="Node2D"]
+z_index = 4
+script = ExtResource("1_trail")
+
+[node name="OuterLine" type="Line2D" parent="."]
+antialiased = false
+joint_mode = 2
+
+[node name="CoreLine" type="Line2D" parent="."]
+antialiased = false
+joint_mode = 2
