@@ -125,6 +125,23 @@ func test_real_base_ship_preserves_every_scene_atlas_region_at_legacy_size() -> 
 	await get_tree().process_frame
 	_assert_hull_atlas_regions(player, Vector2i(16, 24))
 
+func test_interceptadora_scales_only_its_animated_sprite_and_resets_on_ship_swap() -> void:
+	assert_eq(_player.sprite.scale, Vector2(0.7, 0.7))
+	assert_eq(_player.visual_root.scale, Vector2.ONE)
+	assert_eq(_player.muzzle.scale, Vector2.ONE)
+	assert_eq(_player.body_collision.scale, Vector2.ONE)
+	assert_eq(_player.hurtbox.scale, Vector2.ONE)
+	assert_eq(_player.thruster.scale, Vector2.ONE)
+	var base := load("res://resources/ships/base.tres") as ShipDef
+	assert_not_null(base)
+	if base != null:
+		var secondary := _instantiate_player_with_real_ship(base)
+		await get_tree().process_frame
+		assert_eq(_player.sprite.scale, Vector2(0.7, 0.7))
+		assert_eq(secondary.sprite.scale, Vector2.ONE)
+		assert_true(_player.configure_ship(base))
+		assert_eq(_player.sprite.scale, Vector2.ONE)
+
 func test_projectile_consumes_statblock_damage() -> void:
 	_player._stats.set_base(&"damage", 7.25)
 	_player._aim_vector = Vector2.UP

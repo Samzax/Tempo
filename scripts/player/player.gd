@@ -133,6 +133,8 @@ func _configure_loadout() -> void:
 	for omni_thruster in thrusters:
 		omni_thruster.color = character.thrust_color
 	_reset_ship_visual_state()
+	if ship != null:
+		sprite.scale = Vector2.ONE * ship.visual_scale
 	_apply_hull_texture()
 	_configure_ship_geometry()
 	muzzle.visible = ship == null or ship.has_muzzle
@@ -150,6 +152,7 @@ func _configure_loadout() -> void:
 func _reset_ship_visual_state() -> void:
 	_reset_omni_stop_spin()
 	visual_root.rotation = 0.0
+	sprite.scale = Vector2.ONE
 	sprite.modulate = Color.WHITE
 	sprite.animation = &"neutral"
 	sprite.play(&"neutral")

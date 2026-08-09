@@ -9,6 +9,7 @@ extends ProviderDef
 ## Defaults preserve the original aim-driven 16x24 ship presentation.
 @export_enum("aim_forward", "omni") var movement_style: String = "aim_forward"
 @export var frame_size: Vector2i = Vector2i(16, 24)
+@export_range(0.01, 4.0, 0.01) var visual_scale: float = 1.0
 @export_range(1.0, 32.0, 0.5) var hurtbox_radius: float = 8.0
 @export_enum("capsule", "circle") var collision_shape_type: String = "capsule"
 @export var has_muzzle: bool = true
@@ -25,6 +26,8 @@ func validate_content() -> Array[String]:
 		errors.append("Estilo de movimento desconhecido: %s." % movement_style)
 	if frame_size.x <= 0 or frame_size.y <= 0:
 		errors.append("Tamanho de frame invalido: %s." % frame_size)
+	if visual_scale <= 0.0:
+		errors.append("Escala visual deve ser positiva.")
 	if hurtbox_radius <= 0.0:
 		errors.append("Raio da hurtbox deve ser positivo.")
 	if collision_shape_type not in ["capsule", "circle"]:
