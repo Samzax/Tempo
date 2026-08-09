@@ -14,6 +14,8 @@ var _target: DamageTarget
 var _ship: ShipDef
 var _character: CharacterDef
 
+const HULL_ANIMATIONS := [&"hard_left", &"soft_left", &"neutral", &"soft_right", &"hard_right"]
+
 func before_each() -> void:
 	_root = Node2D.new()
 	add_child(_root)
@@ -110,6 +112,24 @@ func test_neutral_ship_defaults_keep_bruta_and_base_inert() -> void:
 	assert_eq(_damage_for(base), 1.0)
 	assert_eq(_damage_for(bruta), 1.5)
 
+func test_real_interceptadora_scales_every_scene_atlas_region_to_64_frames() -> void:
+	var interceptor := load("res://resources/ships/interceptadora.tres") as ShipDef
+	assert_not_null(interceptor)
+	if interceptor == null:
+		return
+	var player := _instantiate_player_with_real_ship(interceptor)
+	await get_tree().process_frame
+	_assert_hull_atlas_regions(player, Vector2i(64, 64))
+
+func test_real_base_ship_preserves_every_scene_atlas_region_at_legacy_size() -> void:
+	var base := load("res://resources/ships/base.tres") as ShipDef
+	assert_not_null(base)
+	if base == null:
+		return
+	var player := _instantiate_player_with_real_ship(base)
+	await get_tree().process_frame
+	_assert_hull_atlas_regions(player, Vector2i(16, 24))
+
 func test_detail_lines_configure_base_frame_preserves_points_and_width() -> void:
 	var lines := _player.get_node("VisualRoot/InterceptorDetailLines")
 	lines.configure(Color.WHITE, 1.0, 0.2, 0.8, 2.0, Vector2(16, 24))
@@ -202,3 +222,24 @@ func _damage_for(ship: ShipDef) -> float:
 	var stats := StatBlock.new(StatCatalog.get_all())
 	Loadout.apply(stats, ship, null)
 	return stats.get_stat(&"damage")
+
+func _instantiate_player_with_real_ship(ship: ShipDef) -> Player:
+	var player := load("res://scenes/player/player.tscn").instantiate() as Player
+	player.ship = ship
+	player.character = load("res://resources/characters/base.tres") as CharacterDef
+	_root.add_child(player)
+	return player
+
+func _assert_hull_atlas_regions(player: Player, frame_size: Vector2i) -> void:
+	var frames := player.sprite.sprite_frames
+	var scale := Vector2(frame_size) / Vector2(16, 24)
+	for animation_index in HULL_ANIMATIONS.size():
+		var animation_name: StringName = HULL_ANIMATIONS[animation_index]
+		assert_eq(frames.get_frame_count(animation_name), 2)
+		for frame_index in 2:
+			var atlas := frames.get_frame_texture(animation_name, frame_index) as AtlasTexture
+			assert_not_null(atlas)
+			if atlas != null:
+				var original_position := Vector2(animation_index * 16, frame_index * 24)
+				assert_eq(atlas.region.size, Vector2(frame_size))
+				assert_eq(atlas.region.position, original_position * scale)

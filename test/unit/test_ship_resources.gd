@@ -66,11 +66,34 @@ func test_new_ships_have_hull_textures() -> void:
 			assert_not_null(ship.hull_texture)
 
 func test_legacy_ship_textures_are_80_by_48() -> void:
-	for ship_id in [&"nave_engenheira", &"nave_rastreadora", &"nave_interceptadora", &"nave_interestelar"]:
+	for ship_id in [&"nave_engenheira", &"nave_rastreadora", &"nave_interestelar"]:
 		var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[ship_id]))
 		assert_not_null(image)
 		if image != null:
 			assert_eq(image.get_size(), Vector2i(80, 48))
+
+func test_interceptadora_texture_is_rgba8_320_by_128_with_valid_alpha() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_interceptadora"]))
+	assert_not_null(image)
+	if image == null:
+		return
+	assert_eq(image.get_size(), Vector2i(320, 128))
+	assert_eq(image.get_format(), Image.FORMAT_RGBA8)
+	var visible_pixels := 0
+	for y in image.get_height():
+		for x in image.get_width():
+			var alpha := image.get_pixel(x, y).a
+			assert_gte(alpha, 0.0)
+			assert_lte(alpha, 1.0)
+			if alpha > 0.0:
+				visible_pixels += 1
+	assert_gt(visible_pixels, 0)
+
+func test_interceptadora_resource_uses_64_by_64_frames() -> void:
+	var ship := load(SHIP_PATHS[&"nave_interceptadora"]) as ShipDef
+	assert_not_null(ship)
+	if ship != null:
+		assert_eq(ship.frame_size, Vector2i(64, 64))
 
 func test_bruta_texture_is_standalone_rgba8_32_with_opaque_hull_and_no_partial_alpha() -> void:
 	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_bruta"]))

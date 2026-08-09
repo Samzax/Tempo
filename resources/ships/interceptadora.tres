@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="ShipDef" load_steps=10 format=3 uid="uid://e9t2x6p4r1k7f"]
 
 [ext_resource type="Script" uid="uid://dxj8iu0hungha" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
-[ext_resource type="Texture2D" uid="uid://em6g9qbrz5a2d" path="res://assets/sprites/interceptadora.png" id="2_texture"]
+[ext_resource type="Texture2D" uid="uid://rrlooejgxfbl" path="res://assets/sprites/interceptadora.png" id="2_texture"]
 [ext_resource type="Script" uid="uid://ejapxfmnbiux" path="res://scripts/stats/base_stat_value.gd" id="3_base_stat"]
 
 [sub_resource type="Resource" id="BaseStatValue_speed"]
@@ -44,6 +44,7 @@ script = ExtResource("1_ship_def")
 id = &"nave_interceptadora"
 display_name = "Interceptadora"
 hull_texture = ExtResource("2_texture")
+frame_size = Vector2i(64, 64)
 base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_acceleration"), SubResource("BaseStatValue_friction"), SubResource("BaseStatValue_blink_distance"), SubResource("BaseStatValue_blink_haste"), SubResource("BaseStatValue_health"), SubResource("BaseStatValue_damage")])
 ability_q = &"interceptadora_blink"
 blink_trail_enabled = true

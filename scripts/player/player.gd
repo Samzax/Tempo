@@ -199,6 +199,12 @@ func _apply_hull_texture() -> void:
 					continue
 				var replacement := atlas_frame.duplicate() as AtlasTexture
 				replacement.atlas = ship.hull_texture
+				var frame_size := Vector2(ship.frame_size)
+				if frame_size.x > 0.0 and frame_size.y > 0.0:
+					var region := replacement.region
+					region.position *= frame_size / Vector2(16, 24)
+					region.size = frame_size
+					replacement.region = region
 				frames.set_frame(animation_name, frame_index, replacement)
 	sprite.sprite_frames = frames
 
