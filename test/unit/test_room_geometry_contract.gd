@@ -173,6 +173,40 @@ func test_enemy_culls_against_configured_room_bottom() -> void:
 	assert_signal_emitted_with_parameters(enemy, &"resolved", [enemy, Enemy.ResolveReason.CULLED])
 	assert_true(enemy.is_queued_for_deletion())
 
+func test_spawn_director_maps_all_entry_edges_to_inward_vectors() -> void:
+	var director := SPAWN_DIRECTOR.new()
+	add_child_autofree(director)
+	assert_eq(director._inward_for_edge(director.EntryEdge.TOP), Vector2.DOWN)
+	assert_eq(director._inward_for_edge(director.EntryEdge.BOTTOM), Vector2.UP)
+	assert_eq(director._inward_for_edge(director.EntryEdge.LEFT), Vector2.RIGHT)
+	assert_eq(director._inward_for_edge(director.EntryEdge.RIGHT), Vector2.LEFT)
+
+func test_enemy_culls_after_entering_from_each_of_four_borders() -> void:
+	var phase_one_room := RoomDef.new()
+	phase_one_room.configure_phase_one_waves()
+	for case in [
+		[Vector2(360, 40), Vector2(360, -50)],
+		[Vector2(360, 365), Vector2(360, 455)],
+		[Vector2(40, 202), Vector2(-50, 202)],
+		[Vector2(680, 202), Vector2(770, 202)],
+	]:
+		var enemy := ENEMY_SCENE.instantiate() as Enemy
+		add_child_autofree(enemy)
+		var resolution := {"emitted": false, "reason": -1}
+		enemy.resolved.connect(func(_resolved_enemy: Enemy, reason: int) -> void:
+			resolution.emitted = true
+			resolution.reason = reason
+		)
+		await get_tree().process_frame
+		enemy.set_room_bounds(ARENA)
+		enemy.set_room_cull_policy(phase_one_room.cull_policy)
+		enemy.global_position = case[0]
+		enemy._physics_process(0.0)
+		enemy.global_position = case[1]
+		enemy._physics_process(0.0)
+		assert_true(resolution.emitted)
+		assert_eq(resolution.reason, Enemy.ResolveReason.CULLED)
+
 func test_player_clamp_uses_configured_bounds_and_keeps_ship_geometry() -> void:
 	var player := PLAYER_SCENE.instantiate() as Player
 	add_child_autofree(player)

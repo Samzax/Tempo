@@ -3,6 +3,9 @@ extends Node
 
 signal room_cleared
 signal exit_unlocked
+signal spawn_warning_observed(wave_index: int, spawn_index: int, point: Vector2)
+
+const SPAWN_WARNING_DURATION := 0.45
 
 @export var room_def: RoomDef
 @export var director_path: NodePath
@@ -18,7 +21,11 @@ var _enemy_tree_exit_callbacks: Dictionary = {}
 var _is_observing_room := false
 var _is_tearing_down := false
 
+## Último FX de aviso criado; superfície de observação para testes de runtime.
+var last_spawn_warning_fx: Node2D
+
 const PROJECTILE_RUNTIME_META := &"room_runtime"
+const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 
 func _ready() -> void:
 	if room_def == null:
@@ -38,8 +45,15 @@ func _ready() -> void:
 	_director.connect(&"enemy_spawned", _on_enemy_spawned)
 	_director.connect(&"spawns_finished", _on_spawns_finished)
 	_director.connect(&"spawns_failed", _on_spawns_failed)
+	if _director.has_signal(&"spawn_warning_started"):
+		_director.connect(&"spawn_warning_started", _on_spawn_warning_started)
 	runtime.start()
-	if not _director.call(&"start", room_def.finite_spawn_count):
+	var started: bool
+	if room_def.has_waves() and _director.has_method(&"start_waves"):
+		started = _director.call(&"start_waves", room_def.wave_specs)
+	else:
+		started = _director.call(&"start", room_def.finite_spawn_count)
+	if not started:
 		runtime.fail_start()
 
 func _on_enemy_spawned(enemy: Enemy) -> void:
@@ -59,6 +73,27 @@ func _on_spawns_finished() -> void:
 	if _is_tearing_down or runtime == null:
 		return
 	runtime.mark_spawns_finished()
+
+## Consome o contrato de aviso do diretor. O sinal espelhado mantem a janela
+## de 0,45 s observavel mesmo em salas sem um conteiner global de efeitos.
+func _on_spawn_warning_started(wave_index: int, spawn_index: int) -> void:
+	var point := _spawn_point_for_warning(wave_index, spawn_index)
+	spawn_warning_observed.emit(wave_index, spawn_index, point)
+	var effects := get_tree().get_first_node_in_group(&"effects")
+	if effects == null:
+		return
+	var teleport_fx := TELEPORT_FX.instantiate() as Node2D
+	teleport_fx.set(&"duration", SPAWN_WARNING_DURATION)
+	teleport_fx.global_position = point
+	effects.add_child(teleport_fx)
+	last_spawn_warning_fx = teleport_fx
+
+func _spawn_point_for_warning(wave_index: int, spawn_index: int) -> Vector2:
+	if _director != null and _director.has_method(&"get_spawn_agenda"):
+		for entry in _director.call(&"get_spawn_agenda"):
+			if int(entry.wave_index) == wave_index and int(entry.spawn_index) == spawn_index:
+				return entry.point
+	return Vector2.ZERO
 
 func _on_enemy_resolved(enemy: Enemy, reason: int) -> void:
 	if _is_tearing_down or runtime == null:
@@ -106,6 +141,8 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	_is_tearing_down = true
+	if is_instance_valid(_director) and _director.has_method(&"stop"):
+		_director.call(&"stop")
 	_stop_room_observation()
 	_disconnect_runtime_callbacks()
 
@@ -134,6 +171,8 @@ func _disconnect_runtime_callbacks() -> void:
 			_director.disconnect(&"spawns_finished", _on_spawns_finished)
 		if _director.is_connected(&"spawns_failed", _on_spawns_failed):
 			_director.disconnect(&"spawns_failed", _on_spawns_failed)
+		if _director.has_signal(&"spawn_warning_started") and _director.is_connected(&"spawn_warning_started", _on_spawn_warning_started):
+			_director.disconnect(&"spawn_warning_started", _on_spawn_warning_started)
 	for enemy in _observed_enemies:
 		if not is_instance_valid(enemy):
 			continue

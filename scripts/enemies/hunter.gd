@@ -47,6 +47,10 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		_advance_death_animation(delta)
 		return
+	if _should_cull():
+		_resolve(ResolveReason.CULLED)
+		queue_free()
+		return
 	var dash_finished := false
 	var state_elapsed_before := _state_elapsed
 	_state_elapsed += delta
@@ -71,7 +75,9 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if dash_finished and not _dead:
 		_enter_state(AttackState.RECOVER)
-	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM and global_position.y > _room_bounds.end.y + 40.0:
+	if _room_bounds.grow(16.0).has_point(global_position):
+		_has_entered_room = true
+	if _should_cull():
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 	_update_sprite_frame()
@@ -80,7 +86,7 @@ func _process_chase(delta: float) -> void:
 	if is_instance_valid(_player):
 		velocity = global_position.direction_to(_player.global_position) * speed
 	else:
-		velocity = Vector2.DOWN * speed
+		velocity = _entry_inward * speed
 	_attack_cooldown = maxf(0.0, _attack_cooldown - delta)
 	if is_instance_valid(_player) and _attack_cooldown <= 0.0 and global_position.distance_to(_player.global_position) <= engagement_distance:
 		_enter_state(AttackState.TELEGRAPH)
