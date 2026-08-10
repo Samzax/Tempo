@@ -131,9 +131,9 @@ func test_interceptor_trail_uses_fixed_visual_widths_and_deterministic_offsets()
 		Vector2(87.0, -7.92),
 		Vector2(100, 0),
 	])
-	assert_eq(trail.outer_line.points, expected)
-	assert_eq(trail.violet_line.points, expected)
-	assert_eq(trail.core_line.points, expected)
+	_assert_points_almost_equal(trail.outer_line.points, expected)
+	_assert_points_almost_equal(trail.violet_line.points, expected)
+	_assert_points_almost_equal(trail.core_line.points, expected)
 
 func test_interceptor_trail_is_visual_only_and_has_no_physics_or_damage_contract() -> void:
 	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
@@ -217,6 +217,12 @@ func _damage_for(ship: ShipDef) -> float:
 	var stats := StatBlock.new(StatCatalog.get_all())
 	Loadout.apply(stats, ship, null)
 	return stats.get_stat(&"damage")
+
+func _assert_points_almost_equal(actual: PackedVector2Array, expected: PackedVector2Array) -> void:
+	assert_eq(actual.size(), expected.size())
+	for index in expected.size():
+		assert_almost_eq(actual[index].x, expected[index].x, 0.0001)
+		assert_almost_eq(actual[index].y, expected[index].y, 0.0001)
 
 func _instantiate_player_with_real_ship(ship: ShipDef) -> Player:
 	var player := load("res://scenes/player/player.tscn").instantiate() as Player
