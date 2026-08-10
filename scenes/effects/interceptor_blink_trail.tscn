@@ -1,19 +1,19 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/effects/interceptor_blink_trail.gd" id="1_trail"]
+[ext_resource type="Texture2D" path="res://assets/sprites/interceptadora-blink-vfx-sprite.png" id="2_sprite"]
+[ext_resource type="Shader" path="res://scenes/effects/interceptor_blink_trail.gdshader" id="3_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_trail"]
+resource_local_to_scene = true
+shader = ExtResource("3_shader")
+shader_parameter/tint_color = Color(1, 1, 1, 1)
 
 [node name="InterceptorBlinkTrail" type="Node2D"]
 z_index = 4
 script = ExtResource("1_trail")
 
-[node name="OuterLine" type="Line2D" parent="."]
-antialiased = false
-joint_mode = 2
-
-[node name="VioletLine" type="Line2D" parent="."]
-antialiased = false
-joint_mode = 2
-
-[node name="CoreLine" type="Line2D" parent="."]
-antialiased = false
-joint_mode = 2
+[node name="TrailSprite" type="Sprite2D" parent="."]
+texture_filter = 1
+material = SubResource("ShaderMaterial_trail")
+texture = ExtResource("2_sprite")

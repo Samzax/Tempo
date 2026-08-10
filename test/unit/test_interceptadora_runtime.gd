@@ -100,40 +100,49 @@ func test_interceptor_trail_is_deterministic_fixed_duration_and_cleans_up() -> v
 	var second := trail_scene.instantiate()
 	_effects.add_child(first)
 	_effects.add_child(second)
-	first.configure(Vector2(12, 18), Vector2(172, 62), _character.thrust_color, 12.0, 0.05)
-	second.configure(Vector2(12, 18), Vector2(172, 62), _character.thrust_color, 12.0, 8.0)
+	var origin := Vector2(12, 18)
+	var dest := Vector2(1835, 881)
+	first.configure(origin, dest, _character.thrust_color, 12.0, 0.05)
+	var second_tint := Color(1.0, 0.2, 0.5)
+	second.configure(origin, dest, second_tint, 12.0, 8.0)
 	assert_eq(first._duration, 0.4)
-	assert_eq(first.outer_line.points, second.outer_line.points)
-	assert_eq(first.outer_line.default_color, second.outer_line.default_color)
+	assert_eq(first.global_position, second.global_position)
+	assert_eq(first.rotation, second.rotation)
+	assert_eq(first.trail_sprite.scale, second.trail_sprite.scale)
+	assert_eq((first.trail_sprite.material as ShaderMaterial).get_shader_parameter(&"tint_color"), _character.thrust_color)
+	assert_eq((second.trail_sprite.material as ShaderMaterial).get_shader_parameter(&"tint_color"), second_tint)
 	assert_null(first.get("random_number_generator"))
-	assert_eq(first.outer_line.default_color, Color(0.12, 0.9, 1.0, 0.9).lerp(_character.thrust_color, 0.12))
-	assert_eq(first.core_line.default_color, Color.WHITE)
 	first._process(0.39)
 	assert_false(first.is_queued_for_deletion())
 	first._process(0.01)
 	assert_true(first.is_queued_for_deletion())
 
-func test_interceptor_trail_uses_fixed_visual_widths_and_deterministic_offsets() -> void:
+func test_interceptor_trail_uses_approved_sprite_transform_and_tint_uniform() -> void:
 	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
 	var trail := trail_scene.instantiate()
 	_effects.add_child(trail)
-	trail.configure(Vector2.ZERO, Vector2(100, 0), _character.thrust_color, 1.5, 99.0)
+	var origin := Vector2(10, 20)
+	var dest := Vector2(10, 1843)
+	trail.configure(origin, dest, _character.thrust_color, 1.5, 99.0)
 
-	assert_almost_eq(trail.outer_line.width, 12.0, 0.0001)
-	assert_almost_eq(trail.violet_line.width, 7.0, 0.0001)
-	assert_almost_eq(trail.core_line.width, 3.6, 0.0001)
-	var expected := PackedVector2Array([
-		Vector2.ZERO,
-		Vector2(15.0, -9.24),
-		Vector2(34.0, 22.0),
-		Vector2(52.0, -16.72),
-		Vector2(71.0, 18.92),
-		Vector2(87.0, -7.92),
-		Vector2(100, 0),
-	])
-	_assert_points_almost_equal(trail.outer_line.points, expected)
-	_assert_points_almost_equal(trail.violet_line.points, expected)
-	_assert_points_almost_equal(trail.core_line.points, expected)
+	assert_eq(trail.global_position, origin.lerp(dest, 0.5))
+	assert_almost_eq(trail.rotation, (dest - origin).angle(), 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.x, 1.0, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.34, 0.0001)
+	var material := trail.trail_sprite.material as ShaderMaterial
+	assert_not_null(material)
+	if material != null:
+		assert_eq(material.get_shader_parameter(&"tint_color"), _character.thrust_color)
+	var image: Image = trail.trail_sprite.texture.get_image()
+	assert_eq(image.get_width(), 1823)
+	assert_eq(image.get_height(), 863)
+	assert_eq(image.get_format(), Image.FORMAT_RGBA8)
+
+	trail.configure(origin, origin, _character.thrust_color, 1.5, 99.0)
+	assert_eq(trail.global_position, origin)
+	assert_eq(trail.rotation, 0.0)
+	assert_lt(trail.trail_sprite.scale.x, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.34, 0.0001)
 
 func test_interceptor_trail_is_visual_only_and_has_no_physics_or_damage_contract() -> void:
 	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
@@ -142,6 +151,8 @@ func test_interceptor_trail_is_visual_only_and_has_no_physics_or_damage_contract
 	trail.configure(Vector2.ZERO, Vector2(100, 0), _character.thrust_color, 1.5, 0.01)
 
 	assert_true(trail is Node2D)
+	assert_not_null(trail.get_node_or_null("TrailSprite"))
+	assert_eq(trail.get_node_or_null("OuterLine"), null)
 	assert_eq(trail.get_node_or_null("Area2D"), null)
 	assert_eq(trail.get_node_or_null("CollisionShape2D"), null)
 	assert_eq(trail.get_method_list().filter(func(method: Dictionary) -> bool: return method.name == "take_damage").size(), 0)
@@ -151,6 +162,19 @@ func test_interceptor_blink_uses_specialized_fx_without_generic_rings() -> void:
 	assert_true(_player.try_blink(Vector2.RIGHT))
 	assert_eq(_effects.get_child_count(), 1)
 	assert_eq(_effects.get_child(0).scene_file_path, "res://scenes/effects/interceptor_blink_trail.tscn")
+
+func test_other_ships_use_generic_teleport_fx() -> void:
+	var base := load("res://resources/ships/base.tres") as ShipDef
+	assert_not_null(base)
+	if base == null:
+		return
+	assert_true(_player.configure_ship(base))
+	_player._blink_cd = 0.0
+	assert_true(_player.try_blink(Vector2.RIGHT))
+	assert_eq(_effects.get_child_count(), 2)
+	for effect in _effects.get_children():
+		assert_eq(effect.scene_file_path, "res://scenes/effects/teleport_fx.tscn")
+		assert_ne(effect.scene_file_path, "res://scenes/effects/interceptor_blink_trail.tscn")
 
 func test_neutral_ship_defaults_keep_bruta_and_base_inert() -> void:
 	var defaults := ShipDef.new()
@@ -217,12 +241,6 @@ func _damage_for(ship: ShipDef) -> float:
 	var stats := StatBlock.new(StatCatalog.get_all())
 	Loadout.apply(stats, ship, null)
 	return stats.get_stat(&"damage")
-
-func _assert_points_almost_equal(actual: PackedVector2Array, expected: PackedVector2Array) -> void:
-	assert_eq(actual.size(), expected.size())
-	for index in expected.size():
-		assert_almost_eq(actual[index].x, expected[index].x, 0.0001)
-		assert_almost_eq(actual[index].y, expected[index].y, 0.0001)
 
 func _instantiate_player_with_real_ship(ship: ShipDef) -> Player:
 	var player := load("res://scenes/player/player.tscn").instantiate() as Player
