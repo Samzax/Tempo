@@ -8,3 +8,4 @@ enum NodeType { OPENING, COMBAT, BOSS }
 @export var row: int = 0
 @export var node_type: NodeType = NodeType.COMBAT
 @export var children: Array[int] = []
+@export var room_profile: StringName = &"default"

@@ -2,6 +2,8 @@ extends Node
 
 const ENEMY := preload("res://scenes/enemies/enemy.tscn")
 const HUNTER := preload("res://scenes/enemies/hunter.tscn")
+const ATIRADOR := preload("res://scenes/enemies/atirador_de_fresta.tscn")
+const KAMIKAZE := preload("res://scenes/enemies/kamikaze_fraturado.tscn")
 const ENTRY_WARNING_DURATION := 0.45
 const WAVE_BREATHER_DURATION := 3.0
 const PAIR_MEMBER_DELAY := 0.35
@@ -250,7 +252,13 @@ func _build_wave_agenda(waves: Array[RoomDef.WaveSpec]) -> Array[Dictionary]:
 			continue
 		var spawn_index := 0
 		var event_index := 0
-		if wave.paired_commons:
+		if not wave.threat_types.is_empty():
+			for threat_type in wave.threat_types:
+				var edge := _random_edge()
+				result.append(_entry(wave_index, event_index, spawn_index, false, edge, _point_for_edge(edge), wave.max_active, wave.cadence, 0.0, wave.cadence, threat_type))
+				spawn_index += 1
+				event_index += 1
+		elif wave.paired_commons:
 			for _pair_index in wave.common_count / 2:
 				var edge := _random_edge()
 				var point := _point_for_edge(edge)
@@ -281,10 +289,10 @@ func _build_wave_events(agenda: Array[Dictionary]) -> Array[Dictionary]:
 		result.back().members.append(entry)
 	return result
 
-func _entry(wave_index: int, event_index: int, spawn_index: int, hunter: bool, edge: int, point: Vector2, max_active: int, cadence: float, member_delay: float, next_event_delay: float = -1.0) -> Dictionary:
+func _entry(wave_index: int, event_index: int, spawn_index: int, hunter: bool, edge: int, point: Vector2, max_active: int, cadence: float, member_delay: float, next_event_delay: float = -1.0, threat_type: StringName = &"") -> Dictionary:
 	if next_event_delay < 0.0:
 		next_event_delay = cadence
-	return {"wave_index": wave_index, "event_index": event_index, "wave_spawn_index": spawn_index, "spawn_index": spawn_index, "hunter": hunter, "edge": edge, "point": point, "max_active": max_active, "cadence": cadence, "member_delay": member_delay, "next_event_delay": next_event_delay}
+	return {"wave_index": wave_index, "event_index": event_index, "wave_spawn_index": spawn_index, "spawn_index": spawn_index, "hunter": hunter, "threat_type": threat_type, "edge": edge, "point": point, "max_active": max_active, "cadence": cadence, "member_delay": member_delay, "next_event_delay": next_event_delay}
 
 func _append_mixed_entries(result: Array[Dictionary], wave: RoomDef.WaveSpec, wave_index: int, first_spawn_index: int, first_event_index: int) -> void:
 	var common_index := 0
@@ -309,20 +317,27 @@ func _append_mixed_entries(result: Array[Dictionary], wave: RoomDef.WaveSpec, wa
 		event_index += 1
 
 func _spawn_agenda_entry(entry: Dictionary) -> Enemy:
-	return _spawn_configured(bool(entry.hunter), int(entry.edge), entry.point)
+	return _spawn_configured(bool(entry.hunter), int(entry.edge), entry.point, StringName(entry.get("threat_type", &"")))
 
 func _spawn_legacy() -> Enemy:
 	var is_hunter := hunter_spawn_every > 0 and (_spawn_index + 1) % hunter_spawn_every == 0
 	return _spawn_configured(is_hunter, EntryEdge.TOP, Vector2(RunManager.rng.randf_range(_room_bounds.position.x + EDGE_MARGIN, _room_bounds.end.x - EDGE_MARGIN), _room_bounds.position.y - OUTSIDE_OFFSET))
 
-func _spawn_configured(is_hunter: bool, edge: int, point: Vector2) -> Enemy:
+func _spawn_configured(is_hunter: bool, edge: int, point: Vector2, threat_type: StringName = &"") -> Enemy:
 	if not is_instance_valid(_container) or _container.is_queued_for_deletion():
 		_fail_spawns("SpawnDirector lost its enemies_container.")
 		return null
-	var enemy := (HUNTER if is_hunter else ENEMY).instantiate() as Enemy
+	var scene: PackedScene = HUNTER if is_hunter else ENEMY
+	if threat_type == &"atirador":
+		scene = ATIRADOR
+	elif threat_type == &"kamikaze":
+		scene = KAMIKAZE
+	var enemy := scene.instantiate() as Enemy
 	if enemy == null:
 		return null
-	if not is_hunter:
+	# "common" e o tipo explicito da mesma familia regular. Ambos devem
+	# passar pela rotacao deterministica de configuracoes.
+	if not is_hunter and (threat_type == &"" or threat_type == &"common"):
 		_configure_regular_enemy(enemy)
 		_regular_spawn_index += 1
 	_spawn_index += 1

@@ -14,6 +14,7 @@ class WaveSpec extends RefCounted:
 	var max_active: int
 	var cadence: float
 	var paired_commons: bool
+	var threat_types: Array[StringName] = []
 
 	func _init(common: int = 0, hunters: int = 0, active_limit: int = 1, interval: float = 1.1, paired: bool = false) -> void:
 		common_count = common
@@ -21,6 +22,15 @@ class WaveSpec extends RefCounted:
 		max_active = active_limit
 		cadence = interval
 		paired_commons = paired
+
+	func with_threat_types(types: Array[StringName]) -> WaveSpec:
+		threat_types = types.duplicate()
+		return self
+
+func get_upper_waves() -> Array[WaveSpec]:
+	return [WaveSpec.new(0, 0, 3, 1.1).with_threat_types([
+		&"common", &"common", &"atirador", &"common", &"common", &"kamikaze", &"atirador", &"kamikaze",
+	])]
 
 func get_phase_one_waves() -> Array[WaveSpec]:
 	return [
@@ -42,6 +52,9 @@ func get_phase_one_waves() -> Array[WaveSpec]:
 ## Nao e exportada: as cinco ondas sao construidas programaticamente para evitar
 ## recursos auxiliares e preservar as salas legadas baseadas em finite_spawn_count.
 var wave_specs: Array[WaveSpec] = []
+## Objetos de mundo pertencentes a sala. Cada entrada usa somente dados
+## deterministas para que o perfil nao consuma o RNG da execucao.
+var initial_debris: Array[Dictionary] = []
 
 func get_bounds() -> Rect2:
 	return Rect2(Vector2.ZERO, size)
@@ -52,3 +65,12 @@ func has_waves() -> bool:
 func configure_phase_one_waves() -> void:
 	wave_specs = get_phase_one_waves()
 	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
+
+func configure_upper_waves() -> void:
+	wave_specs = get_upper_waves()
+	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
+	initial_debris = [
+		{"position": Vector2(180.0, 132.0), "size_class": 0, "drift_velocity": Vector2(12.0, 5.0)},
+		{"position": Vector2(390.0, 246.0), "size_class": 1, "drift_velocity": Vector2(-10.0, 8.0)},
+		{"position": Vector2(590.0, 154.0), "size_class": 0, "drift_velocity": Vector2(-7.0, -6.0)},
+	]

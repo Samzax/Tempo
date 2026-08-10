@@ -26,8 +26,10 @@ var last_spawn_warning_fx: Node2D
 
 const PROJECTILE_RUNTIME_META := &"room_runtime"
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
+const DEBRIS_SCENE := preload("res://scenes/world/debris.tscn")
 
 func _ready() -> void:
+	add_to_group(&"room_controller")
 	if room_def == null:
 		push_error("RoomController requires a RoomDef.")
 		return
@@ -48,6 +50,9 @@ func _ready() -> void:
 	if _director.has_signal(&"spawn_warning_started"):
 		_director.connect(&"spawn_warning_started", _on_spawn_warning_started)
 	runtime.start()
+	# RoomController entra na arvore enquanto Room ainda esta anexando filhos;
+	# o container irmao precisa ser criado no proximo idle.
+	call_deferred(&"_spawn_initial_debris")
 	var started: bool
 	if room_def.has_waves() and _director.has_method(&"start_waves"):
 		started = _director.call(&"start_waves", room_def.wave_specs)
@@ -55,6 +60,20 @@ func _ready() -> void:
 		started = _director.call(&"start", room_def.finite_spawn_count)
 	if not started:
 		runtime.fail_start()
+
+func _spawn_initial_debris() -> void:
+	if not is_inside_tree() or room_def.initial_debris.is_empty() or _room_root == null:
+		return
+	var container := Node2D.new()
+	container.name = &"Debris"
+	_room_root.add_child(container)
+	for spec in room_def.initial_debris:
+		var debris := DEBRIS_SCENE.instantiate() as Debris
+		debris.global_position = spec.position
+		debris.size_class = int(spec.size_class)
+		debris.drift_velocity = spec.drift_velocity
+		debris.set_room_bounds(room_def.get_bounds())
+		container.add_child(debris)
 
 func _on_enemy_spawned(enemy: Enemy) -> void:
 	if _is_tearing_down or runtime == null or enemy == null:

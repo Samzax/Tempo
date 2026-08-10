@@ -228,6 +228,10 @@ func _dispose_active_room() -> void:
 			for projectile in get_tree().get_nodes_in_group(&"enemy_projectiles"):
 				if projectile is Node and projectile.get_meta(&"room_runtime", null) == old_runtime:
 					projectile.queue_free()
+		var debris_container := _active_room.get_node_or_null("Debris")
+		if debris_container != null:
+			for debris in debris_container.get_children():
+				debris.queue_free()
 		_active_room.get_parent().remove_child(_active_room)
 		_active_room.queue_free()
 	_active_room = null
@@ -276,6 +280,8 @@ func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 	def.room_type = RoomDef.RoomType.BOSS if node_def.node_type == SectorNode.NodeType.BOSS else (RoomDef.RoomType.OPENING if node_def.node_type == SectorNode.NodeType.OPENING else RoomDef.RoomType.COMBAT)
 	if is_revisit:
 		def.finite_spawn_count = 0
+	elif node_def.room_profile == &"upper":
+		def.configure_upper_waves()
 	elif _is_phase_one_wave_node(node_def):
 		def.configure_phase_one_waves()
 	return def
