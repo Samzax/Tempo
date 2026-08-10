@@ -94,6 +94,31 @@ func test_non_positive_duration_does_not_damage_or_spawn_trail() -> void:
 	assert_eq(_target.calls.size(), 0)
 	assert_eq(_effects.get_child_count(), 0)
 
+func test_interceptor_trail_is_deterministic_fixed_duration_and_cleans_up() -> void:
+	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
+	var first := trail_scene.instantiate()
+	var second := trail_scene.instantiate()
+	_effects.add_child(first)
+	_effects.add_child(second)
+	first.configure(Vector2(12, 18), Vector2(172, 62), _character.thrust_color, 12.0, 0.05)
+	second.configure(Vector2(12, 18), Vector2(172, 62), _character.thrust_color, 12.0, 8.0)
+	assert_eq(first._duration, 0.4)
+	assert_eq(first.outer_line.points, second.outer_line.points)
+	assert_eq(first.outer_line.default_color, second.outer_line.default_color)
+	assert_null(first.get("random_number_generator"))
+	assert_eq(first.outer_line.default_color, Color(0.12, 0.9, 1.0, 0.9).lerp(_character.thrust_color, 0.12))
+	assert_eq(first.core_line.default_color, Color.WHITE)
+	first._process(0.39)
+	assert_false(first.is_queued_for_deletion())
+	first._process(0.01)
+	assert_true(first.is_queued_for_deletion())
+
+func test_interceptor_blink_uses_specialized_fx_without_generic_rings() -> void:
+	_player._blink_cd = 0.0
+	assert_true(_player.try_blink(Vector2.RIGHT))
+	assert_eq(_effects.get_child_count(), 1)
+	assert_eq(_effects.get_child(0).scene_file_path, "res://scenes/effects/interceptor_blink_trail.tscn")
+
 func test_neutral_ship_defaults_keep_bruta_and_base_inert() -> void:
 	var defaults := ShipDef.new()
 	assert_false(defaults.blink_trail_enabled)

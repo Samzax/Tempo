@@ -10,6 +10,10 @@ script = ExtResource("1_trail")
 antialiased = false
 joint_mode = 2
 
+[node name="VioletLine" type="Line2D" parent="."]
+antialiased = false
+joint_mode = 2
+
 [node name="CoreLine" type="Line2D" parent="."]
 antialiased = false
 joint_mode = 2

@@ -489,9 +489,11 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	_reset_omni_stop_spin()
 	_dispatcher.dispatch(&"on_blink", null, 0)
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))
-	_spawn_teleport_fx(origin)
-	_spawn_teleport_fx(dest)
-	_spawn_interceptor_blink_trail(origin, dest)
+	if _uses_interceptor_blink_trail():
+		_spawn_interceptor_blink_trail(origin, dest)
+	else:
+		_spawn_teleport_fx(origin)
+		_spawn_teleport_fx(dest)
 	var cooldown := blink_cooldown_duration()
 	_blink_cd = cooldown
 	_blink_cd_duration = cooldown
@@ -670,11 +672,14 @@ func _resolve_blink_trail_damage(origin: Vector2, dest: Vector2) -> void:
 		target.take_damage(info)
 
 func _spawn_interceptor_blink_trail(origin: Vector2, dest: Vector2) -> void:
-	if _effects == null or ship == null or not ship.blink_trail_enabled or ship.blink_trail_width <= 0.0 or ship.blink_trail_duration <= 0.0:
+	if _effects == null or not _uses_interceptor_blink_trail():
 		return
 	var fx := INTERCEPTOR_BLINK_TRAIL.instantiate()
 	_effects.add_child(fx)
 	fx.configure(origin, dest, character.thrust_color, ship.blink_trail_width, ship.blink_trail_duration)
+
+func _uses_interceptor_blink_trail() -> bool:
+	return ship != null and ship.blink_trail_enabled and ship.blink_trail_width > 0.0 and ship.blink_trail_duration > 0.0
 
 ## Dispara enquanto Espaço estiver pressionado, respeitando a cadência.
 func _handle_fire(delta: float) -> void:
