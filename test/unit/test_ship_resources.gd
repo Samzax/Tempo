@@ -65,12 +65,56 @@ func test_new_ships_have_hull_textures() -> void:
 		if ship != null:
 			assert_not_null(ship.hull_texture)
 
-func test_interestelar_legacy_texture_is_80_by_48() -> void:
-	for ship_id in [&"nave_interestelar"]:
-		var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[ship_id]))
-		assert_not_null(image)
-		if image != null:
-			assert_eq(image.get_size(), Vector2i(80, 48))
+func test_interestelar_texture_is_rgba8_1983_by_793() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_interestelar"]))
+	assert_not_null(image)
+	if image != null:
+		assert_eq(image.get_size(), Vector2i(1983, 793))
+		assert_eq(image.get_format(), Image.FORMAT_RGBA8)
+
+func test_interestelar_resource_uses_complete_custom_ten_frame_atlas() -> void:
+	var interestelar := load(SHIP_PATHS[&"nave_interestelar"]) as ShipDef
+	assert_not_null(interestelar)
+	if interestelar == null:
+		return
+	assert_eq(interestelar.frame_size, Vector2i(397, 397))
+	assert_eq(interestelar.atlas_grid_size, Vector2i(5, 2))
+	assert_almost_eq(interestelar.visual_scale, 0.06, 0.00001)
+	var expected_regions: Array[Rect2] = [
+		Rect2(0, 0, 397, 397), Rect2(397, 0, 396, 397), Rect2(793, 0, 397, 397), Rect2(1190, 0, 396, 397), Rect2(1586, 0, 397, 397),
+		Rect2(0, 397, 397, 396), Rect2(397, 397, 396, 396), Rect2(793, 397, 397, 396), Rect2(1190, 397, 396, 396), Rect2(1586, 397, 397, 397 - 1),
+	]
+	assert_eq(interestelar.custom_frame_regions, expected_regions)
+	var covered_area := 0.0
+	for region in interestelar.custom_frame_regions:
+		assert_eq(region.position.x, floor(region.position.x))
+		assert_eq(region.position.y, floor(region.position.y))
+		assert_eq(region.size.x, floor(region.size.x))
+		assert_eq(region.size.y, floor(region.size.y))
+		assert_gte(region.position.x, 0.0)
+		assert_gte(region.position.y, 0.0)
+		assert_lte(region.end.x, 1983.0)
+		assert_lte(region.end.y, 793.0)
+		covered_area += region.get_area()
+	assert_eq(covered_area, 1983.0 * 793.0)
+	for left_index in interestelar.custom_frame_regions.size():
+		for right_index in range(left_index + 1, interestelar.custom_frame_regions.size()):
+			assert_false(interestelar.custom_frame_regions[left_index].intersects(interestelar.custom_frame_regions[right_index]))
+	assert_eq(interestelar.validate_content(), [])
+
+func test_custom_frame_regions_require_ten_positive_complete_non_overlapping_regions() -> void:
+	var ship := ShipDef.new()
+	ship.id = &"test_custom_regions"
+	ship.hull_texture = load(NEW_SHIP_TEXTURES[&"nave_interestelar"])
+	ship.custom_frame_regions = [Rect2(0, 0, 1, 1)]
+	assert_gt(ship.validate_content().size(), 0)
+	ship.custom_frame_regions = [
+		Rect2(0, 0, 397, 397), Rect2(397, 0, 396, 397), Rect2(793, 0, 397, 397), Rect2(1190, 0, 396, 397), Rect2(1586, 0, 397, 397),
+		Rect2(0, 397, 397, 396), Rect2(397, 397, 396, 396), Rect2(793, 397, 397, 396), Rect2(1190, 397, 396, 396), Rect2(1586, 397, 397, 396),
+	]
+	assert_eq(ship.validate_content(), [])
+	ship.custom_frame_regions[0] = Rect2(0, 0, 0, 397)
+	assert_gt(ship.validate_content().size(), 0)
 
 func test_rastreadora_texture_is_rgba8_1254_by_1254() -> void:
 	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_rastreadora"]))
@@ -247,6 +291,42 @@ func test_ship_thrusters_enabled_match_expected_resources() -> void:
 	assert_not_null(bruta)
 	if bruta != null:
 		assert_true(bruta.thrusters_enabled)
+
+func test_engine_trail_contract_is_opt_in_and_interestelar_defaults_are_exact() -> void:
+	var interestelar := load(SHIP_PATHS[&"nave_interestelar"]) as ShipDef
+	assert_not_null(interestelar)
+	if interestelar == null:
+		return
+	assert_true(interestelar.engine_trail_enabled)
+	assert_eq(interestelar.engine_trail_damage, 1.0)
+	assert_eq(interestelar.engine_trail_width, 16.0)
+	assert_eq(interestelar.engine_trail_duration, 0.8)
+	assert_eq(interestelar.engine_trail_min_speed_ratio, 0.5)
+	assert_eq(interestelar.engine_trail_damage_cooldown, 0.5)
+	assert_eq(interestelar.engine_trail_segment_spacing, 32.0)
+	assert_eq(interestelar.validate_content().size(), 0)
+
+	for ship in ShipCatalog.all():
+		if ship.id != &"nave_interestelar":
+			assert_false(ship.engine_trail_enabled)
+			assert_eq(ship.engine_trail_damage, 0.0)
+
+func test_interestelar_engine_trail_contract_has_speed_threshold_and_shared_cooldown() -> void:
+	var interestelar := load(SHIP_PATHS[&"nave_interestelar"]) as ShipDef
+	assert_not_null(interestelar)
+	if interestelar != null:
+		assert_true(interestelar.engine_trail_enabled)
+		assert_gt(interestelar.engine_trail_min_speed_ratio, 0.0)
+		assert_lte(interestelar.engine_trail_min_speed_ratio, 1.0)
+		assert_gt(interestelar.engine_trail_damage_cooldown, 0.0)
+		assert_gt(interestelar.engine_trail_segment_spacing, 0.0)
+
+func test_engine_trail_validation_rejects_enabled_invalid_values_but_disabled_defaults_are_inert() -> void:
+	var ship := ShipDef.new()
+	ship.id = &"test_ship"
+	assert_eq(ship.validate_content().size(), 0)
+	ship.engine_trail_enabled = true
+	assert_gt(ship.validate_content().size(), 0)
 
 func _base_stat_value(ship: ShipDef, stat: StringName) -> float:
 	for base_stat in ship.base_stats:

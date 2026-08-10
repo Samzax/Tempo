@@ -13,6 +13,8 @@ extends ProviderDef
 @export var frame_size: Vector2i = Vector2i(16, 24)
 ## Grade do atlas da nave. Os defaults preservam as cinco poses e dois frames do casco legado.
 @export var atlas_grid_size: Vector2i = Vector2i(5, 2)
+## Regiões de atlas opcionais, em ordem de animação e frame. Permite frames não uniformes.
+@export var custom_frame_regions: Array[Rect2] = []
 ## Rotacao aplicada somente ao sprite; nao afeta a mira, a fisica nem o Muzzle.
 @export_range(-360.0, 360.0, 1.0, "radians_as_degrees") var visual_rotation_offset: float = 0.0
 @export_range(0.01, 4.0, 0.01) var visual_scale: float = 1.0
@@ -27,6 +29,15 @@ extends ProviderDef
 @export_range(0.0, 100.0, 0.1) var blink_trail_damage: float = 0.0
 @export_range(0.0, 128.0, 0.5) var blink_trail_width: float = 0.0
 @export_range(0.01, 2.0, 0.01) var blink_trail_duration: float = 0.18
+## Contrato opt-in para um rastro ofensivo emitido pelo movimento. Defaults inertes.
+@export var engine_trail_enabled: bool = false
+@export_range(0.0, 100.0, 0.1) var engine_trail_damage: float = 0.0
+@export_range(0.0, 128.0, 0.5) var engine_trail_width: float = 0.0
+@export_range(0.01, 5.0, 0.01) var engine_trail_duration: float = 0.8
+@export_range(0.0, 1.0, 0.01) var engine_trail_min_speed_ratio: float = 0.5
+@export_range(0.01, 5.0, 0.01) var engine_trail_damage_cooldown: float = 0.5
+## Distancia minima entre pares de segmentos; evita emissao dependente do frame rate.
+@export_range(1.0, 128.0, 1.0) var engine_trail_segment_spacing: float = 32.0
 ## Devolve os erros de autoria encontrados nesta nave.
 func validate_content() -> Array[String]:
 	var errors := super()
@@ -38,6 +49,26 @@ func validate_content() -> Array[String]:
 		errors.append("Tamanho de frame invalido: %s." % frame_size)
 	if atlas_grid_size.x <= 0 or atlas_grid_size.y <= 0:
 		errors.append("Grade de atlas invalida: %s." % atlas_grid_size)
+	if not custom_frame_regions.is_empty():
+		if custom_frame_regions.size() != 10:
+			errors.append("Atlas com regioes customizadas precisa de exatamente 10 regioes.")
+		else:
+			var atlas_size := hull_texture.get_size() if hull_texture != null else Vector2.ZERO
+			var covered_area := 0.0
+			for region_index in custom_frame_regions.size():
+				var region := custom_frame_regions[region_index]
+				if region.size.x <= 0.0 or region.size.y <= 0.0:
+					errors.append("Regiao customizada %d precisa ter tamanho positivo." % region_index)
+					continue
+				if hull_texture != null and (region.position.x < 0.0 or region.position.y < 0.0 or region.end.x > atlas_size.x or region.end.y > atlas_size.y):
+					errors.append("Regiao customizada %d esta fora do atlas configurado." % region_index)
+				covered_area += region.get_area()
+			for left_index in custom_frame_regions.size():
+				for right_index in range(left_index + 1, custom_frame_regions.size()):
+					if custom_frame_regions[left_index].intersects(custom_frame_regions[right_index]):
+						errors.append("Regioes customizadas %d e %d se sobrepoem." % [left_index, right_index])
+			if hull_texture != null and not is_equal_approx(covered_area, atlas_size.x * atlas_size.y):
+				errors.append("Regioes customizadas devem cobrir integralmente o atlas configurado.")
 	if visual_scale <= 0.0:
 		errors.append("Escala visual deve ser positiva.")
 	if hurtbox_radius <= 0.0:
@@ -51,6 +82,19 @@ func validate_content() -> Array[String]:
 			errors.append("Rastro do blink habilitado precisa de largura positiva.")
 		if blink_trail_duration <= 0.0:
 			errors.append("Rastro do blink habilitado precisa de duracao positiva.")
+	if engine_trail_enabled:
+		if engine_trail_damage <= 0.0:
+			errors.append("Rastro do propulsor habilitado precisa de dano positivo.")
+		if engine_trail_width <= 0.0:
+			errors.append("Rastro do propulsor habilitado precisa de largura positiva.")
+		if engine_trail_duration <= 0.0:
+			errors.append("Rastro do propulsor habilitado precisa de duracao positiva.")
+		if engine_trail_min_speed_ratio <= 0.0 or engine_trail_min_speed_ratio > 1.0:
+			errors.append("Rastro do propulsor precisa de uma razao minima de velocidade entre 0 e 1.")
+		if engine_trail_damage_cooldown <= 0.0:
+			errors.append("Rastro do propulsor habilitado precisa de cooldown de dano positivo.")
+		if engine_trail_segment_spacing <= 0.0:
+			errors.append("Rastro do propulsor habilitado precisa de espacamento positivo.")
 	var seen_stats: Dictionary = {}
 	for base_stat_index in base_stats.size():
 		var base_stat := base_stats[base_stat_index]

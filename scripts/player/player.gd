@@ -14,6 +14,7 @@ signal health_capacity_changed(max_health: float)
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 const INTERCEPTOR_BLINK_TRAIL := preload("res://scenes/effects/interceptor_blink_trail.tscn")
+const ENGINE_TRAIL_MANAGER := preload("res://scripts/effects/engine_trail_manager.gd")
 const BLINK_BASE_COOLDOWN := 0.9
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
 const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
@@ -57,6 +58,7 @@ var _joypad_aim_was_active: bool = false
 var _spawn_point: Vector2 = Vector2.ZERO
 var _projectiles: Node = null
 var _effects: Node = null
+var _engine_trail_manager: EngineTrailManager = null
 var _stats: StatBlock
 var _dispatcher: EffectDispatcher
 var _inventory: Inventory
@@ -83,6 +85,7 @@ func _ready() -> void:
 	health.health = health.max_health
 	_projectiles = get_tree().get_first_node_in_group("projectiles")
 	_effects = get_tree().get_first_node_in_group("effects")
+	_configure_engine_trail_manager()
 	_spawn_point = global_position
 	health.died.connect(_on_died)
 
@@ -162,6 +165,8 @@ func _configure_loadout() -> void:
 		health.health = health.max_health
 		if health.max_health != previous_max_health:
 			health_capacity_changed.emit(health.max_health)
+	if is_node_ready():
+		_configure_engine_trail_manager()
 
 ## Restaura o estado que pode ter sido alterado por uma nave omni antes de
 ## aplicar o novo casco. Isso tambem mantem a troca para naves legadas segura.
@@ -211,6 +216,25 @@ func _apply_hull_texture() -> void:
 			frames.set_animation_speed(&"neutral", 1.0)
 			sprite.sprite_frames = frames
 			sprite.play(&"neutral")
+			return
+		if not ship.custom_frame_regions.is_empty():
+			var animation_order := [&"hard_left", &"soft_left", &"neutral", &"soft_right", &"hard_right"]
+			if ship.custom_frame_regions.size() != 10:
+				push_warning("A nave com regioes customizadas precisa configurar exatamente 10 frames.")
+				sprite.sprite_frames = frames
+				return
+			for animation_index in animation_order.size():
+				var animation_name: StringName = animation_order[animation_index]
+				if not frames.has_animation(animation_name) or frames.get_frame_count(animation_name) != 2:
+					push_warning("SpriteFrames base precisa conter as cinco animacoes de casco com dois frames.")
+					sprite.sprite_frames = frames
+					return
+				for frame_index in 2:
+					var replacement := AtlasTexture.new()
+					replacement.atlas = ship.hull_texture
+					replacement.region = ship.custom_frame_regions[animation_index + frame_index * 5]
+					frames.set_frame(animation_name, frame_index, replacement)
+			sprite.sprite_frames = frames
 			return
 		if ship.atlas_grid_size != Vector2i(5, 2):
 			if ship.hull_texture.get_size() != Vector2(ship.frame_size * ship.atlas_grid_size):
@@ -368,7 +392,8 @@ func _physics_process(delta: float) -> void:
 	_check_contact()
 	_update_omni_stop_spin(delta, movement_direction if omni else Vector2.ZERO)
 	_update_bank(movement_direction if omni else Vector2.ZERO)
-	_update_thruster(movement_direction if omni else Vector2.DOWN)
+	_update_thruster(movement_direction if omni else Vector2.DOWN, is_thrusting)
+	_update_engine_trail(is_thrusting and not blink_consumed)
 	_update_invuln_visual()
 	if ship == null or ship.has_muzzle:
 		_handle_fire(delta)
@@ -543,6 +568,7 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	dest.x = clampf(dest.x, _room_bounds.position.x + m, _room_bounds.end.x - m)
 	dest.y = clampf(dest.y, _room_bounds.position.y + m, _room_bounds.end.y - m)
 
+	_clear_engine_trail_segments()
 	_resolve_blink_trail_damage(origin, dest)
 	global_position = dest      # teleporte instantâneo
 	velocity = Vector2.ZERO     # é um blink, não um empurrão
@@ -623,6 +649,7 @@ func _on_enemy_died(_enemy: Node, fatal_info: DamageInfo) -> void:
 func _on_died(_fatal_info: DamageInfo) -> void:
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
 	_reset_omni_stop_spin()
+	_clear_engine_trail_segments()
 	_spawn_teleport_fx(global_position)
 	if GameState.player_lives <= 0:
 		hide()
@@ -662,7 +689,7 @@ func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
 		sprite.play(&"neutral")
 
 ## O propulsor estica e intensifica conforme a velocidade atual.
-func _update_thruster(omni_direction: Vector2 = Vector2.DOWN) -> void:
+func _update_thruster(omni_direction: Vector2 = Vector2.DOWN, non_omni_thrusting: bool = false) -> void:
 	if ship != null and not ship.thrusters_enabled:
 		for current_thruster in thrusters:
 			current_thruster.emitting = false
@@ -678,7 +705,7 @@ func _update_thruster(omni_direction: Vector2 = Vector2.DOWN) -> void:
 	var ratio := clampf(velocity.length() / _stats.get_stat(&"max_speed"), 0.0, 1.0)
 	for current_thruster in thrusters:
 		var active := current_thruster == thruster if not _is_omni_ship() else _is_thruster_active(current_thruster, omni_direction)
-		current_thruster.emitting = active and (not _is_omni_ship() or omni_direction != Vector2.ZERO)
+		current_thruster.emitting = active and (non_omni_thrusting if not _is_omni_ship() else omni_direction != Vector2.ZERO)
 		current_thruster.initial_velocity_min = 20.0 + ratio * 40.0
 		current_thruster.initial_velocity_max = 50.0 + ratio * 70.0
 		current_thruster.scale_amount_min = 0.8 + ratio * 0.4
@@ -707,6 +734,44 @@ func _spawn_teleport_fx(pos: Vector2) -> void:
 	var fx := TELEPORT_FX.instantiate()
 	_effects.add_child(fx)
 	fx.global_position = pos
+
+func _uses_engine_trail() -> bool:
+	return ship != null and ship.engine_trail_enabled and ship.engine_trail_damage > 0.0 and ship.engine_trail_width > 0.0 and ship.engine_trail_duration > 0.0 and ship.engine_trail_damage_cooldown > 0.0 and ship.engine_trail_segment_spacing > 0.0
+
+func _configure_engine_trail_manager() -> void:
+	if is_instance_valid(_engine_trail_manager):
+		_engine_trail_manager.clear_segments()
+		_engine_trail_manager.queue_free()
+	_engine_trail_manager = null
+	if _effects == null or not _uses_engine_trail():
+		return
+	var manager := ENGINE_TRAIL_MANAGER.new() as EngineTrailManager
+	if manager == null:
+		return
+	_effects.add_child(manager)
+	manager.configure(self, ship.engine_trail_damage, ship.engine_trail_width, ship.engine_trail_duration, ship.engine_trail_damage_cooldown, ship.engine_trail_segment_spacing, character.thrust_color)
+	_engine_trail_manager = manager
+
+func _update_engine_trail(movement_input_active: bool) -> void:
+	if not is_instance_valid(_engine_trail_manager):
+		return
+	if not movement_input_active or _stats == null:
+		_engine_trail_manager.stop_emission()
+		return
+	var minimum_speed := ship.engine_trail_min_speed_ratio * _stats.get_stat(&"max_speed")
+	if velocity.length() <= minimum_speed:
+		_engine_trail_manager.stop_emission()
+		return
+	# As ancoras pertencem ao casco: o movimento so decide se o rastro emite.
+	# VisualRoot inclui a orientacao real do casco, inclusive qualquer ajuste visual.
+	_engine_trail_manager.emit_from_anchors(
+		visual_root.to_global(Vector2(-4.0, 8.0)),
+		visual_root.to_global(Vector2(4.0, 8.0)),
+	)
+
+func _clear_engine_trail_segments() -> void:
+	if is_instance_valid(_engine_trail_manager):
+		_engine_trail_manager.clear_segments()
 
 ## Resolve o dano no quadro do blink; o FX posterior nunca participa da fisica.
 func _resolve_blink_trail_damage(origin: Vector2, dest: Vector2) -> void:
