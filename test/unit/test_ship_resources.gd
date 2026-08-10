@@ -97,6 +97,7 @@ func test_engenheira_resource_uses_64_by_64_frames_and_valid_content() -> void:
 		if engineer.hull_texture != null:
 			assert_eq(engineer.hull_texture.resource_path, NEW_SHIP_TEXTURES[&"nave_engenheira"])
 		assert_eq(engineer.frame_size, Vector2i(64, 64))
+		assert_eq(engineer.visual_scale, 0.5)
 		assert_eq(engineer.muzzle_offset, Vector2(0, -10))
 		assert_eq(engineer.validate_content().size(), 0)
 
