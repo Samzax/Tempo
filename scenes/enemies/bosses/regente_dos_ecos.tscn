@@ -1,0 +1,55 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/regente_dos_ecos.gd" id="1_regente"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/components/procedural_chain_2d.gd" id="3_chain"]
+
+[sub_resource type="CircleShape2D" id="Circle_regente"]
+radius = 20.0
+
+[node name="RegenteDosEcos" type="CharacterBody2D" groups=["enemies"]]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("1_regente")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Circle_regente")
+
+[node name="MaskPivot" type="Node2D" parent="."]
+top_level = true
+
+[node name="CrownPivot" type="Node2D" parent="."]
+top_level = true
+
+[node name="Arms" type="Node2D" parent="."]
+
+[node name="LeftArmChain" type="Node2D" parent="Arms" groups=["regente_arm_chain"]]
+position = Vector2(-18, 8)
+script = ExtResource("3_chain")
+link_count = 4
+link_length = 14.0
+
+[node name="RightArmChain" type="Node2D" parent="Arms" groups=["regente_arm_chain"]]
+position = Vector2(18, 8)
+script = ExtResource("3_chain")
+link_count = 4
+link_length = 14.0
+
+[node name="Conduits" type="Node2D" parent="."]
+
+[node name="LeftConduitChain" type="Node2D" parent="Conduits" groups=["regente_conduit_chain"]]
+position = Vector2(-10, 15)
+script = ExtResource("3_chain")
+link_count = 3
+link_length = 10.0
+
+[node name="RightConduitChain" type="Node2D" parent="Conduits" groups=["regente_conduit_chain"]]
+position = Vector2(10, 15)
+script = ExtResource("3_chain")
+link_count = 3
+link_length = 10.0
