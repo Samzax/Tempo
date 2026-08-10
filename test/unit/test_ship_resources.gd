@@ -11,7 +11,7 @@ const SHIP_PATHS := {
 const NEW_SHIP_TEXTURES := {
 	&"nave_bruta": "res://assets/sprites/bruta-hull.png",
 	&"nave_engenheira": "res://assets/sprites/engenheira.png",
-	&"nave_rastreadora": "res://assets/sprites/rastreadora.png",
+	&"nave_rastreadora": "res://assets/sprites/rastreadora_v2.png",
 	&"nave_interceptadora": "res://assets/sprites/interceptadora.png",
 	&"nave_interestelar": "res://assets/sprites/interestelar.png",
 }
@@ -20,7 +20,7 @@ const SHIP_IMPORT_PATHS := [
 	"res://assets/sprites/engenheira.png.import",
 	"res://assets/sprites/interceptadora.png.import",
 	"res://assets/sprites/interestelar.png.import",
-	"res://assets/sprites/rastreadora.png.import",
+	"res://assets/sprites/rastreadora_v2.png.import",
 ]
 
 func test_ship_resources_have_unique_non_empty_uids() -> void:
@@ -65,12 +65,37 @@ func test_new_ships_have_hull_textures() -> void:
 		if ship != null:
 			assert_not_null(ship.hull_texture)
 
-func test_legacy_ship_textures_are_80_by_48() -> void:
-	for ship_id in [&"nave_rastreadora", &"nave_interestelar"]:
+func test_interestelar_legacy_texture_is_80_by_48() -> void:
+	for ship_id in [&"nave_interestelar"]:
 		var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[ship_id]))
 		assert_not_null(image)
 		if image != null:
 			assert_eq(image.get_size(), Vector2i(80, 48))
+
+func test_rastreadora_texture_is_rgba8_1254_by_1254() -> void:
+	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_rastreadora"]))
+	assert_not_null(image)
+	if image != null:
+		assert_eq(image.get_size(), Vector2i(1254, 1254))
+		assert_eq(image.get_format(), Image.FORMAT_RGBA8)
+
+func test_rastreadora_resource_uses_two_by_two_closed_atlas_layout() -> void:
+	var rastreadora := load(SHIP_PATHS[&"nave_rastreadora"]) as ShipDef
+	assert_not_null(rastreadora)
+	if rastreadora != null:
+		assert_not_null(rastreadora.hull_texture)
+		if rastreadora.hull_texture != null:
+			assert_eq(rastreadora.hull_texture.resource_path, NEW_SHIP_TEXTURES[&"nave_rastreadora"])
+		assert_eq(rastreadora.frame_size, Vector2i(627, 627))
+		assert_eq(rastreadora.atlas_grid_size, Vector2i(2, 2))
+		assert_almost_eq(rastreadora.visual_rotation_offset, -PI / 2.0, 0.00001)
+		assert_eq(rastreadora.visual_scale, 0.05)
+		# The right-facing source frame is rotated up, placing the nose one scaled
+		# half-frame above center. The scene Marker2D already contributes -12 on Y.
+		assert_eq(rastreadora.muzzle_offset, Vector2(0, -3.675))
+		var front_distance := rastreadora.frame_size.x * rastreadora.visual_scale / 2.0
+		assert_almost_eq(-12.0 + rastreadora.muzzle_offset.y, -front_distance, 0.00001)
+		assert_eq(rastreadora.validate_content().size(), 0)
 
 func test_engenheira_texture_is_rgba8_320_by_128_with_valid_alpha() -> void:
 	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_engenheira"]))

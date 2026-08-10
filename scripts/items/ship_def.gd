@@ -11,6 +11,10 @@ extends ProviderDef
 ## Defaults preserve the original aim-driven 16x24 ship presentation.
 @export_enum("aim_forward", "omni") var movement_style: String = "aim_forward"
 @export var frame_size: Vector2i = Vector2i(16, 24)
+## Grade do atlas da nave. Os defaults preservam as cinco poses e dois frames do casco legado.
+@export var atlas_grid_size: Vector2i = Vector2i(5, 2)
+## Rotacao aplicada somente ao sprite; nao afeta a mira, a fisica nem o Muzzle.
+@export_range(-360.0, 360.0, 1.0, "radians_as_degrees") var visual_rotation_offset: float = 0.0
 @export_range(0.01, 4.0, 0.01) var visual_scale: float = 1.0
 @export_range(1.0, 32.0, 0.5) var hurtbox_radius: float = 8.0
 @export_enum("capsule", "circle") var collision_shape_type: String = "capsule"
@@ -32,6 +36,8 @@ func validate_content() -> Array[String]:
 		errors.append("muzzle_offset diferente de zero so e suportado com movement_style aim_forward.")
 	if frame_size.x <= 0 or frame_size.y <= 0:
 		errors.append("Tamanho de frame invalido: %s." % frame_size)
+	if atlas_grid_size.x <= 0 or atlas_grid_size.y <= 0:
+		errors.append("Grade de atlas invalida: %s." % atlas_grid_size)
 	if visual_scale <= 0.0:
 		errors.append("Escala visual deve ser positiva.")
 	if hurtbox_radius <= 0.0:

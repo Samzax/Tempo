@@ -173,6 +173,7 @@ func _reset_ship_visual_state() -> void:
 	muzzle.position = _base_muzzle_position + (ship.muzzle_offset if ship != null else Vector2.ZERO)
 	visual_root.rotation = 0.0
 	sprite.scale = Vector2.ONE
+	sprite.rotation = ship.visual_rotation_offset if ship != null else 0.0
 	sprite.modulate = Color.WHITE
 	sprite.animation = &"neutral"
 	sprite.play(&"neutral")
@@ -206,6 +207,23 @@ func _apply_hull_texture() -> void:
 			frames.clear_all()
 			frames.add_animation(&"neutral")
 			frames.add_frame(&"neutral", ship.hull_texture)
+			frames.set_animation_loop(&"neutral", true)
+			frames.set_animation_speed(&"neutral", 1.0)
+			sprite.sprite_frames = frames
+			sprite.play(&"neutral")
+			return
+		if ship.atlas_grid_size != Vector2i(5, 2):
+			if ship.hull_texture.get_size() != Vector2(ship.frame_size * ship.atlas_grid_size):
+				push_warning("A textura da nave precisa corresponder ao frame_size e atlas_grid_size configurados.")
+				sprite.sprite_frames = frames
+				return
+			# Layouts customizados exibem por enquanto apenas o primeiro frame fechado no neutral.
+			frames.clear_all()
+			frames.add_animation(&"neutral")
+			var closed_frame := AtlasTexture.new()
+			closed_frame.atlas = ship.hull_texture
+			closed_frame.region = Rect2(Vector2.ZERO, Vector2(ship.frame_size))
+			frames.add_frame(&"neutral", closed_frame)
 			frames.set_animation_loop(&"neutral", true)
 			frames.set_animation_speed(&"neutral", 1.0)
 			sprite.sprite_frames = frames
