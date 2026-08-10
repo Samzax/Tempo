@@ -15,7 +15,7 @@ func test_interceptadora_resource_activates_runtime_contract() -> void:
 		assert_eq(_base_stat_value(ship, &"max_health"), 2.0)
 		assert_eq(_base_stat_value(ship, &"damage"), 0.5)
 		assert_true(ship.blink_trail_enabled)
-		assert_eq(ship.blink_trail_damage, 0.2)
+		assert_eq(ship.blink_trail_damage, 2.0)
 		assert_eq(ship.blink_trail_width, 1.5)
 		assert_eq(ship.blink_trail_duration, 0.4)
 		assert_eq(ship.visual_scale, 0.7)

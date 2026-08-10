@@ -50,6 +50,6 @@ base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_speed
 ability_q = &"interceptadora_blink"
 thrusters_enabled = false
 blink_trail_enabled = true
-blink_trail_damage = 0.2
+blink_trail_damage = 2.0
 blink_trail_width = 1.5
 blink_trail_duration = 0.4
