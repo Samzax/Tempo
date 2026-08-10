@@ -46,7 +46,7 @@ func _physics_process(delta: float) -> void:
 			if _elapsed >= vulnerable_duration:
 				_enter_state(AttackState.DRIFT)
 	move_and_slide()
-	if _room_bounds.grow(16.0).has_point(global_position):
+	if _room_bounds.has_point(global_position):
 		_has_entered_room = true
 
 func take_damage(info: DamageInfo) -> void:

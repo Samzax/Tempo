@@ -115,3 +115,18 @@ func test_drift_uses_player_lateral_motion_after_entering_room() -> void:
 	enemy._process_drift()
 	assert_almost_eq(enemy.velocity.x, 0.0, 0.001)
 	assert_almost_eq(enemy.velocity.y, enemy.drift_speed, 0.001)
+
+func test_drift_marks_entry_only_after_crossing_room_boundary() -> void:
+	var enemy := await _enemy()
+	enemy.set_room_bounds(Rect2(0.0, 0.0, 320.0, 320.0))
+	enemy.set_entry_inward(Vector2.RIGHT)
+	enemy.global_position = Vector2(-10.0, 160.0)
+	enemy._has_entered_room = false
+
+	enemy._physics_process(0.016)
+	assert_false(enemy._has_entered_room)
+	assert_gt(enemy.velocity.dot(Vector2.RIGHT), 0.0)
+
+	enemy.global_position = Vector2(5.0, 160.0)
+	enemy._physics_process(0.016)
+	assert_true(enemy._has_entered_room)
