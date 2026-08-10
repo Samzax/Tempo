@@ -134,18 +134,58 @@ func test_interceptor_trail_is_deterministic_fixed_duration_and_cleans_up() -> v
 	first._process(0.01)
 	assert_true(first.is_queued_for_deletion())
 
+func test_interceptor_trail_reveals_reaches_peak_and_compresses() -> void:
+	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
+	var trail := trail_scene.instantiate()
+	trail.set_process(false)
+	_effects.add_child(trail)
+	trail.configure(Vector2.ZERO, Vector2(1823, 0), _character.thrust_color, 1.5, 9.0)
+
+	assert_almost_eq(trail.trail_sprite.scale.x, 0.0, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.0, 0.0001)
+	assert_almost_eq(trail.trail_sprite.modulate.a, 0.0, 0.0001)
+	trail._process(0.025)
+	assert_gt(trail.trail_sprite.scale.x, 0.0)
+	assert_gt(trail.trail_sprite.modulate.a, 0.0)
+	trail._process(0.025)
+	assert_almost_eq(trail.trail_sprite.modulate.a, 1.0, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.15, 0.0001)
+	trail._process(0.10)
+	assert_almost_eq(trail.trail_sprite.modulate.a, 1.0, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.10, 0.0001)
+
+func test_interceptor_trail_dissolves_before_cleanup() -> void:
+	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
+	var trail := trail_scene.instantiate()
+	trail.set_process(false)
+	_effects.add_child(trail)
+	trail.configure(Vector2.ZERO, Vector2(1823, 0), _character.thrust_color, 1.5, 9.0)
+	trail._elapsed = 0.0
+	trail._apply_visual_state()
+
+	trail._process(0.4)
+	assert_almost_eq(trail.trail_sprite.modulate.a, 0.0, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.0, 0.0001)
+	assert_true(trail.is_queued_for_deletion())
+
 func test_interceptor_trail_uses_approved_sprite_transform_and_tint_uniform() -> void:
 	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
 	var trail := trail_scene.instantiate()
+	trail.set_process(false)
 	_effects.add_child(trail)
 	var origin := Vector2(10, 20)
 	var dest := Vector2(10, 1843)
 	trail.configure(origin, dest, _character.thrust_color, 1.5, 99.0)
+	trail._elapsed = 0.0
+	trail._apply_visual_state()
 
 	assert_eq(trail.global_position, origin.lerp(dest, 0.5))
 	assert_almost_eq(trail.rotation, (dest - origin).angle(), 0.0001)
-	assert_almost_eq(trail.trail_sprite.scale.x, 1.0, 0.0001)
-	assert_almost_eq(trail.trail_sprite.scale.y, 0.10, 0.0001)
+	assert_almost_eq(trail._base_scale.x, 1.0, 0.0001)
+	assert_almost_eq(trail._base_scale.y, 0.10, 0.0001)
+	var configured_scale: Vector2 = trail.trail_sprite.scale
+	trail.configure(origin, dest, _character.thrust_color, 1.5, 99.0)
+	assert_eq(trail.trail_sprite.scale, configured_scale)
 	var material := trail.trail_sprite.material as ShaderMaterial
 	assert_not_null(material)
 	if material != null:
@@ -158,8 +198,9 @@ func test_interceptor_trail_uses_approved_sprite_transform_and_tint_uniform() ->
 	trail.configure(origin, origin, _character.thrust_color, 1.5, 99.0)
 	assert_eq(trail.global_position, origin)
 	assert_eq(trail.rotation, 0.0)
+	assert_almost_eq(trail._base_scale.y, 0.10, 0.0001)
 	assert_lt(trail.trail_sprite.scale.x, 0.0001)
-	assert_almost_eq(trail.trail_sprite.scale.y, 0.10, 0.0001)
+	assert_lt(trail.trail_sprite.scale.y, 0.0001)
 
 func test_interceptor_trail_is_visual_only_and_has_no_physics_or_damage_contract() -> void:
 	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
