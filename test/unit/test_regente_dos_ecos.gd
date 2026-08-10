@@ -152,18 +152,44 @@ func test_regente_scene_preserves_root_pivots_and_texture_free_chain_structure()
 	assert_true(boss is Enemy)
 	assert_not_null(boss.get_node_or_null("MaskPivot"))
 	assert_not_null(boss.get_node_or_null("CrownPivot"))
-	assert_null(boss.get_node("Sprite2D").texture)
+	var sprite := boss.get_node("Sprite2D") as Sprite2D
+	assert_not_null(sprite.texture)
+	assert_eq(sprite.texture.resource_path, "res://assets/sprites/enemies/regente-dos-ecos/assembled-reference.png")
+	assert_true(sprite.texture.resource_path.begins_with("res://"))
+	assert_true(FileAccess.file_exists(sprite.texture.resource_path))
+	assert_eq(sprite.texture.get_width(), 390)
+	assert_eq(sprite.texture.get_height(), 700)
+	assert_eq(sprite.texture.get_image().get_format(), Image.FORMAT_RGBA8)
+	assert_eq(sprite.scale, Vector2(0.3205, 0.3205))
+	assert_eq(sprite.offset, Vector2(27.0, 108.0))
+	assert_eq(sprite.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST)
+	assert_eq(sprite.hframes, 1)
+	assert_eq(sprite.vframes, 1)
 	assert_eq(boss.max_health, 3.0)
 	assert_eq(boss.score_value, 10)
 	assert_false(_scene_property_names(NodePath(".")).has(&"max_health"))
 	assert_false(_scene_property_names(NodePath(".")).has(&"score_value"))
+	assert_eq(boss.collision_layer, 4)
+	assert_eq(boss.collision_mask, 0)
 	assert_eq(boss.get_node("CollisionShape2D").get_parent(), boss)
+	assert_not_null(boss.get_node("CollisionShape2D").shape)
 	assert_eq(boss.get_node("Arms/LeftArmChain").get_child_count(), 0)
 	assert_eq(boss.get_node("Conduits/RightConduitChain").get_child_count(), 0)
 	for chain in boss.arm_chains + boss.conduit_chains:
 		assert_eq(chain.get_child_count(), 0)
 		assert_null(chain.get_node_or_null("Sprite2D"))
 		assert_null(chain.get_node_or_null("CollisionShape2D"))
+
+func test_regente_asset_loads_headless_without_external_resource_dependencies() -> void:
+	var texture := load("res://assets/sprites/enemies/regente-dos-ecos/assembled-reference.png") as Texture2D
+
+	assert_not_null(texture)
+	assert_eq(texture.resource_path, "res://assets/sprites/enemies/regente-dos-ecos/assembled-reference.png")
+	assert_true(texture.resource_path.begins_with("res://"))
+	assert_true(FileAccess.file_exists(texture.resource_path))
+	assert_eq(texture.get_width(), 390)
+	assert_eq(texture.get_height(), 700)
+	assert_eq(texture.get_image().get_format(), Image.FORMAT_RGBA8)
 
 func test_regente_updates_pivots_and_all_chains_without_physics_links() -> void:
 	var boss := BOSS_SCENE.instantiate() as RegenteDosEcos
@@ -205,3 +231,47 @@ func test_regente_pivots_have_global_translation_lag_as_well_as_rotation_lag() -
 	assert_ne(boss.crown_pivot.global_rotation, old_crown_rotation)
 	assert_gt(absf(boss.mask_pivot.global_rotation - Vector2.RIGHT.angle()), 0.01)
 	assert_gt(absf(boss.crown_pivot.global_rotation - Vector2.RIGHT.angle()), 0.01)
+
+func _culling_boss(bounds: Rect2, policy: RoomDef.CullPolicy) -> RegenteDosEcos:
+	var boss := BOSS_SCENE.instantiate() as RegenteDosEcos
+	add_child_autofree(boss)
+	boss.set_room_bounds(bounds)
+	boss.set_room_cull_policy(policy)
+	boss._has_entered_room = true
+	return boss
+
+func test_regente_visual_cull_margins_preserve_base_margin_inside_bounds() -> void:
+	var boss := _culling_boss(Rect2(0.0, 0.0, 320.0, 320.0), RoomDef.CullPolicy.DESPAWN_BOTTOM)
+
+	assert_eq(boss.visual_cull_margin_x, 64.0)
+	assert_eq(boss.visual_cull_margin_y, 169.0)
+	boss.global_position = Vector2(160.0, 528.0)
+	assert_false(boss._should_cull())
+
+func test_regente_despawn_bottom_culls_after_vertical_visual_margin() -> void:
+	var boss := _culling_boss(Rect2(0.0, 0.0, 320.0, 320.0), RoomDef.CullPolicy.DESPAWN_BOTTOM)
+
+	boss.global_position = Vector2(160.0, 530.0)
+	assert_true(boss._should_cull())
+
+func test_regente_all_borders_preserves_vertical_sprite_footprint_at_top() -> void:
+	var boss := _culling_boss(Rect2(0.0, 0.0, 320.0, 320.0), RoomDef.CullPolicy.DESPAWN_ALL_BORDERS)
+
+	boss.global_position = Vector2(160.0, -209.0)
+	assert_false(boss._should_cull())
+	boss.global_position = Vector2(160.0, -210.0)
+	assert_true(boss._should_cull())
+
+func test_regente_all_borders_uses_lateral_visual_margin() -> void:
+	var boss := _culling_boss(Rect2(0.0, 0.0, 320.0, 320.0), RoomDef.CullPolicy.DESPAWN_ALL_BORDERS)
+
+	boss.global_position = Vector2(-103.0, 160.0)
+	assert_false(boss._should_cull())
+	boss.global_position = Vector2(-105.0, 160.0)
+	assert_true(boss._should_cull())
+
+func test_regente_none_never_culls() -> void:
+	var boss := _culling_boss(Rect2(0.0, 0.0, 320.0, 320.0), RoomDef.CullPolicy.NONE)
+
+	boss.global_position = Vector2(-10000.0, 10000.0)
+	assert_false(boss._should_cull())

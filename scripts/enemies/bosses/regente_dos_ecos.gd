@@ -13,6 +13,11 @@ extends Enemy
 @export_range(0.01, 100.0, 0.01) var crown_follow_rate: float = 5.0
 @export_range(0.01, 100.0, 0.01) var mask_turn_rate: float = 8.0
 @export_range(0.01, 100.0, 0.01) var crown_turn_rate: float = 5.0
+@export_group("Visual Culling")
+## Margem extra alem da margem de sala da classe base, em pixels de mundo.
+## Cobre o footprint aproximado do Sprite2D da Regente em torno da raiz.
+@export_range(64.0, 500.0, 1.0) var visual_cull_margin_x: float = 64.0
+@export_range(169.0, 500.0, 1.0) var visual_cull_margin_y: float = 169.0
 
 @onready var mask_pivot: Node2D = get_node_or_null("MaskPivot")
 @onready var crown_pivot: Node2D = get_node_or_null("CrownPivot")
@@ -53,6 +58,19 @@ func _target_velocity() -> Vector2:
 		if to_player != Vector2.ZERO:
 			return to_player * root_max_speed
 	return _entry_inward * root_max_speed
+
+func _should_cull() -> bool:
+	if _room_cull_policy == RoomDef.CullPolicy.NONE:
+		return false
+	var visual_margin := Vector2(40.0 + visual_cull_margin_x, 40.0 + visual_cull_margin_y)
+	if _room_cull_policy == RoomDef.CullPolicy.DESPAWN_BOTTOM:
+		return global_position.y > _room_bounds.end.y + visual_margin.y
+	return _has_entered_room and not _room_bounds.grow_individual(
+		visual_margin.x,
+		visual_margin.y,
+		visual_margin.x,
+		visual_margin.y
+	).has_point(global_position)
 
 func _update_pivots(delta: float) -> void:
 	if is_instance_valid(mask_pivot):

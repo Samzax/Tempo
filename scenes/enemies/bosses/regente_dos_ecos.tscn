@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/bosses/regente_dos_ecos.gd" id="1_regente"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
 [ext_resource type="Script" path="res://scripts/components/procedural_chain_2d.gd" id="3_chain"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/assembled-reference.png" id="4_sprite"]
 
 [sub_resource type="CircleShape2D" id="Circle_regente"]
 radius = 20.0
@@ -16,6 +17,10 @@ script = ExtResource("1_regente")
 script = ExtResource("2_health")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("4_sprite")
+offset = Vector2(27, 108)
+scale = Vector2(0.3205, 0.3205)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("Circle_regente")
