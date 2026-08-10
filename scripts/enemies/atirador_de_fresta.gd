@@ -59,6 +59,9 @@ func take_damage(info: DamageInfo) -> void:
 	super(info)
 
 func _process_drift() -> void:
+	if not _has_entered_room:
+		velocity = _entry_inward * drift_speed
+		return
 	_anchor = _find_anchor()
 	if is_instance_valid(_anchor):
 		velocity = global_position.direction_to(_anchor.global_position) * drift_speed

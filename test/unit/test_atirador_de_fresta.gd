@@ -82,3 +82,36 @@ func test_locked_direction_remains_the_projectile_direction() -> void:
 	var captured: Vector2 = enemy.locked_direction
 	player.global_position = Vector2.LEFT * 100.0
 	assert_eq(enemy.locked_direction, captured)
+
+func test_drift_enters_from_each_edge_before_using_player_lateral_motion() -> void:
+	var enemy := await _enemy()
+	var player := Node2D.new()
+	add_child_autofree(player)
+	enemy._player = player
+	player.global_position = Vector2(100.0, 100.0)
+	enemy.set_room_bounds(Rect2(Vector2.ZERO, Vector2(200.0, 200.0)))
+	var edge_cases := [
+		[Vector2(-16.0, 100.0), Vector2.RIGHT],
+		[Vector2(216.0, 100.0), Vector2.LEFT],
+		[Vector2(100.0, -16.0), Vector2.DOWN],
+		[Vector2(100.0, 216.0), Vector2.UP],
+	]
+	for edge_case in edge_cases:
+		enemy.global_position = edge_case[0]
+		enemy.set_entry_inward(edge_case[1])
+		enemy._has_entered_room = false
+		enemy._process_drift()
+		assert_eq(enemy.velocity, edge_case[1] * enemy.drift_speed)
+
+func test_drift_uses_player_lateral_motion_after_entering_room() -> void:
+	var enemy := await _enemy()
+	var player := Node2D.new()
+	add_child_autofree(player)
+	enemy._player = player
+	enemy.global_position = Vector2(40.0, 100.0)
+	player.global_position = Vector2(100.0, 100.0)
+	enemy.set_entry_inward(Vector2.RIGHT)
+	enemy._has_entered_room = true
+	enemy._process_drift()
+	assert_almost_eq(enemy.velocity.x, 0.0, 0.001)
+	assert_almost_eq(enemy.velocity.y, enemy.drift_speed, 0.001)
