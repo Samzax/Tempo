@@ -79,7 +79,7 @@ func test_interestelar_resource_uses_complete_custom_ten_frame_atlas() -> void:
 		return
 	assert_eq(interestelar.frame_size, Vector2i(397, 397))
 	assert_eq(interestelar.atlas_grid_size, Vector2i(5, 2))
-	assert_almost_eq(interestelar.visual_scale, 0.06, 0.00001)
+	assert_almost_eq(interestelar.visual_scale, 0.081, 0.00001)
 	var expected_regions: Array[Rect2] = [
 		Rect2(0, 0, 397, 397), Rect2(397, 0, 396, 397), Rect2(793, 0, 397, 397), Rect2(1190, 0, 396, 397), Rect2(1586, 0, 397, 397),
 		Rect2(0, 397, 397, 396), Rect2(397, 397, 396, 396), Rect2(793, 397, 397, 396), Rect2(1190, 397, 396, 396), Rect2(1586, 397, 397, 397 - 1),
