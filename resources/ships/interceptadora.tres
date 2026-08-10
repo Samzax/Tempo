@@ -51,5 +51,5 @@ ability_q = &"interceptadora_blink"
 thrusters_enabled = false
 blink_trail_enabled = true
 blink_trail_damage = 2.0
-blink_trail_width = 1.5
+blink_trail_width = 49.28
 blink_trail_duration = 0.4

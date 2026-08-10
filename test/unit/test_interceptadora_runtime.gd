@@ -64,6 +64,23 @@ func test_target_outside_trail_width_is_not_hit() -> void:
 	_player._resolve_blink_trail_damage(Vector2(100, 100), Vector2(200, 100))
 	assert_eq(_target.calls.size(), 0)
 
+func test_real_interceptadora_blink_width_hits_at_24_5_and_misses_at_25_0() -> void:
+	_ship.blink_trail_width = 49.28
+	_ship.blink_trail_damage = 2.0
+	assert_almost_eq(_ship.blink_trail_width * 0.5, 24.64, 0.0001)
+	_target.position = Vector2(150, 124.5)
+	_player._resolve_blink_trail_damage(Vector2(100, 100), Vector2(200, 100))
+	assert_eq(_target.calls.size(), 1)
+	var hit_info := _target.calls[0]
+	assert_eq(hit_info.amount, 2.0)
+	assert_eq(hit_info.source, _player)
+	assert_true(hit_info.tags.has(&"blink"))
+	assert_true(hit_info.tags.has(&"interceptor_blink_trail"))
+	_target.calls.clear()
+	_target.position = Vector2(150, 125.0)
+	_player._resolve_blink_trail_damage(Vector2(100, 100), Vector2(200, 100))
+	assert_eq(_target.calls.size(), 0)
+
 func test_clamped_endpoint_and_zero_length_trail_are_safe() -> void:
 	_target.position = Vector2(110, 100)
 	_player._resolve_blink_trail_damage(Vector2(100, 100), Vector2(100, 100))
@@ -128,7 +145,7 @@ func test_interceptor_trail_uses_approved_sprite_transform_and_tint_uniform() ->
 	assert_eq(trail.global_position, origin.lerp(dest, 0.5))
 	assert_almost_eq(trail.rotation, (dest - origin).angle(), 0.0001)
 	assert_almost_eq(trail.trail_sprite.scale.x, 1.0, 0.0001)
-	assert_almost_eq(trail.trail_sprite.scale.y, 0.34, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.10, 0.0001)
 	var material := trail.trail_sprite.material as ShaderMaterial
 	assert_not_null(material)
 	if material != null:
@@ -142,7 +159,7 @@ func test_interceptor_trail_uses_approved_sprite_transform_and_tint_uniform() ->
 	assert_eq(trail.global_position, origin)
 	assert_eq(trail.rotation, 0.0)
 	assert_lt(trail.trail_sprite.scale.x, 0.0001)
-	assert_almost_eq(trail.trail_sprite.scale.y, 0.34, 0.0001)
+	assert_almost_eq(trail.trail_sprite.scale.y, 0.10, 0.0001)
 
 func test_interceptor_trail_is_visual_only_and_has_no_physics_or_damage_contract() -> void:
 	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene

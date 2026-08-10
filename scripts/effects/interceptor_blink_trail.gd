@@ -3,7 +3,7 @@ extends Node2D
 
 const FIXED_DURATION := 0.4
 const NATIVE_TEXTURE_WIDTH := 1823.0
-const FIXED_VERTICAL_SCALE := 0.34
+const FIXED_VERTICAL_SCALE := 0.10
 
 @onready var trail_sprite: Sprite2D = $TrailSprite
 
