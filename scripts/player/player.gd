@@ -49,6 +49,7 @@ var _ability_q_cd_duration: float = 0.0
 var _ability_e_cd: float = 0.0
 var _ability_e_cd_duration: float = 0.0
 var _invuln_timer: float = 0.0
+var _shield_charges: Dictionary = {}
 var is_sandbox_invulnerable: bool = false
 var _aim_vector: Vector2 = Vector2.UP
 var _last_aim_source: AimSource = AimSource.NONE
@@ -106,6 +107,19 @@ func configure_selection(next_ship: ShipDef, character_id: StringName) -> bool:
 func deploy_engineer_gadget() -> bool:
 	var session := get_tree().get_first_node_in_group(&"session")
 	return session != null and session.has_method(&"deploy_engineer_deployable") and bool(session.call(&"deploy_engineer_deployable", self))
+
+## Alvo comum de implantacao e comando: sempre a alcance fixo na direcao da mira.
+func get_engineer_deploy_target(distance: float) -> Vector2:
+	var target := global_position + _aim_vector.normalized() * distance
+	var margin := 10.0
+	target.x = clampf(target.x, _room_bounds.position.x + margin, _room_bounds.end.x - margin)
+	target.y = clampf(target.y, _room_bounds.position.y + margin, _room_bounds.end.y - margin)
+	return target
+
+## O Shift da nave sem blink reposiciona somente o Drone ja implantado.
+func command_engineer_drone() -> bool:
+	var session := get_tree().get_first_node_in_group(&"session")
+	return session != null and session.has_method(&"command_engineer_drone") and bool(session.call(&"command_engineer_drone", self))
 
 ## Aplica a selecao antes do inicio da run. Reconstruir o loadout nao reconecta
 ## sinais do Player e por isso permanece seguro mesmo apos o _ready da cena.
@@ -237,6 +251,10 @@ func apply_temporary_modifier(source_id: StringName, stat_id: StringName, op: St
 	modifier.duration = duration
 	modifier.source_id = source_id
 	_stats.add_modifier(modifier)
+
+func remove_temporary_modifier(source_id: StringName) -> void:
+	if _stats != null and not source_id.is_empty():
+		_stats.remove_modifiers_by_source(source_id)
 
 ## Adquire um item e aplica seus efeitos e modificadores.
 func acquire_item(item: ItemDef) -> bool:
@@ -436,6 +454,22 @@ func is_invulnerable() -> bool:
 func grant_invuln(duration: float) -> void:
 	_invuln_timer = maxf(_invuln_timer, duration)
 
+## Uma estacao concede uma unica carga por fonte; a carga absorve o proximo dano.
+func grant_shield_charge(source_id: StringName) -> void:
+	if not source_id.is_empty():
+		_shield_charges[source_id] = true
+
+func revoke_shield_charge(source_id: StringName) -> void:
+	if not source_id.is_empty():
+		_shield_charges.erase(source_id)
+
+func _consume_shield_charge() -> bool:
+	if _shield_charges.is_empty():
+		return false
+	var source_id: Variant = _shield_charges.keys().front()
+	_shield_charges.erase(source_id)
+	return true
+
 ## Fração de recarga do blink (0 = pronto, 1 = acabou de usar). Usado pelo HUD.
 func blink_cooldown_ratio() -> float:
 	if _blink_cd <= 0.0 or _blink_cd_duration <= 0.0:
@@ -471,6 +505,8 @@ func _tick_timers(delta: float) -> void:
 ## Blink: teleporte instantâneo na direção da mira,
 ## com efeito de colapso na origem e no destino, i-frames e recarga.
 func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
+	if ship != null and not ship.can_blink:
+		return false
 	if _stats == null or _dispatcher == null or _blink_cd > 0.0:
 		return false
 	var requested_direction := direction
@@ -501,7 +537,12 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 
 ## Ativa as habilidades equipadas quando seus slots estao prontos.
 func _handle_blink_input() -> bool:
-	return Input.is_action_just_pressed("blink") and try_blink()
+	if not Input.is_action_just_pressed("blink"):
+		return false
+	if ship != null and not ship.can_blink:
+		command_engineer_drone()
+		return false
+	return try_blink()
 
 func _handle_ability_input() -> void:
 	if Input.is_action_just_pressed("ability_q") and _ability_q != null and _ability_q_cd <= 0.0:
@@ -542,6 +583,8 @@ func take_damage(info: DamageInfo) -> void:
 		return
 	if is_invulnerable():
 		return
+	if _consume_shield_charge():
+		return
 	_invuln_timer = _stats.get_stat(&"hit_invuln")
 	health.apply_damage(info)
 
@@ -572,6 +615,7 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 	_ability_e_cd = 0.0
 	_ability_e_cd_duration = 0.0
 	_stats.clear_temporary()
+	_shield_charges.clear()
 	_invuln_timer = _stats.get_stat(&"respawn_invuln")
 	_spawn_teleport_fx(_spawn_point)
 

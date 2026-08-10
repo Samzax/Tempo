@@ -35,6 +35,18 @@ func _blink_player(ship: ShipDef) -> Player:
 	player._blink_cd_duration = 0.0
 	return player
 
+func _engineer_session() -> Session:
+	var session := InputTestSession.new()
+	add_child_autofree(session)
+	var room := Node2D.new()
+	var deployables := Node2D.new()
+	deployables.name = "Deployables"
+	room.add_child(deployables)
+	session.add_child(room)
+	session._active_room = room
+	session._room_active = true
+	return session
+
 func _release_inputs() -> void:
 	for action in INPUT_ACTIONS:
 		Input.action_release(action)
@@ -167,3 +179,51 @@ func test_position_is_clamped_to_arena_bounds() -> void:
 	player._clamp_to_bounds()
 
 	assert_eq(player.global_position, Vector2(10.0, 70.0))
+
+func test_can_blink_defaults_true_for_other_ships_and_false_for_engineer() -> void:
+	assert_true(BASE_SHIP.can_blink)
+	assert_true(ShipCatalog.get_ship(&"nave_bruta").can_blink)
+	assert_false(ShipCatalog.get_ship(&"nave_engenheira").can_blink)
+
+func test_engineer_shift_does_not_teleport_and_commands_drone_path() -> void:
+	var session := _engineer_session()
+	var player := PLAYER_SCENE.instantiate() as Player
+	player.name = "Player"
+	session.add_child(player)
+	await get_tree().process_frame
+	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_engenheira")))
+	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(720.0, 405.0)))
+	player.global_position = Vector2(360.0, 200.0)
+	player._blink_cd = 0.0
+	assert_true(session.deploy_engineer_deployable(player))
+	var drone := session._active_room.get_node("Deployables").get_child(0) as EngineerDeployable
+	drone.global_position = Vector2.ZERO
+	var target_before_shift := drone._target_position
+	var before := player.global_position
+	Input.action_press(&"move_up")
+	Input.action_press(&"aim_up")
+	player._physics_process(1.0 / 60.0)
+	Input.action_release(&"move_up")
+	Input.action_release(&"aim_up")
+	assert_ne(player.global_position, before)
+	assert_eq(drone._target_position, target_before_shift)
+	var target_after_aim := session._engineer_target_for(player)
+	Input.action_press(&"blink")
+	assert_false(player._handle_blink_input())
+	Input.action_release(&"blink")
+	assert_ne(player.global_position, before)
+	assert_eq(player.global_position, before + player.velocity * (1.0 / 60.0))
+	assert_eq(drone._target_position, target_after_aim)
+	assert_ne(drone._target_position, target_before_shift)
+
+func test_shift_input_keeps_blink_for_common_ship() -> void:
+	var player := await _blink_player(BASE_SHIP)
+	var before := player.global_position
+	Input.action_press(&"blink")
+	assert_true(player._handle_blink_input())
+	Input.action_release(&"blink")
+	assert_ne(player.global_position, before)
+
+class InputTestSession extends Session:
+	func _ready() -> void:
+		add_to_group(&"session")

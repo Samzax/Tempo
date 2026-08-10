@@ -26,7 +26,7 @@ var _room_active := false
 var _awaiting_boss_advance := false
 var _room_generation := 0
 var _has_started := false
-var _engineer_deploy_sequence := 0
+var _engineer_deploy_sequence_by_player: Dictionary = {}
 
 func _ready() -> void:
 	add_to_group(&"session")
@@ -40,7 +40,7 @@ func _ready() -> void:
 	_hyperspace.node_selected.connect(_on_node_selected)
 	_hyperspace.sector_advance_requested.connect(_on_sector_advance_requested)
 
-## Instancia a proxima unidade da Engenheira no container da sala e remove a mais antiga do mesmo jogador no limite.
+## Implanta por jogador e por sala. O Drone e singleton e nunca e removido pelo limite.
 func deploy_engineer_deployable(player: Node2D) -> bool:
 	if not _room_active or not is_instance_valid(_active_room) or player == null:
 		return false
@@ -52,16 +52,70 @@ func deploy_engineer_deployable(player: Node2D) -> bool:
 		var existing := child as EngineerDeployable
 		if existing != null and existing.deploying_player == player:
 			deployed_by_player.append(existing)
-	while deployed_by_player.size() >= ENGINEER_DEPLOYABLE_LIMIT:
-		var oldest: EngineerDeployable = deployed_by_player.pop_front()
-		container.remove_child(oldest)
-		oldest.queue_free()
+	var player_id := player.get_instance_id()
+	var sequence := int(_engineer_deploy_sequence_by_player.get(player_id, 0))
+	var next_kind := _next_engineer_kind(sequence, deployed_by_player)
+	var selected_index := [
+		EngineerDeployable.Kind.DRONE,
+		EngineerDeployable.Kind.TRAP,
+		EngineerDeployable.Kind.OVERCLOCK_STATION,
+	].find(next_kind)
+	_engineer_deploy_sequence_by_player[player_id] = (selected_index + 1) % 3
+	if deployed_by_player.size() >= ENGINEER_DEPLOYABLE_LIMIT:
+		var oldest_replaceable := _oldest_replaceable(deployed_by_player)
+		if oldest_replaceable == null:
+			return false
+		container.remove_child(oldest_replaceable)
+		oldest_replaceable.queue_free()
 	var deployable := ENGINEER_DEPLOYABLE.instantiate() as EngineerDeployable
 	container.add_child(deployable)
-	deployable.global_position = player.global_position + Vector2.UP.rotated(_engineer_deploy_sequence * TAU / 3.0) * 20.0
-	deployable.configure(_engineer_deploy_sequence % 3, player)
-	_engineer_deploy_sequence += 1
+	var target := _engineer_target_for(player)
+	deployable.global_position = player.global_position
+	deployable.configure(next_kind, player, target)
 	return true
+
+func command_engineer_drone(player: Node2D) -> bool:
+	if not _room_active or not is_instance_valid(_active_room) or player == null:
+		return false
+	var container := _active_room.get_node_or_null("Deployables") as Node2D
+	if container == null:
+		return false
+	for child in container.get_children():
+		var deployable := child as EngineerDeployable
+		if deployable != null and deployable.deploying_player == player and deployable.kind == EngineerDeployable.Kind.DRONE:
+			deployable.command_to(_engineer_target_for(player))
+			return true
+	return false
+
+func _next_engineer_kind(sequence: int, deployed: Array[EngineerDeployable]) -> EngineerDeployable.Kind:
+	const DEPLOY_ORDER := [
+		EngineerDeployable.Kind.DRONE,
+		EngineerDeployable.Kind.TRAP,
+		EngineerDeployable.Kind.OVERCLOCK_STATION,
+	]
+	for offset in 3:
+		var candidate := int(DEPLOY_ORDER[(sequence + offset) % DEPLOY_ORDER.size()])
+		if candidate != EngineerDeployable.Kind.DRONE or not _has_engineer_drone(deployed):
+			return candidate
+	return EngineerDeployable.Kind.TRAP
+
+func _has_engineer_drone(deployed: Array[EngineerDeployable]) -> bool:
+	for deployable in deployed:
+		if is_instance_valid(deployable) and deployable.kind == EngineerDeployable.Kind.DRONE:
+			return true
+	return false
+
+func _oldest_replaceable(deployed: Array[EngineerDeployable]) -> EngineerDeployable:
+	for deployable in deployed:
+		if is_instance_valid(deployable) and deployable.kind != EngineerDeployable.Kind.DRONE:
+			return deployable
+	return null
+
+## Mantem o contrato de sessao testavel com jogadores minimos, sem afetar Player real.
+func _engineer_target_for(player: Node2D) -> Vector2:
+	if player.has_method(&"get_engineer_deploy_target"):
+		return player.call(&"get_engineer_deploy_target", EngineerDeployable.DEPLOY_RANGE)
+	return player.global_position + Vector2.UP * EngineerDeployable.DEPLOY_RANGE
 
 func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAULT_CHARACTER_ID) -> void:
 	if _has_started:
@@ -90,12 +144,13 @@ func reset_run() -> void:
 	_room_active = false
 	_awaiting_boss_advance = false
 	_has_started = false
-	_engineer_deploy_sequence = 0
+	_engineer_deploy_sequence_by_player.clear()
 
 func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	if _room_active or sector == null or sector.get_node(node_id) == null:
 		return
 	_room_generation += 1
+	_engineer_deploy_sequence_by_player.clear()
 	var room_generation := _room_generation
 	run_state.current_node_id = node_id
 	_room_active = true

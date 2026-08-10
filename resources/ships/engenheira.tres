@@ -26,3 +26,4 @@ display_name = "Engenheira"
 hull_texture = ExtResource("2_texture")
 base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_pierce")])
 ability_q = &"engenheira_deploy"
+can_blink = false

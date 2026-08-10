@@ -6,6 +6,8 @@ extends ProviderDef
 @export var hull_texture: Texture2D
 @export var base_stats: Array[BaseStatValue] = []
 @export var ability_q: StringName
+## Desliga o blink sem acoplar o controle a uma identidade de nave especifica.
+@export var can_blink: bool = true
 ## Defaults preserve the original aim-driven 16x24 ship presentation.
 @export_enum("aim_forward", "omni") var movement_style: String = "aim_forward"
 @export var frame_size: Vector2i = Vector2i(16, 24)

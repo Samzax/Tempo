@@ -1,9 +1,13 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/deployables/engineer_deployable.gd" id="1_deployable"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
 
 [sub_resource type="CircleShape2D" id="Circle_influence"]
 radius = 18.0
+
+[sub_resource type="CircleShape2D" id="Circle_hurtbox"]
+radius = 10.0
 
 [node name="EngineerDeployable" type="Node2D"]
 script = ExtResource("1_deployable")
@@ -15,3 +19,16 @@ monitoring = true
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Influence"]
 shape = SubResource("Circle_influence")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 6.0
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 20
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("Circle_hurtbox")
