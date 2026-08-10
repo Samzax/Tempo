@@ -7,18 +7,23 @@ const ENEMY_PROJECTILE := preload("res://scenes/projectiles/enemy_projectile.tsc
 @export var attack_state: AttackState = AttackState.DRIFT
 @export var telegraph_duration := 0.7
 @export var vulnerable_duration := 0.7
-@export var engagement_distance := 280.0
-@export var drift_speed := 38.0
 
 var locked_direction := Vector2.DOWN
 var _elapsed := 0.0
-var _anchor: Node2D
+var _activation_distance := 100.0
+var _entry_speed := 90.0
+var _max_drift_time := 1.2
+var _entry_start_position := Vector2.ZERO
 
 @onready var telegraph: Line2D = $Telegraph
 @onready var fire_fx: Sprite2D = $FireFx
 
 func _ready() -> void:
 	super()
+	_activation_distance = RunManager.rng.randf_range(100.0, 200.0)
+	_entry_speed = RunManager.rng.randf_range(90.0, 140.0)
+	_max_drift_time = RunManager.rng.randf_range(1.2, 1.8)
+	_entry_start_position = global_position
 	_enter_state(attack_state)
 
 func _physics_process(delta: float) -> void:
@@ -30,7 +35,8 @@ func _physics_process(delta: float) -> void:
 	match attack_state:
 		AttackState.DRIFT:
 			_process_drift()
-			if _elapsed >= 1.1 or (is_instance_valid(_player) and global_position.distance_to(_player.global_position) <= engagement_distance):
+			_mark_room_entry()
+			if _has_entered_room and (global_position.distance_to(_entry_start_position) >= _activation_distance or _elapsed >= _max_drift_time):
 				_lock_target()
 				_enter_state(AttackState.TELEGRAPH)
 		AttackState.TELEGRAPH:
@@ -46,8 +52,8 @@ func _physics_process(delta: float) -> void:
 			if _elapsed >= vulnerable_duration:
 				_enter_state(AttackState.DRIFT)
 	move_and_slide()
-	if _room_bounds.has_point(global_position):
-		_has_entered_room = true
+	if attack_state == AttackState.DRIFT:
+		_mark_room_entry()
 
 func take_damage(info: DamageInfo) -> void:
 	# Mantem o mesmo limite de cadeias de Enemy antes de criar o dano derivado.
@@ -59,30 +65,13 @@ func take_damage(info: DamageInfo) -> void:
 	super(info)
 
 func _process_drift() -> void:
-	if not _has_entered_room:
-		velocity = _entry_inward * drift_speed
-		return
-	_anchor = _find_anchor()
-	if is_instance_valid(_anchor):
-		velocity = global_position.direction_to(_anchor.global_position) * drift_speed
-	elif is_instance_valid(_player):
-		var lateral := global_position.direction_to(_player.global_position).rotated(PI * 0.5)
-		velocity = lateral * drift_speed
-	else:
-		velocity = _entry_inward * drift_speed
+	velocity = _entry_inward * _entry_speed
 
-func _find_anchor() -> Node2D:
-	var best: Node2D
-	var best_distance := INF
-	for candidate in get_tree().get_nodes_in_group(&"debris"):
-		var debris := candidate as Node2D
-		if debris == null:
-			continue
-		var distance := global_position.distance_to(debris.global_position)
-		if distance < best_distance and distance <= engagement_distance:
-			best = debris
-			best_distance = distance
-	return best
+func _mark_room_entry() -> void:
+	if not _has_entered_room and _room_bounds.has_point(global_position):
+		_has_entered_room = true
+		_entry_start_position = global_position
+		_elapsed = 0.0
 
 func _lock_target() -> void:
 	if is_instance_valid(_player):
@@ -96,6 +85,7 @@ func _enter_state(next: AttackState) -> void:
 	telegraph.visible = next == AttackState.TELEGRAPH
 	fire_fx.visible = next == AttackState.VULNERABLE
 	if next == AttackState.TELEGRAPH:
+		velocity = Vector2.ZERO
 		telegraph.points = PackedVector2Array([Vector2.ZERO, locked_direction * 340.0])
 	if next == AttackState.VULNERABLE:
 		fire_fx.frame = 0

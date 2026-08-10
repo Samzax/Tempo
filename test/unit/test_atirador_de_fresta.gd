@@ -77,13 +77,41 @@ func test_locked_direction_remains_the_projectile_direction() -> void:
 	add_child_autofree(player)
 	enemy._player = player
 	enemy.global_position = Vector2.ZERO
-	player.global_position = Vector2.RIGHT * 100.0
+	player.global_position = Vector2.RIGHT * 230.0
 	enemy._lock_target()
 	var captured: Vector2 = enemy.locked_direction
 	player.global_position = Vector2.LEFT * 100.0
 	assert_eq(enemy.locked_direction, captured)
+	enemy._fire_projectile()
+	var projectile := enemy.get_parent().get_child(enemy.get_parent().get_child_count() - 1) as EnemyProjectile
+	assert_eq(projectile._velocity.normalized(), captured)
+	projectile.queue_free()
 
-func test_drift_enters_from_each_edge_before_using_player_lateral_motion() -> void:
+func test_instance_draws_entry_values_once_from_run_rng() -> void:
+	var original_state := RunManager.rng.get_state()
+	var expected_rng := RunRng.new(RunManager.seed_value)
+	expected_rng.set_state(original_state)
+	var expected_activation := expected_rng.randf_range(100.0, 200.0)
+	var expected_speed := expected_rng.randf_range(90.0, 140.0)
+	var expected_time := expected_rng.randf_range(1.2, 1.8)
+
+	var enemy := await _enemy()
+	assert_almost_eq(enemy._activation_distance, expected_activation, 0.001)
+	assert_almost_eq(enemy._entry_speed, expected_speed, 0.001)
+	assert_almost_eq(enemy._max_drift_time, expected_time, 0.001)
+	assert_between(enemy._activation_distance, 100.0, 200.0)
+	assert_between(enemy._entry_speed, 90.0, 140.0)
+	assert_between(enemy._max_drift_time, 1.2, 1.8)
+	assert_eq(RunManager.rng.get_state(), expected_rng.get_state())
+
+	enemy._physics_process(0.1)
+	assert_eq(RunManager.rng.get_state(), expected_rng.get_state())
+	for state in [SCRIPT.AttackState.TELEGRAPH, SCRIPT.AttackState.FIRE, SCRIPT.AttackState.VULNERABLE, SCRIPT.AttackState.DRIFT]:
+		enemy._enter_state(state)
+		enemy._physics_process(0.1)
+	assert_eq(RunManager.rng.get_state(), expected_rng.get_state())
+
+func test_drift_moves_straight_from_each_edge() -> void:
 	var enemy := await _enemy()
 	var player := Node2D.new()
 	add_child_autofree(player)
@@ -101,9 +129,11 @@ func test_drift_enters_from_each_edge_before_using_player_lateral_motion() -> vo
 		enemy.set_entry_inward(edge_case[1])
 		enemy._has_entered_room = false
 		enemy._process_drift()
-		assert_eq(enemy.velocity, edge_case[1] * enemy.drift_speed)
+		assert_eq(enemy.velocity, edge_case[1] * enemy._entry_speed)
+		enemy.global_position += enemy.velocity * 0.25
+		assert_eq(enemy.global_position, edge_case[0] + edge_case[1] * enemy._entry_speed * 0.25)
 
-func test_drift_uses_player_lateral_motion_after_entering_room() -> void:
+func test_drift_ignores_player_position_after_entering_room() -> void:
 	var enemy := await _enemy()
 	var player := Node2D.new()
 	add_child_autofree(player)
@@ -113,8 +143,66 @@ func test_drift_uses_player_lateral_motion_after_entering_room() -> void:
 	enemy.set_entry_inward(Vector2.RIGHT)
 	enemy._has_entered_room = true
 	enemy._process_drift()
-	assert_almost_eq(enemy.velocity.x, 0.0, 0.001)
-	assert_almost_eq(enemy.velocity.y, enemy.drift_speed, 0.001)
+	assert_eq(enemy.velocity, Vector2.RIGHT * enemy._entry_speed)
+
+	player.global_position = Vector2(-100.0, 0.0)
+	enemy._process_drift()
+	assert_eq(enemy.velocity, Vector2.RIGHT * enemy._entry_speed)
+
+func test_drift_distance_promotes_to_telegraph_and_locks_target() -> void:
+	var enemy := await _enemy()
+	var player := Node2D.new()
+	add_child_autofree(player)
+	enemy._player = player
+	enemy.global_position = Vector2.ZERO
+	enemy._entry_start_position = Vector2.ZERO
+	enemy._activation_distance = 120.0
+	enemy._entry_speed = 130.0
+	enemy._max_drift_time = 1.8
+	enemy.set_entry_inward(Vector2.RIGHT)
+	enemy._has_entered_room = true
+	player.global_position = Vector2.RIGHT * 230.0
+	enemy._process_drift()
+	enemy.global_position += enemy.velocity * 1.0
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
+	assert_eq(enemy.global_position, Vector2.RIGHT * 130.0)
+	enemy._physics_process(0.0)
+
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.TELEGRAPH)
+	assert_eq(enemy.velocity, Vector2.ZERO)
+	assert_almost_eq(enemy.locked_direction.x, 1.0, 0.001)
+	assert_almost_eq(enemy.locked_direction.y, 0.0, 0.001)
+
+func test_drift_time_promotes_to_telegraph_before_distance() -> void:
+	var enemy := await _enemy()
+	enemy.global_position = Vector2.ZERO
+	enemy._entry_start_position = Vector2.ZERO
+	enemy._activation_distance = 190.0
+	enemy._entry_speed = 90.0
+	enemy._max_drift_time = 1.2
+	enemy.set_entry_inward(Vector2.RIGHT)
+	enemy._has_entered_room = true
+	enemy._process_drift()
+	enemy.global_position += enemy.velocity * 1.2
+	enemy._elapsed = 1.2
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
+	assert_almost_eq(enemy.global_position.x, 108.0, 0.001)
+	assert_almost_eq(enemy.global_position.y, 0.0, 0.001)
+	enemy._physics_process(0.0)
+
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.TELEGRAPH)
+	assert_eq(enemy.velocity, Vector2.ZERO)
+
+func test_culling_keeps_forty_pixel_room_margin_after_entry() -> void:
+	var enemy := await _enemy()
+	enemy.set_room_bounds(Rect2(0.0, 0.0, 320.0, 320.0))
+	enemy.set_room_cull_policy(RoomDef.CullPolicy.DESPAWN_ALL_BORDERS)
+	enemy._has_entered_room = true
+	enemy.global_position = Vector2(-40.0, 160.0)
+	assert_false(enemy._should_cull())
+
+	enemy.global_position = Vector2(-41.0, 160.0)
+	assert_true(enemy._should_cull())
 
 func test_drift_marks_entry_only_after_crossing_room_boundary() -> void:
 	var enemy := await _enemy()
@@ -130,3 +218,73 @@ func test_drift_marks_entry_only_after_crossing_room_boundary() -> void:
 	enemy.global_position = Vector2(5.0, 160.0)
 	enemy._physics_process(0.016)
 	assert_true(enemy._has_entered_room)
+	assert_true(enemy._entry_start_position.x >= 0.0)
+	assert_eq(enemy._entry_start_position.y, enemy.global_position.y)
+	assert_lt(enemy._elapsed, 0.02)
+
+func test_normal_spawn_waits_for_post_entry_distance_before_telegraph() -> void:
+	var enemy := await _enemy()
+	enemy.set_room_bounds(Rect2(0.0, 0.0, 320.0, 320.0))
+	enemy.set_entry_inward(Vector2.RIGHT)
+	enemy.global_position = Vector2(-16.0, 160.0)
+	enemy._entry_speed = 100.0
+	enemy._activation_distance = 100.0
+	enemy._max_drift_time = 1.2
+	enemy._has_entered_room = false
+
+	while not enemy._has_entered_room:
+		enemy._physics_process(0.016)
+	assert_true(enemy._has_entered_room)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
+	assert_lt(enemy._elapsed, 0.02)
+	assert_true(enemy._entry_start_position.x >= 0.0)
+
+	enemy._physics_process(0.0)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
+	while enemy.attack_state == SCRIPT.AttackState.DRIFT:
+		enemy._physics_process(0.016)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.TELEGRAPH)
+
+func test_far_external_spawn_resets_activation_clock_and_origin_on_entry() -> void:
+	var enemy := await _enemy()
+	enemy.set_room_bounds(Rect2(0.0, 0.0, 320.0, 320.0))
+	enemy.set_entry_inward(Vector2.RIGHT)
+	enemy.global_position = Vector2(-500.0, 160.0)
+	enemy._entry_speed = 100.0
+	enemy._activation_distance = 100.0
+	enemy._max_drift_time = 1.2
+	enemy._has_entered_room = false
+
+	var pre_entry_elapsed := 0.0
+	var pre_entry_distance := 0.0
+	while not enemy._has_entered_room:
+		pre_entry_elapsed = enemy._elapsed
+		pre_entry_distance = enemy.global_position.distance_to(enemy._entry_start_position)
+		enemy._physics_process(0.016)
+	assert_gt(pre_entry_elapsed, enemy._max_drift_time)
+	assert_gt(pre_entry_distance, enemy._activation_distance)
+	assert_true(enemy._has_entered_room)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
+	assert_lt(enemy._elapsed, 0.02)
+	assert_true(enemy._entry_start_position.x >= 0.0)
+
+	# The first frame in the room begins the new measurement; it cannot telegraph.
+	enemy._physics_process(0.0)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
+	while enemy.attack_state == SCRIPT.AttackState.DRIFT:
+		enemy._physics_process(0.016)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.TELEGRAPH)
+
+func test_legacy_anchor_and_engagement_distance_contracts_are_absent() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/enemies/atirador_de_fresta.gd")
+	assert_false(source.contains("_find_anchor"))
+	assert_false(source.contains("_anchor"))
+	assert_false(source.contains("engagement_distance"))
+
+func test_vulnerable_duration_is_point_seven() -> void:
+	var enemy := await _enemy()
+	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
+	enemy._physics_process(0.69)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.VULNERABLE)
+	enemy._physics_process(0.01)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
