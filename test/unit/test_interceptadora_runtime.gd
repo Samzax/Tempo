@@ -119,9 +119,9 @@ func test_interceptor_trail_uses_fixed_visual_widths_and_deterministic_offsets()
 	_effects.add_child(trail)
 	trail.configure(Vector2.ZERO, Vector2(100, 0), _character.thrust_color, 1.5, 99.0)
 
-	assert_eq(trail.outer_line.width, 12.0)
-	assert_eq(trail.violet_line.width, 7.0)
-	assert_eq(trail.core_line.width, 3.6)
+	assert_almost_eq(trail.outer_line.width, 12.0, 0.0001)
+	assert_almost_eq(trail.violet_line.width, 7.0, 0.0001)
+	assert_almost_eq(trail.core_line.width, 3.6, 0.0001)
 	var expected := PackedVector2Array([
 		Vector2.ZERO,
 		Vector2(15.0, -9.24),
