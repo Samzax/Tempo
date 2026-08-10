@@ -113,6 +113,39 @@ func test_interceptor_trail_is_deterministic_fixed_duration_and_cleans_up() -> v
 	first._process(0.01)
 	assert_true(first.is_queued_for_deletion())
 
+func test_interceptor_trail_uses_fixed_visual_widths_and_deterministic_offsets() -> void:
+	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
+	var trail := trail_scene.instantiate()
+	_effects.add_child(trail)
+	trail.configure(Vector2.ZERO, Vector2(100, 0), _character.thrust_color, 1.5, 99.0)
+
+	assert_eq(trail.outer_line.width, 12.0)
+	assert_eq(trail.violet_line.width, 7.0)
+	assert_eq(trail.core_line.width, 3.6)
+	var expected := PackedVector2Array([
+		Vector2.ZERO,
+		Vector2(15.0, -9.24),
+		Vector2(34.0, 22.0),
+		Vector2(52.0, -16.72),
+		Vector2(71.0, 18.92),
+		Vector2(87.0, -7.92),
+		Vector2(100, 0),
+	])
+	assert_eq(trail.outer_line.points, expected)
+	assert_eq(trail.violet_line.points, expected)
+	assert_eq(trail.core_line.points, expected)
+
+func test_interceptor_trail_is_visual_only_and_has_no_physics_or_damage_contract() -> void:
+	var trail_scene := load("res://scenes/effects/interceptor_blink_trail.tscn") as PackedScene
+	var trail := trail_scene.instantiate()
+	_effects.add_child(trail)
+	trail.configure(Vector2.ZERO, Vector2(100, 0), _character.thrust_color, 1.5, 0.01)
+
+	assert_true(trail is Node2D)
+	assert_eq(trail.get_node_or_null("Area2D"), null)
+	assert_eq(trail.get_node_or_null("CollisionShape2D"), null)
+	assert_eq(trail.get_method_list().filter(func(method: Dictionary) -> bool: return method.name == "take_damage").size(), 0)
+
 func test_interceptor_blink_uses_specialized_fx_without_generic_rings() -> void:
 	_player._blink_cd = 0.0
 	assert_true(_player.try_blink(Vector2.RIGHT))

@@ -6,6 +6,10 @@ extends Node2D
 @onready var core_line: Line2D = $CoreLine
 
 const FIXED_DURATION := 0.4
+const OUTER_VISUAL_WIDTH := 12.0
+const VIOLET_VISUAL_WIDTH := 7.0
+const CORE_VISUAL_WIDTH := 3.6
+const JAGGED_OFFSET_AMPLITUDE := 22.0
 
 var _duration := FIXED_DURATION
 var _elapsed := 0.0
@@ -16,15 +20,16 @@ func configure(origin: Vector2, dest: Vector2, thrust_color: Color, width: float
 	# O argumento continua aceito para preservar o contrato público do endpoint.
 	_duration = FIXED_DURATION
 	_elapsed = 0.0
-	var points := _make_irregular_points(dest - origin, width)
+	# A largura de gameplay continua no contrato, mas não determina a escala gráfica.
+	var points := _make_irregular_points(dest - origin)
 	outer_line.points = points
-	outer_line.width = maxf(1.0, width)
+	outer_line.width = OUTER_VISUAL_WIDTH
 	outer_line.default_color = Color(0.12, 0.9, 1.0, 0.9)
 	violet_line.points = points
-	violet_line.width = maxf(1.0, width * 0.68)
+	violet_line.width = VIOLET_VISUAL_WIDTH
 	violet_line.default_color = Color(0.58, 0.22, 1.0, 0.95)
 	core_line.points = points
-	core_line.width = maxf(1.0, width * 0.32)
+	core_line.width = CORE_VISUAL_WIDTH
 	core_line.default_color = Color.WHITE
 	# O matiz do propulsor só tinge sutilmente o halo, sem substituir a leitura ciano/violeta.
 	outer_line.default_color = outer_line.default_color.lerp(thrust_color, 0.12)
@@ -57,15 +62,15 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, impact_radius, Color(0.55, 0.25, 1.0, alpha * 0.55))
 	draw_circle(points[points.size() - 1], impact_radius, Color(0.1, 0.9, 1.0, alpha * 0.6))
 
-func _make_irregular_points(delta: Vector2, width: float) -> PackedVector2Array:
+func _make_irregular_points(delta: Vector2) -> PackedVector2Array:
 	var points := PackedVector2Array([Vector2.ZERO])
 	if delta.length_squared() <= 0.001:
 		return points
 	var perpendicular := delta.normalized().rotated(PI * 0.5)
 	# Perfil fixo: um único corte angular dominante, com poucos espinhos curtos.
 	# Não há RNG: origem/destino iguais sempre geram a mesma geometria.
-	var profile := [Vector2(0.15, -0.18), Vector2(0.31, 0.28), Vector2(0.50, -0.12), Vector2(0.69, 0.20), Vector2(0.85, -0.08)]
+	var profile := [Vector2(0.15, -0.42), Vector2(0.34, 1.0), Vector2(0.52, -0.76), Vector2(0.71, 0.86), Vector2(0.87, -0.36)]
 	for knot in profile:
-		points.append(delta * knot.x + perpendicular * (knot.y * width))
+		points.append(delta * knot.x + perpendicular * (knot.y * JAGGED_OFFSET_AMPLITUDE))
 	points.append(delta)
 	return points
