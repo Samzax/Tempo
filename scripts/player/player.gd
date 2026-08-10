@@ -474,8 +474,8 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	if _stats == null or _dispatcher == null or _blink_cd > 0.0:
 		return false
 	var requested_direction := direction
-	if requested_direction == Vector2.ZERO:
-		requested_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if requested_direction == Vector2.ZERO and _is_omni_ship():
+		requested_direction = _omni_movement_direction()
 	var bdir := requested_direction.normalized() if requested_direction != Vector2.ZERO else _aim_vector
 	var origin := global_position
 	var m := 10.0

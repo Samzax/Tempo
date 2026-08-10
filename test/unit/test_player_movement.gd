@@ -2,6 +2,22 @@ extends GutTest
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const MOTION := preload("res://scripts/player/asteroids_motion.gd")
+const BASE_SHIP := preload("res://resources/ships/base.tres")
+const BRUTA_SHIP := preload("res://resources/ships/bruta.tres")
+const INPUT_ACTIONS: Array[StringName] = [
+	&"move_up",
+	&"move_left",
+	&"move_down",
+	&"move_right",
+	&"aim_up",
+	&"aim_left",
+	&"aim_down",
+	&"aim_right",
+	&"shoot",
+	&"blink",
+	&"ability_q",
+	&"ability_e",
+]
 
 func _player() -> Player:
 	var player := PLAYER_SCENE.instantiate() as Player
@@ -9,9 +25,25 @@ func _player() -> Player:
 	await get_tree().process_frame
 	return player
 
+func _blink_player(ship: ShipDef) -> Player:
+	var player := await _player()
+	assert_true(player.configure_ship(ship))
+	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(2000.0, 2000.0)))
+	player.global_position = Vector2(1000.0, 1000.0)
+	player.velocity = Vector2(60.0, -40.0)
+	player._blink_cd = 0.0
+	player._blink_cd_duration = 0.0
+	return player
+
 func _release_inputs() -> void:
-	for action in [&"aim_right", &"move_left", &"move_down", &"move_right", &"move_up", &"blink"]:
+	for action in INPUT_ACTIONS:
 		Input.action_release(action)
+
+func before_each() -> void:
+	_release_inputs()
+
+func after_each() -> void:
+	_release_inputs()
 
 func test_heading_points_sprite_nose_and_muzzle_remains_aligned() -> void:
 	var player: Player = await _player()
@@ -72,21 +104,61 @@ func test_blink_with_move_up_pressed_keeps_velocity_zero_for_the_frame() -> void
 	_release_inputs()
 
 	assert_eq(player.velocity, Vector2.ZERO)
-	assert_eq(player.global_position, Vector2(190.0, 100.0))
+	assert_eq(player.global_position, Vector2(100.0 + player._stats.get_stat(&"blink_distance"), 100.0))
 	assert_eq(player._aim_vector, Vector2.RIGHT)
 
 func test_blink_destination_is_clamped_near_arena_edges() -> void:
-	var player: Player = await _player()
+	var player: Player = await _blink_player(BASE_SHIP)
 	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(100.0, 80.0)))
 	player.global_position = Vector2(12.0, 68.0)
 	player._aim_vector = Vector2(-1.0, 1.0).normalized()
-	Input.action_press(&"aim_right")
-	Input.action_press(&"blink")
-	player._physics_process(1.0 / 60.0)
-	_release_inputs()
+	assert_true(player.try_blink(player._aim_vector))
 
-	assert_eq(player.global_position, Vector2(90.0, 68.0))
+	assert_eq(player.global_position, Vector2(10.0, 70.0))
 	assert_eq(player.velocity, Vector2.ZERO)
+
+func test_omni_blink_explicit_direction_has_priority_over_wasd_and_aim() -> void:
+	var player: Player = await _blink_player(BRUTA_SHIP)
+	player._aim_vector = Vector2.LEFT
+	Input.action_press(&"move_up")
+
+	assert_true(player.try_blink(Vector2.RIGHT))
+
+	assert_eq(player.global_position, Vector2(1000.0 + player._stats.get_stat(&"blink_distance"), 1000.0))
+	assert_eq(player.velocity, Vector2.ZERO)
+	assert_gt(player.blink_cooldown_ratio(), 0.0)
+
+func test_omni_blink_uses_wasd_when_available() -> void:
+	var player: Player = await _blink_player(BRUTA_SHIP)
+	player._aim_vector = Vector2.LEFT
+	Input.action_press(&"move_down")
+
+	assert_true(player.try_blink())
+
+	assert_eq(player.global_position, Vector2(1000.0, 1000.0 + player._stats.get_stat(&"blink_distance")))
+	assert_eq(player.velocity, Vector2.ZERO)
+	assert_gt(player.blink_cooldown_ratio(), 0.0)
+
+func test_omni_blink_falls_back_to_aim_without_wasd() -> void:
+	var player: Player = await _blink_player(BRUTA_SHIP)
+	player._aim_vector = Vector2.LEFT
+
+	assert_true(player.try_blink())
+
+	assert_eq(player.global_position, Vector2(1000.0 - player._stats.get_stat(&"blink_distance"), 1000.0))
+	assert_eq(player.velocity, Vector2.ZERO)
+	assert_gt(player.blink_cooldown_ratio(), 0.0)
+
+func test_aim_forward_blink_uses_aim_even_with_wasd() -> void:
+	var player: Player = await _blink_player(BASE_SHIP)
+	player._aim_vector = Vector2.UP
+	Input.action_press(&"move_right")
+
+	assert_true(player.try_blink())
+
+	assert_eq(player.global_position, Vector2(1000.0, 1000.0 - player._stats.get_stat(&"blink_distance")))
+	assert_eq(player.velocity, Vector2.ZERO)
+	assert_gt(player.blink_cooldown_ratio(), 0.0)
 
 func test_position_is_clamped_to_arena_bounds() -> void:
 	var player: Player = await _player()
