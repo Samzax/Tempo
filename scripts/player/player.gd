@@ -62,6 +62,8 @@ var _dispatcher: EffectDispatcher
 var _inventory: Inventory
 var _base_sprite_frames: SpriteFrames = null
 var _base_body_shape: Shape2D = null
+var _base_muzzle_position := Vector2.ZERO
+var _has_base_muzzle_position := false
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 var _omni_stop_spin_state: SpinState = SpinState.IDLE
 var _omni_stop_spin_elapsed := 0.0
@@ -165,6 +167,10 @@ func _configure_loadout() -> void:
 ## aplicar o novo casco. Isso tambem mantem a troca para naves legadas segura.
 func _reset_ship_visual_state() -> void:
 	_reset_omni_stop_spin()
+	if not _has_base_muzzle_position:
+		_base_muzzle_position = muzzle.position
+		_has_base_muzzle_position = true
+	muzzle.position = _base_muzzle_position + (ship.muzzle_offset if ship != null else Vector2.ZERO)
 	visual_root.rotation = 0.0
 	sprite.scale = Vector2.ONE
 	sprite.modulate = Color.WHITE

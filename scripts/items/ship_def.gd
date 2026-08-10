@@ -15,6 +15,8 @@ extends ProviderDef
 @export_range(1.0, 32.0, 0.5) var hurtbox_radius: float = 8.0
 @export_enum("capsule", "circle") var collision_shape_type: String = "capsule"
 @export var has_muzzle: bool = true
+## Deslocamento local adicional a partir do Marker2D de disparo da cena.
+@export var muzzle_offset: Vector2 = Vector2.ZERO
 @export var thrusters_enabled: bool = true
 ## Contrato opt-in para o rastro ofensivo do blink. Os defaults permanecem inertes.
 @export var blink_trail_enabled: bool = false
@@ -26,6 +28,8 @@ func validate_content() -> Array[String]:
 	var errors := super()
 	if movement_style not in ["aim_forward", "omni"]:
 		errors.append("Estilo de movimento desconhecido: %s." % movement_style)
+	if movement_style == "omni" and muzzle_offset != Vector2.ZERO:
+		errors.append("muzzle_offset diferente de zero so e suportado com movement_style aim_forward.")
 	if frame_size.x <= 0 or frame_size.y <= 0:
 		errors.append("Tamanho de frame invalido: %s." % frame_size)
 	if visual_scale <= 0.0:
