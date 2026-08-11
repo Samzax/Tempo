@@ -8,12 +8,16 @@ const DEPLOY_RANGE := 96.0
 const DRONE_SPEED := 190.0
 const DRONE_DAMAGE := 1.0
 const DRONE_HIT_INTERVAL := 0.5
+const DRONE_FIRE_INTERVAL := 1.0
+const DRONE_PROJECTILE_SCALE := 0.5
 const TRAP_DAMAGE := 3.0
 const STATION_MAX_HEALTH := 6.0
 const STATION_CONTACT_DAMAGE := 1.0
 const STATION_CONTACT_INTERVAL := 0.5
 const STATION_FIRE_RATE_BONUS := 0.20
 const STATION_BUFF_REFRESH := 0.2
+
+const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 
 @export var kind: Kind = Kind.TRAP
 @export var deploying_player: Node2D
@@ -22,11 +26,13 @@ const STATION_BUFF_REFRESH := 0.2
 @onready var hurtbox: Area2D = $Hurtbox
 @onready var health: HealthComponent = $HealthComponent
 @onready var drone_sprite: Sprite2D = $DroneSprite
+@onready var muzzle: Marker2D = $Muzzle
 
 var _next_effect_at: Dictionary = {}
 var _target_position := Vector2.ZERO
 var _station_shield_recipients: Dictionary = {}
 var _station_buff_source := StringName()
+var _drone_fire_cooldown := 0.0
 
 func _ready() -> void:
 	influence.body_entered.connect(_on_influence_body_entered)
@@ -49,9 +55,14 @@ func command_to(target_position: Vector2) -> void:
 		_target_position = target_position
 
 func _physics_process(delta: float) -> void:
+	if is_queued_for_deletion() or (kind == Kind.DRONE and (health == null or health.health <= 0.0)):
+		return
 	match kind:
 		Kind.DRONE:
 			_move_drone(delta)
+			if not _has_active_deploying_player():
+				return
+			_fire_drone(delta)
 			for body in influence.get_overlapping_bodies():
 				_damage_enemy(body as Node2D, DRONE_DAMAGE, DRONE_HIT_INTERVAL)
 		Kind.OVERCLOCK_STATION:
@@ -67,17 +78,71 @@ func _move_drone(delta: float) -> void:
 		return
 	global_position += global_position.direction_to(_target_position) * minf(DRONE_SPEED * delta, remaining)
 
+func _fire_drone(delta: float) -> void:
+	if is_queued_for_deletion() or health == null or health.health <= 0.0:
+		return
+	_drone_fire_cooldown = maxf(0.0, _drone_fire_cooldown - delta)
+	if _drone_fire_cooldown > 0.0 or not _has_active_deploying_player():
+		return
+	var direction := _owner_aim_direction()
+	if direction == Vector2.ZERO:
+		return
+	var projectiles := get_tree().get_first_node_in_group(&"projectiles")
+	if projectiles == null or projectiles.is_queued_for_deletion():
+		return
+	var bullet := Pools.acquire(BULLET)
+	if bullet.get_parent() == null:
+		projectiles.add_child(bullet)
+	var projectile_speed := _owner_projectile_stat(&"projectile_speed", 320.0)
+	var projectile_lifetime := _owner_projectile_stat(&"projectile_lifetime", 2.0)
+	bullet.set_room_bounds(_owner_room_bounds())
+	bullet.activate(
+		muzzle.global_position,
+		direction,
+		deploying_player,
+		DRONE_DAMAGE,
+		projectile_speed,
+		projectile_lifetime * 0.5,
+		DRONE_PROJECTILE_SCALE,
+		true,
+	)
+	_drone_fire_cooldown = DRONE_FIRE_INTERVAL
+
+func _owner_aim_direction() -> Vector2:
+	if not deploying_player.has_method(&"get_aim_direction"):
+		return Vector2.ZERO
+	var direction: Variant = deploying_player.call(&"get_aim_direction")
+	if direction is Vector2 and direction.is_finite() and direction.length_squared() > 0.0001:
+		return direction.normalized()
+	return Vector2.ZERO
+
+func _owner_projectile_stat(stat_id: StringName, fallback: float) -> float:
+	if deploying_player.has_method(&"get_projectile_stat"):
+		var value: Variant = deploying_player.call(&"get_projectile_stat", stat_id, fallback)
+		if (value is float or value is int) and is_finite(float(value)) and float(value) > 0.0:
+			return float(value)
+	return fallback
+
+func _owner_room_bounds() -> Rect2:
+	if deploying_player.has_method(&"get_room_bounds"):
+		var bounds: Variant = deploying_player.call(&"get_room_bounds")
+		if bounds is Rect2 and bounds.size.x > 0.0 and bounds.size.y > 0.0:
+			return bounds
+	return Rect2(Vector2.ZERO, Vector2(720, 405))
+
 func _apply_kind() -> void:
 	# Inimigos ocupam a camada 4; jogadores ocupam a camada 2.
 	influence.collision_mask = 2 if kind == Kind.OVERCLOCK_STATION else 4
-	hurtbox.monitoring = kind == Kind.OVERCLOCK_STATION
-	hurtbox.monitorable = kind == Kind.OVERCLOCK_STATION
+	hurtbox.monitoring = kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION
+	hurtbox.monitorable = kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION
 	# Camada 3 (inimigos) para contato e camada 5 (projeteis inimigos) para dano a distancia.
 	hurtbox.collision_mask = 20
 	drone_sprite.visible = kind == Kind.DRONE
-	if kind == Kind.OVERCLOCK_STATION:
+	if kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
 		health.max_health = STATION_MAX_HEALTH
 		health.reset()
+	if kind != Kind.DRONE:
+		_drone_fire_cooldown = 0.0
 	queue_redraw()
 
 func _on_influence_body_entered(body: Node2D) -> void:
@@ -86,7 +151,8 @@ func _on_influence_body_entered(body: Node2D) -> void:
 			if _is_enemy(body):
 				_detonate()
 		Kind.DRONE:
-			_damage_enemy(body, DRONE_DAMAGE, DRONE_HIT_INTERVAL)
+			if _has_active_deploying_player():
+				_damage_enemy(body, DRONE_DAMAGE, DRONE_HIT_INTERVAL)
 		Kind.OVERCLOCK_STATION:
 			_buff_ally(body)
 
@@ -95,23 +161,25 @@ func _on_influence_body_exited(body: Node2D) -> void:
 		_remove_station_aura(body)
 
 func _on_hurtbox_body_entered(body: Node2D) -> void:
-	if kind == Kind.OVERCLOCK_STATION:
+	if kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
 		_damage_station_from_enemy(body)
 
 func _on_hurtbox_area_entered(area: Area2D) -> void:
-	if kind != Kind.OVERCLOCK_STATION or area == null or not area.is_in_group(&"enemy_projectiles"):
+	if (kind != Kind.DRONE and kind != Kind.OVERCLOCK_STATION) or area == null or not area.is_in_group(&"enemy_projectiles"):
 		return
 	var info := DamageInfo.new()
 	var projectile_damage: Variant = area.get(&"damage")
 	info.amount = float(projectile_damage) if projectile_damage != null else STATION_CONTACT_DAMAGE
 	info.source = area.get(&"_source") as Node
 	info.position = global_position
-	info.tags = [&"enemy_projectile", &"engineer_station"]
+	info.tags = [&"enemy_projectile", &"engineer_deployable"]
 	take_damage(info)
 	area.queue_free()
 
 func _damage_enemy(body: Node2D, amount: float, interval: float = 0.0) -> bool:
 	if not _is_enemy(body):
+		return false
+	if kind == Kind.DRONE and not _has_active_deploying_player():
 		return false
 	var instance_id := body.get_instance_id()
 	var now := Time.get_ticks_msec() * 0.001
@@ -139,7 +207,7 @@ func _damage_station_from_enemy(body: Node2D) -> void:
 	info.amount = float(contact_damage) if contact_damage != null else STATION_CONTACT_DAMAGE
 	info.source = body
 	info.position = global_position
-	info.tags = [&"contact", &"engineer_station"]
+	info.tags = [&"contact", &"engineer_drone"] if kind == Kind.DRONE else [&"contact", &"engineer_station"]
 	take_damage(info)
 
 ## Consumido por projeteis/AoE inimigos e por contratos futuros de dano.
@@ -148,7 +216,7 @@ func take_damage(info: DamageInfo) -> void:
 		return
 	if kind == Kind.TRAP and (info.tags.has(&"burst") or info.tags.has(&"aoe")):
 		_detonate()
-	elif kind == Kind.OVERCLOCK_STATION:
+	elif kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
 		health.apply_damage(info)
 
 func _buff_ally(body: Node2D) -> void:
@@ -189,6 +257,9 @@ func _remove_station_aura(body: Node2D) -> void:
 
 func _is_enemy(body: Node2D) -> bool:
 	return body != null and body.is_in_group(&"enemies") and body.has_method(&"take_damage")
+
+func _has_active_deploying_player() -> bool:
+	return is_instance_valid(deploying_player) and not deploying_player.is_queued_for_deletion()
 
 func _is_player_source(source: Node) -> bool:
 	return source != null and source.is_in_group(&"player")

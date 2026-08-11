@@ -380,6 +380,185 @@ func test_room_clear_dispatches_once_and_not_again_on_revisit() -> void:
 	session._on_room_cleared(node_def, 1)
 	assert_eq(player.room_clear_calls, 1)
 
+func _drone_fixture() -> Array:
+	var projectiles := Node2D.new()
+	projectiles.name = "Projectiles"
+	projectiles.add_to_group(&"projectiles")
+	add_child_autofree(projectiles)
+	var owner := DroneOwnerStub.new()
+	owner.global_position = Vector2(100, 100)
+	add_child_autofree(owner)
+	var drone := preload("res://scenes/deployables/engineer_deployable.tscn").instantiate() as EngineerDeployable
+	add_child_autofree(drone)
+	drone.configure(EngineerDeployable.Kind.DRONE, owner, Vector2.ZERO)
+	drone.global_position = Vector2(200, 150)
+	await get_tree().process_frame
+	return [drone, owner, projectiles]
+
+func test_drone_fires_from_muzzle_immediately_and_only_once_per_second() -> void:
+	var fixture := await _drone_fixture()
+	var drone: EngineerDeployable = fixture[0]
+	var projectiles: Node2D = fixture[2]
+	drone._fire_drone(0.0)
+	assert_eq(projectiles.get_child_count(), 1)
+	var first := projectiles.get_child(0) as Area2D
+	assert_eq(first.global_position, drone.muzzle.global_position)
+	drone._fire_drone(0.99)
+	assert_eq(projectiles.get_child_count(), 1)
+	drone._fire_drone(0.01)
+	assert_eq(projectiles.get_child_count(), 2)
+
+func test_drone_uses_owner_aim_damage_and_projectile_contract() -> void:
+	var fixture := await _drone_fixture()
+	var drone: EngineerDeployable = fixture[0]
+	var owner: DroneOwnerStub = fixture[1]
+	var projectiles: Node2D = fixture[2]
+	drone._fire_drone(0.0)
+	var bullet := projectiles.get_child(0) as Area2D
+	assert_almost_eq(bullet.rotation, owner.aim_direction.angle() + PI / 2.0, 0.001)
+	assert_eq(bullet.damage, EngineerDeployable.DRONE_DAMAGE)
+	assert_eq(bullet._shooter, owner)
+	assert_almost_eq(bullet.scale.x, 0.5, 0.001)
+	assert_almost_eq(bullet.scale.y, 0.5, 0.001)
+	assert_eq((bullet.get_node("CollisionShape2D") as CollisionShape2D).scale, Vector2.ONE)
+	assert_eq(bullet.collision_layer & 8, 8)
+	assert_true(bullet._despawn_on_valid_hit)
+	# The aim comes from the owner input contract (the same path used by
+	# mouse/joystick aim), while the spawn point remains the drone muzzle.
+	owner.aim_direction = Vector2.DOWN
+	drone._drone_fire_cooldown = 0.0
+	drone._fire_drone(1.0)
+	var joystick_bullet := projectiles.get_child(1) as Area2D
+	assert_eq(joystick_bullet.global_position, drone.muzzle.global_position)
+	assert_almost_eq(joystick_bullet.rotation, PI, 0.001)
+
+func test_drone_aim_is_not_command_target_and_is_isolated_per_owner() -> void:
+	var fixture := await _drone_fixture()
+	var drone: EngineerDeployable = fixture[0]
+	var owner: DroneOwnerStub = fixture[1]
+	owner.command_target = Vector2.LEFT
+	assert_eq(owner.get_aim_direction(), Vector2.RIGHT)
+	assert_ne(owner.get_engineer_drone_command_target(), owner.get_aim_direction())
+	var other := DroneOwnerStub.new()
+	other.aim_direction = Vector2.DOWN
+	add_child_autofree(other)
+	assert_ne(owner.get_aim_direction(), other.get_aim_direction())
+	drone.deploying_player = owner
+
+func test_bullet_reactivation_resets_drone_scale_lifetime_and_range() -> void:
+	var bullet := preload("res://scenes/projectiles/bullet.tscn").instantiate()
+	add_child_autofree(bullet)
+	var shooter := Node2D.new()
+	bullet.activate(Vector2.ZERO, Vector2.RIGHT, shooter, 1.0, 100.0, 0.5, 0.5)
+	assert_eq(bullet.scale, Vector2.ONE * 0.5)
+	assert_almost_eq(bullet.lifetime, 0.5, 0.001)
+	bullet._on_hit(EnemyContactStub.new())
+	bullet.activate(Vector2.ZERO, Vector2.RIGHT, shooter, 7.0, 200.0, 2.0)
+	assert_eq(bullet.scale, Vector2.ONE)
+	assert_almost_eq(bullet.lifetime, 2.0, 0.001)
+	assert_almost_eq(bullet._range_remaining, 400.0, 0.001)
+	assert_eq(bullet._hit_targets.size(), 0)
+	assert_false(bullet._despawn_on_valid_hit)
+	assert_eq(bullet._shooter, shooter)
+
+func test_drone_flag_despawns_on_first_valid_hit_but_normal_bullet_pierces() -> void:
+	var target_a := DamageTargetStub.new()
+	var target_b := DamageTargetStub.new()
+	add_child_autofree(target_a)
+	add_child_autofree(target_b)
+	var bullet := preload("res://scenes/projectiles/bullet.tscn").instantiate()
+	add_child_autofree(bullet)
+	var shooter := Node2D.new()
+	bullet.activate(Vector2.ZERO, Vector2.RIGHT, shooter, 1.0, 100.0, 2.0, 0.5, true)
+	bullet._on_hit(target_a)
+	bullet._on_hit(target_b)
+	assert_eq(target_a.calls, 1)
+	assert_eq(target_b.calls, 0)
+	assert_false(bullet._active)
+	assert_null(bullet._shooter)
+
+	bullet.activate(Vector2.ZERO, Vector2.RIGHT, shooter, 2.0, 100.0, 2.0, 1.0, false)
+	bullet._on_hit(target_a)
+	bullet._on_hit(target_b)
+	assert_eq(target_a.calls, 2)
+	assert_eq(target_b.calls, 1)
+	assert_true(bullet._active)
+
+func test_bullet_pool_reuse_resets_all_drone_state() -> void:
+	var projectiles := Node2D.new()
+	add_child_autofree(projectiles)
+	var scene := preload("res://scenes/projectiles/bullet.tscn")
+	var shooter := Node2D.new()
+	var bullet := Pools.acquire(scene) as Area2D
+	projectiles.add_child(bullet)
+	bullet.activate(Vector2.ZERO, Vector2.RIGHT, shooter, 1.0, 100.0, 0.5, 0.5, true)
+	bullet._on_hit(DamageTargetStub.new())
+	await get_tree().process_frame
+	var reused := Pools.acquire(scene) as Area2D
+	projectiles.add_child(reused)
+	reused.activate(Vector2.ZERO, Vector2.RIGHT, shooter, 1.0, 100.0, 2.0, 1.0, false)
+	assert_eq(reused, bullet)
+	assert_eq(reused.scale, Vector2.ONE)
+	assert_almost_eq(reused.lifetime, 2.0, 0.001)
+	assert_almost_eq(reused._range_remaining, 200.0, 0.001)
+	assert_false(reused._despawn_on_valid_hit)
+	assert_eq(reused._hit_targets.size(), 0)
+	assert_eq(reused._shooter, shooter)
+	reused._despawn()
+	await get_tree().process_frame
+
+func test_drone_bullet_range_is_half_normal_and_despawns_at_limit() -> void:
+	var bullet := preload("res://scenes/projectiles/bullet.tscn").instantiate()
+	add_child_autofree(bullet)
+	bullet.activate(Vector2.ZERO, Vector2.RIGHT, Node2D.new(), 1.0, 100.0, 1.0, 0.5)
+	bullet._physics_process(0.6)
+	assert_false(bullet.is_queued_for_deletion())
+	bullet._physics_process(0.4)
+	assert_false(bullet._active)
+	assert_almost_eq(bullet.global_position.x, 100.0, 0.001)
+
+func test_drone_keeps_contact_health_and_stops_firing_after_death() -> void:
+	var fixture := await _drone_fixture()
+	var drone: EngineerDeployable = fixture[0]
+	var projectiles: Node2D = fixture[2]
+	drone._fire_drone(0.0)
+	var before := projectiles.get_child_count()
+	var damage := DamageInfo.new()
+	damage.amount = drone.health.max_health
+	damage.source = EnemyContactStub.new()
+	drone.take_damage(damage)
+	assert_lte(drone.health.health, 0.0)
+	assert_true(drone.is_queued_for_deletion())
+	drone._fire_drone(1.0)
+	assert_eq(projectiles.get_child_count(), before)
+	drone._physics_process(1.0)
+	assert_eq(projectiles.get_child_count(), before)
+
+func test_drone_contact_damage_preserves_player_source_and_damage() -> void:
+	var fixture := await _drone_fixture()
+	var drone: EngineerDeployable = fixture[0]
+	var owner: DroneOwnerStub = fixture[1]
+	var enemy := EnemyContactStub.new()
+	add_child_autofree(enemy)
+	assert_true(drone._damage_enemy(enemy, EngineerDeployable.DRONE_DAMAGE))
+	assert_eq(enemy.received_damage.size(), 1)
+	assert_eq(enemy.received_damage[0].source, owner)
+	assert_eq(enemy.received_damage[0].amount, EngineerDeployable.DRONE_DAMAGE)
+
+func test_drone_contact_does_not_damage_when_deploying_player_is_queued() -> void:
+	var fixture := await _drone_fixture()
+	var drone: EngineerDeployable = fixture[0]
+	var owner: DroneOwnerStub = fixture[1]
+	var projectiles: Node2D = fixture[2]
+	var enemy := EnemyContactStub.new()
+	add_child_autofree(enemy)
+	enemy.global_position = drone.global_position
+	var projectiles_before := projectiles.get_child_count()
+	owner.queue_free()
+	await get_tree().physics_frame
+	assert_eq(enemy.received_damage.size(), 0)
+	assert_eq(projectiles.get_child_count(), projectiles_before)
+
 class TestSession extends Session:
 	func _ready() -> void:
 		add_to_group(&"session")
@@ -407,6 +586,13 @@ class EnemyContactStub extends CharacterBody2D:
 	func apply_slow(_amount: float, _duration: float) -> void:
 		slow_calls += 1
 
+class DamageTargetStub extends Node:
+	var calls := 0
+
+	func take_damage(_info: DamageInfo) -> float:
+		calls += 1
+		return 0.0
+
 class DeployPlayerStub extends Node2D:
 	var should_deploy := true
 	var deploy_calls := 0
@@ -420,3 +606,23 @@ class RoomClearPlayerStub extends Node2D:
 
 	func on_room_clear() -> void:
 		room_clear_calls += 1
+
+class DroneOwnerStub extends Node2D:
+	var aim_direction := Vector2.RIGHT
+	var command_target := Vector2.ZERO
+
+	func get_aim_direction() -> Vector2:
+		return aim_direction
+
+	func get_projectile_stat(stat_id: StringName, fallback: float) -> float:
+		if stat_id == &"projectile_speed":
+			return 100.0
+		if stat_id == &"projectile_lifetime":
+			return 2.0
+		return fallback
+
+	func get_room_bounds() -> Rect2:
+		return Rect2(Vector2.ZERO, Vector2(720, 405))
+
+	func get_engineer_drone_command_target() -> Vector2:
+		return command_target

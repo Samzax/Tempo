@@ -134,6 +134,18 @@ func get_engineer_deploy_target(distance: float) -> Vector2:
 	target.y = clampf(target.y, _room_bounds.position.y + margin, _room_bounds.end.y - margin)
 	return target
 
+## Contratos de autoria usados pelo Drone da Engenheira.
+func get_aim_direction() -> Vector2:
+	return _aim_vector.normalized()
+
+func get_projectile_stat(stat_id: StringName, fallback: float) -> float:
+	if _stats == null or not _stats.get_stat_ids().has(stat_id):
+		return fallback
+	return _stats.get_stat(stat_id)
+
+func get_room_bounds() -> Rect2:
+	return _room_bounds
+
 ## O Shift da nave sem blink reposiciona somente o Drone ja implantado.
 func command_engineer_drone() -> bool:
 	var session := get_tree().get_first_node_in_group(&"session")
