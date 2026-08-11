@@ -9,6 +9,8 @@ func test_engineer_deployable_scene_has_textured_drone_sprite() -> void:
 	var drone_sprite := deployable.get_node_or_null(^"DroneSprite") as Sprite2D
 	assert_not_null(drone_sprite)
 	if drone_sprite != null:
+		assert_almost_eq(drone_sprite.scale.x, 0.333333, 0.00001)
+		assert_almost_eq(drone_sprite.scale.y, 0.333333, 0.00001)
 		assert_not_null(drone_sprite.texture)
 		if drone_sprite.texture != null:
 			assert_eq(drone_sprite.texture.get_size(), Vector2(32, 32))

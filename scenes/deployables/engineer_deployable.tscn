@@ -16,6 +16,7 @@ script = ExtResource("1_deployable")
 [node name="DroneSprite" type="Sprite2D" parent="."]
 texture_filter = 1
 texture = ExtResource("3_drone_sprite")
+scale = Vector2(0.333333, 0.333333)
 visible = false
 
 [node name="Influence" type="Area2D" parent="."]
