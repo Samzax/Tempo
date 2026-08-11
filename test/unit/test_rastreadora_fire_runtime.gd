@@ -51,6 +51,14 @@ func test_invalid_fire_does_not_create_bullet_or_start_fire() -> void:
 	_player._fire()
 	assert_eq(_projectiles.get_child_count(), 0)
 	assert_eq(_player.sprite.animation, &"neutral")
+	assert_eq(_player.sprite.frame, 0)
+
+func test_cooldown_does_not_start_a_second_fire_animation() -> void:
+	_player._aim_vector = Vector2.UP
+	_player._fire_cooldown = 0.25
+	_player._handle_fire(0.0)
+	assert_eq(_projectiles.get_child_count(), 0)
+	assert_eq(_player.sprite.animation, &"neutral")
 
 func test_handle_fire_respects_rastreadora_fire_rate_cadence() -> void:
 	_player._aim_vector = Vector2.UP
@@ -67,10 +75,33 @@ func test_handle_fire_respects_rastreadora_fire_rate_cadence() -> void:
 	_player._handle_fire(0.0)
 	assert_eq(_projectiles.get_child_count(), 2)
 
-func test_fire_animation_ends_in_neutral() -> void:
+func test_fire_animation_progresses_frames_and_returns_to_neutral_via_signal() -> void:
+	_player._aim_vector = Vector2.UP
 	_player._fire()
-	_player._on_hull_animation_finished()
+	assert_eq(_player.sprite.animation, &"fire")
+	var observed_frames: Array[int] = []
+	for frame_budget in 60:
+		if _player.sprite.animation != &"fire":
+			break
+		if observed_frames.is_empty() or observed_frames.back() != _player.sprite.frame:
+			observed_frames.append(_player.sprite.frame)
+		await get_tree().process_frame
+	assert_eq(observed_frames, [0, 1, 2, 3])
 	assert_eq(_player.sprite.animation, &"neutral")
+	assert_eq(_player.sprite.frame, 0)
+
+func test_update_bank_on_next_gameplay_tick_preserves_fire_and_frame_progresses() -> void:
+	_player._aim_vector = Vector2.UP
+	_player._fire()
+	assert_eq(_player.sprite.animation, &"fire")
+	var initial_frame := _player.sprite.frame
+	await get_tree().physics_frame
+	assert_eq(_player.sprite.animation, &"fire")
+	for frame_budget in 30:
+		if _player.sprite.frame != initial_frame:
+			break
+		await get_tree().process_frame
+	assert_ne(_player.sprite.frame, initial_frame)
 
 func test_update_bank_does_not_cancel_fire_animation() -> void:
 	_player._fire()
