@@ -37,6 +37,44 @@ func test_debris_health_scales_by_size_and_fragments_large_to_medium() -> void:
 		remaining.queue_free()
 	await get_tree().process_frame
 
+func test_debris_take_damage_null_returns_zero() -> void:
+	var debris := DEBRIS.instantiate()
+	add_child_autofree(debris)
+	await get_tree().process_frame
+	var before: float = debris.health.health
+
+	assert_eq(debris.take_damage(null), 0.0)
+	assert_eq(debris.health.health, before)
+
+func test_debris_take_damage_ignores_deep_trigger() -> void:
+	var debris := DEBRIS.instantiate()
+	add_child_autofree(debris)
+	await get_tree().process_frame
+	var before: float = debris.health.health
+	var info := DamageInfo.new()
+	info.trigger_depth = 4
+
+	assert_eq(debris.take_damage(info), 0.0)
+	assert_eq(debris.health.health, before)
+
+func test_debris_take_damage_returns_partial_and_lethal_float() -> void:
+	var debris := DEBRIS.instantiate()
+	add_child_autofree(debris)
+	await get_tree().process_frame
+
+	assert_almost_eq(debris.take_damage(_damage(1.5)), 1.5, 0.001)
+	assert_almost_eq(debris.health.health, 4.5, 0.001)
+	assert_almost_eq(debris.take_damage(_damage(10.0)), 4.5, 0.001)
+	await get_tree().process_frame
+	for remaining in get_tree().get_nodes_in_group("debris"):
+		remaining.queue_free()
+	await get_tree().process_frame
+
+func _damage(amount: float) -> DamageInfo:
+	var info := DamageInfo.new()
+	info.amount = amount
+	return info
+
 func test_small_debris_does_not_fragment() -> void:
 	var debris := DEBRIS.instantiate()
 	debris.size_class = DEBRIS_SCRIPT.SizeClass.SMALL

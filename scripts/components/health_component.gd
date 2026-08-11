@@ -12,12 +12,16 @@ var health: float
 func _ready() -> void:
 	health = max_health
 
-func apply_damage(info: DamageInfo) -> void:
+func apply_damage(info: DamageInfo) -> float:
+	if info == null:
+		return 0.0
+	if not is_finite(info.amount):
+		return 0.0
 	## Ignora dano nulo ou negativo para preservar os limites de vida.
 	if info.amount <= 0.0:
-		return
+		return 0.0
 	if health <= 0.0:
-		return
+		return 0.0
 	var previous_health := health
 	health = clampf(health - info.amount, 0.0, max_health)
 	var actual_drop := previous_health - health
@@ -25,6 +29,7 @@ func apply_damage(info: DamageInfo) -> void:
 		damaged.emit(info, actual_drop)
 	if health <= 0.0:
 		died.emit(info)
+	return actual_drop
 
 ## Recupera vida ate o maximo. Ignora valores nao-positivos.
 func heal(amount: float) -> void:

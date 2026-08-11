@@ -238,13 +238,14 @@ func _damage_station_from_enemy(body: Node2D) -> void:
 	take_damage(info)
 
 ## Consumido por projeteis/AoE inimigos e por contratos futuros de dano.
-func take_damage(info: DamageInfo) -> void:
+func take_damage(info: DamageInfo) -> float:
 	if info == null or _is_player_source(info.source):
-		return
+		return 0.0
 	if kind == Kind.TRAP and (info.tags.has(&"burst") or info.tags.has(&"aoe")):
 		_detonate()
 	elif kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
-		health.apply_damage(info)
+		return health.apply_damage(info)
+	return 0.0
 
 func _buff_ally(body: Node2D) -> void:
 	if body == null or not body.is_in_group(&"player"):

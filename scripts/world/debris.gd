@@ -37,8 +37,10 @@ func _physics_process(delta: float) -> void:
 	if _age >= lifetime or (_has_entered_room and not _room_bounds.grow(cull_margin).has_point(global_position)):
 		queue_free()
 
-func take_damage(info: DamageInfo) -> void:
-	health.apply_damage(info)
+func take_damage(info: DamageInfo) -> float:
+	if info == null or info.trigger_depth > 3:
+		return 0.0
+	return health.apply_damage(info)
 
 func _configure_size() -> void:
 	match size_class:
