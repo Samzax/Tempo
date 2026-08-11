@@ -101,6 +101,8 @@ func _ready() -> void:
 	_configure_loadout()
 	EventBus.enemy_died.connect(_on_enemy_died)
 	health.damaged.connect(_on_health_damaged)
+	if not sprite.animation_finished.is_connected(_on_hull_animation_finished):
+		sprite.animation_finished.connect(_on_hull_animation_finished)
 	health.max_health = _stats.get_stat(&"max_health")
 	health.health = health.max_health
 	_projectiles = get_tree().get_first_node_in_group("projectiles")
@@ -329,6 +331,30 @@ func _apply_hull_texture() -> void:
 					replacement.region = ship.custom_frame_regions[animation_index + frame_index * 5]
 					frames.set_frame(animation_name, frame_index, replacement)
 			sprite.sprite_frames = frames
+			return
+		if ship.atlas_grid_size == Vector2i(2, 2):
+			if ship.hull_texture.get_size() != Vector2(ship.frame_size * ship.atlas_grid_size):
+				push_warning("A textura da nave precisa corresponder ao frame_size e atlas_grid_size configurados.")
+				sprite.sprite_frames = frames
+				return
+			frames.clear_all()
+			frames.add_animation(&"neutral")
+			var neutral_frame := AtlasTexture.new()
+			neutral_frame.atlas = ship.hull_texture
+			neutral_frame.region = Rect2(Vector2.ZERO, Vector2(ship.frame_size))
+			frames.add_frame(&"neutral", neutral_frame)
+			frames.set_animation_loop(&"neutral", true)
+			frames.set_animation_speed(&"neutral", 1.0)
+			frames.add_animation(&"fire")
+			for cell in [Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 0)]:
+				var fire_frame := AtlasTexture.new()
+				fire_frame.atlas = ship.hull_texture
+				fire_frame.region = Rect2(Vector2(cell * ship.frame_size), Vector2(ship.frame_size))
+				frames.add_frame(&"fire", fire_frame)
+			frames.set_animation_loop(&"fire", false)
+			frames.set_animation_speed(&"fire", 12.0)
+			sprite.sprite_frames = frames
+			sprite.play(&"neutral")
 			return
 		if ship.atlas_grid_size != Vector2i(5, 2):
 			if ship.hull_texture.get_size() != Vector2(ship.frame_size * ship.atlas_grid_size):
@@ -976,7 +1002,7 @@ func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
 		var target := clampf(omni_direction.x * deg_to_rad(3.0), -deg_to_rad(3.0), deg_to_rad(3.0))
 		visual_root.rotation = lerpf(visual_root.rotation, target, 0.2)
 		return
-	if sprite.animation != &"neutral":
+	if sprite.animation != &"neutral" and sprite.animation != &"fire":
 		sprite.play(&"neutral")
 
 ## O propulsor estica e intensifica conforme a velocidade atual.
@@ -1137,10 +1163,19 @@ func _fire() -> void:
 		_projectiles.add_child(b)
 	b.set_room_bounds(_room_bounds)
 	b.activate(muzzle.global_position, fire_dir, self, _stats.get_stat(&"damage"))
+	if _uses_two_by_two_fire_animation():
+		sprite.play(&"fire")
 	_dispatcher.dispatch(&"on_fire", null, 0)
 
 ## Sem stick ativo, o mouse e avaliado no disparo a partir do muzzle.
 ## Expoe a direcao de tiro para origens auxiliares, como o muzzle do Drone.
+func _uses_two_by_two_fire_animation() -> bool:
+	return ship != null and ship.atlas_grid_size == Vector2i(2, 2) and sprite != null and sprite.sprite_frames != null and sprite.sprite_frames.has_animation(&"fire")
+
+func _on_hull_animation_finished() -> void:
+	if _uses_two_by_two_fire_animation() and sprite.animation == &"fire":
+		sprite.play(&"neutral")
+
 func get_fire_direction_from(origin: Vector2) -> Vector2:
 	if not _joypad_aim_was_active:
 		var mouse_direction := get_global_mouse_position() - origin

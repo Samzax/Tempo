@@ -141,6 +141,15 @@ func test_rastreadora_resource_uses_two_by_two_closed_atlas_layout() -> void:
 		assert_almost_eq(-12.0 + rastreadora.muzzle_offset.y, -front_distance, 0.00001)
 		assert_eq(rastreadora.validate_content().size(), 0)
 
+func test_rastreadora_resource_has_overkill_fire_stats_and_preserves_projectile_stats() -> void:
+	var rastreadora := load(SHIP_PATHS[&"nave_rastreadora"]) as ShipDef
+	assert_not_null(rastreadora)
+	if rastreadora != null:
+		assert_eq(_base_stat_value(rastreadora, &"damage"), 18.0)
+		assert_eq(_base_stat_value(rastreadora, &"fire_rate"), 0.8)
+		assert_eq(_base_stat_value(rastreadora, &"projectile_speed"), 780.0)
+		assert_eq(_base_stat_value(rastreadora, &"projectile_lifetime"), 2.4)
+
 func test_engenheira_texture_is_rgba8_320_by_128_with_valid_alpha() -> void:
 	var image := Image.load_from_file(ProjectSettings.globalize_path(NEW_SHIP_TEXTURES[&"nave_engenheira"]))
 	assert_not_null(image)
