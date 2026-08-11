@@ -28,7 +28,7 @@ func test_updated_enemy_visuals_and_telegraph_contract() -> void:
 	assert_eq(aim.hframes, 6)
 	assert_false(aim.centered)
 	assert_eq(aim.offset, Vector2(-8.0, -32.0))
-	assert_eq(aim.scale, Vector2(0.9, 0.9))
+	assert_eq(aim.scale, Vector2(0.9, 0.25))
 	assert_eq(aim.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST)
 	assert_eq(enemy.telegraph.width, 1.5)
 
