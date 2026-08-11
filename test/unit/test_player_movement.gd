@@ -129,37 +129,33 @@ func test_blink_destination_is_clamped_near_arena_edges() -> void:
 	assert_eq(player.global_position, Vector2(10.0, 70.0))
 	assert_eq(player.velocity, Vector2.ZERO)
 
-func test_omni_blink_explicit_direction_has_priority_over_wasd_and_aim() -> void:
+func test_bruta_omni_movement_uses_wasd_direction() -> void:
 	var player: Player = await _blink_player(BRUTA_SHIP)
 	player._aim_vector = Vector2.LEFT
 	Input.action_press(&"move_up")
 
-	assert_true(player.try_blink(Vector2.RIGHT))
+	assert_eq(player._omni_movement_direction(), Vector2.UP)
 
-	assert_eq(player.global_position, Vector2(1000.0 + player._stats.get_stat(&"blink_distance"), 1000.0))
-	assert_eq(player.velocity, Vector2.ZERO)
-	assert_gt(player.blink_cooldown_ratio(), 0.0)
-
-func test_omni_blink_uses_wasd_when_available() -> void:
+func test_bruta_shift_starts_continuous_charge_instead_of_blink() -> void:
 	var player: Player = await _blink_player(BRUTA_SHIP)
-	player._aim_vector = Vector2.LEFT
-	Input.action_press(&"move_down")
+	player._aim_vector = Vector2.RIGHT
+	Input.action_press(&"blink")
 
-	assert_true(player.try_blink())
+	assert_true(player._handle_blink_input())
+	assert_true(player._is_bruta_charging())
+	assert_eq(player._bruta_charge_direction, Vector2.RIGHT)
 
-	assert_eq(player.global_position, Vector2(1000.0, 1000.0 + player._stats.get_stat(&"blink_distance")))
-	assert_eq(player.velocity, Vector2.ZERO)
-	assert_gt(player.blink_cooldown_ratio(), 0.0)
-
-func test_omni_blink_falls_back_to_aim_without_wasd() -> void:
+func test_bruta_try_blink_is_rejected_without_movement_or_cooldown() -> void:
 	var player: Player = await _blink_player(BRUTA_SHIP)
 	player._aim_vector = Vector2.LEFT
 
-	assert_true(player.try_blink())
+	var before := player.global_position
 
-	assert_eq(player.global_position, Vector2(1000.0 - player._stats.get_stat(&"blink_distance"), 1000.0))
-	assert_eq(player.velocity, Vector2.ZERO)
-	assert_gt(player.blink_cooldown_ratio(), 0.0)
+	assert_false(player.try_blink())
+
+	assert_eq(player.global_position, before)
+	assert_eq(player._blink_cd, 0.0)
+	assert_eq(player._blink_cd_duration, 0.0)
 
 func test_aim_forward_blink_uses_aim_even_with_wasd() -> void:
 	var player: Player = await _blink_player(BASE_SHIP)
@@ -180,9 +176,9 @@ func test_position_is_clamped_to_arena_bounds() -> void:
 
 	assert_eq(player.global_position, Vector2(10.0, 70.0))
 
-func test_can_blink_defaults_true_for_other_ships_and_false_for_engineer() -> void:
+func test_can_blink_defaults_true_for_base_and_false_for_bruta_and_engineer() -> void:
 	assert_true(BASE_SHIP.can_blink)
-	assert_true(ShipCatalog.get_ship(&"nave_bruta").can_blink)
+	assert_false(ShipCatalog.get_ship(&"nave_bruta").can_blink)
 	assert_false(ShipCatalog.get_ship(&"nave_engenheira").can_blink)
 
 func test_engineer_shift_does_not_teleport_and_commands_drone_path() -> void:

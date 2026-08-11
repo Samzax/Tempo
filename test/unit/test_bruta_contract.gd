@@ -67,6 +67,43 @@ func test_bruta_declares_omni_32_pixel_circle_without_muzzle() -> void:
 	assert_eq(BRUTA.ability_shift, &"bruta_investida")
 	assert_false(BRUTA.can_blink)
 
+
+func test_bruta_resolves_shift_slot_to_bruta_investida() -> void:
+	var player: Player = await _bruta_player()
+
+	assert_true(player.uses_bruta_charge_shift())
+	assert_not_null(player._ability_shift)
+	if player._ability_shift != null:
+		assert_eq(player._ability_shift.id, &"bruta_investida")
+	assert_eq(AbilityCatalog.get_ability(&"bruta_investida").id, &"bruta_investida")
+
+
+func test_bruta_shift_input_starts_charge_instead_of_try_blink() -> void:
+	var player: Player = await _bruta_player()
+	player.global_position = Vector2(100.0, 100.0)
+	player._aim_vector = Vector2.RIGHT
+	var before := player.global_position
+	Input.action_press(&"blink")
+
+	assert_true(player._handle_blink_input())
+	assert_true(player._is_bruta_charging())
+	assert_eq(player._bruta_charge_direction, Vector2.RIGHT)
+	assert_eq(player.global_position, before)
+	assert_eq(player.blink_cooldown_ratio(), 0.0)
+	assert_gt(player.shift_cooldown_ratio(), 0.0)
+
+
+func test_bruta_shift_cooldown_rejects_second_activation() -> void:
+	var player: Player = await _bruta_player()
+	player._aim_vector = Vector2.RIGHT
+	Input.action_press(&"blink")
+
+	assert_true(player._handle_blink_input())
+	var windup_before := player._bruta_charge_windup_remaining
+	assert_false(player._handle_blink_input())
+	assert_eq(player._bruta_charge_windup_remaining, windup_before)
+	assert_gt(player.shift_cooldown_ratio(), 0.0)
+
 func test_ship_def_accepts_empty_shift_and_rejects_unknown_shift_ability() -> void:
 	var empty_shift := ShipDef.new()
 	empty_shift.id = &"empty_shift"
@@ -440,6 +477,21 @@ func test_bruta_charge_active_duration_never_exceeds_075_seconds() -> void:
 	assert_false(player._is_bruta_charging())
 	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
 
+func test_bruta_charge_stops_at_safe_room_boundary_and_clears_state() -> void:
+	var player: Player = await _bruta_player()
+	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(200.0, 160.0)))
+	player.global_position = Vector2(100.0, 80.0)
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+
+	player._update_bruta_charge(0.75)
+
+	_assert_vector_almost_eq(player.global_position, Vector2(190.0, 80.0))
+	assert_false(player._is_bruta_charging())
+	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.ZERO)
+	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
+
 func test_bruta_charge_integrates_same_active_displacement_at_60hz_and_large_delta() -> void:
 	var stepped: Player = await _bruta_player()
 	var large_step: Player = await _bruta_player()
@@ -489,6 +541,67 @@ func test_bruta_charge_mitigates_damage_during_active_window() -> void:
 	var before := player.health.health
 	player.take_damage(info)
 	assert_almost_eq(player.health.health, before - 0.6, 0.001)
+
+
+func test_bruta_loadout_reconfiguration_clears_shift_cooldown_and_charge_state() -> void:
+	var player: Player = await _bruta_player()
+	player._ability_shift_cd = 3.0
+	player._ability_shift_cd_duration = 5.0
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.12
+	player._bruta_charge_remaining = 0.75
+	player.velocity = Vector2.RIGHT * 200.0
+
+	player._configure_loadout()
+
+	assert_almost_eq(player._ability_shift_cd, 0.0, 0.001)
+	assert_almost_eq(player._ability_shift_cd_duration, 0.0, 0.001)
+	assert_false(player._is_bruta_charging())
+	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
+
+func test_bruta_death_clears_shift_state_even_on_terminal_life() -> void:
+	var player: Player = await _bruta_player()
+	var prior_lives := GameState.player_lives
+	GameState.player_lives = 1
+	player._ability_shift_cd = 3.0
+	player._ability_shift_cd_duration = 5.0
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.12
+	player._bruta_charge_remaining = 0.75
+	player.velocity = Vector2.RIGHT * 200.0
+
+	player._on_died(DamageInfo.new())
+
+	assert_eq(GameState.player_lives, 0)
+	assert_almost_eq(player._ability_shift_cd, 0.0, 0.001)
+	assert_almost_eq(player._ability_shift_cd_duration, 0.0, 0.001)
+	assert_false(player._is_bruta_charging())
+	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.ZERO)
+	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
+	assert_false(player.visible)
+	GameState.player_lives = prior_lives
+
+
+func test_bruta_charge_stops_at_obstacle_before_bounded_endpoint() -> void:
+	var player: Player = await _bruta_player()
+	player.global_position = Vector2(100.0, 100.0)
+	var obstacle := StaticBody2D.new()
+	obstacle.global_position = Vector2(180.0, 100.0)
+	var collision_shape := CollisionShape2D.new()
+	var rectangle := RectangleShape2D.new()
+	rectangle.size = Vector2(20.0, 100.0)
+	collision_shape.shape = rectangle
+	obstacle.add_child(collision_shape)
+	add_child_autofree(obstacle)
+	await get_tree().physics_frame
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_remaining = 0.75
+
+	player._update_bruta_charge(0.75)
+
+	assert_lt(player.global_position.x, 170.0)
+	assert_false(player._is_bruta_charging())
+	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
 
 func test_bruta_charge_takes_full_damage_during_windup() -> void:
 	var player: Player = await _bruta_player()
