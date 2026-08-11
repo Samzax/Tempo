@@ -838,12 +838,7 @@ func _handle_fire(delta: float) -> void:
 func _fire() -> void:
 	if _projectiles == null or (ship != null and not ship.has_muzzle):
 		return
-	var tier := clampi(_stats.get_stat_int(&"aim_tier"), 0, 3)
 	var fire_dir := _aim_vector
-	if tier > 0:
-		var target_dir := _select_aim_target(tier)
-		if target_dir != Vector2.ZERO:
-			fire_dir = target_dir
 	var b := Pools.acquire(BULLET)
 	if b.get_parent() == null:
 		_projectiles.add_child(b)
