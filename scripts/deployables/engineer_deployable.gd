@@ -21,6 +21,7 @@ const STATION_BUFF_REFRESH := 0.2
 @onready var influence: Area2D = $Influence
 @onready var hurtbox: Area2D = $Hurtbox
 @onready var health: HealthComponent = $HealthComponent
+@onready var drone_sprite: Sprite2D = $DroneSprite
 
 var _next_effect_at: Dictionary = {}
 var _target_position := Vector2.ZERO
@@ -73,6 +74,7 @@ func _apply_kind() -> void:
 	hurtbox.monitorable = kind == Kind.OVERCLOCK_STATION
 	# Camada 3 (inimigos) para contato e camada 5 (projeteis inimigos) para dano a distancia.
 	hurtbox.collision_mask = 20
+	drone_sprite.visible = kind == Kind.DRONE
 	if kind == Kind.OVERCLOCK_STATION:
 		health.max_health = STATION_MAX_HEALTH
 		health.reset()
@@ -198,7 +200,7 @@ func _draw() -> void:
 			for index in 4:
 				draw_line(Vector2.ZERO, Vector2.UP.rotated(index * PI * 0.5) * 10.0, Color("b6f3ff"), 1.0)
 		Kind.DRONE:
-			draw_colored_polygon(PackedVector2Array([Vector2(0, -7), Vector2(6, 6), Vector2(-6, 6)]), Color("a66cff"))
+			pass
 		Kind.OVERCLOCK_STATION:
 			draw_rect(Rect2(-6, -6, 12, 12), Color("ffd166"), true)
 			draw_line(Vector2(-9, 0), Vector2(9, 0), Color.WHITE, 1.0)
