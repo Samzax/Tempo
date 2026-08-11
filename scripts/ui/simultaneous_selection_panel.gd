@@ -10,6 +10,7 @@ signal back_requested()
 const STAT_IDS: Array[StringName] = [&"max_health", &"max_speed", &"acceleration", &"fire_rate", &"damage", &"aim_tier"]
 const STAT_LABELS := ["VIDA", "VELOCIDADE", "ACELERACAO", "CADENCIA", "DANO", "MIRA"]
 const PLAYABLE_SHIP_IDS: Array[StringName] = [&"nave_interceptadora", &"nave_engenheira", &"nave_rastreadora", &"nave_bruta", &"nave_interestelar"]
+const STAT_SEGMENT_COUNT := 4
 
 @onready var _character_art: TextureRect = $CharacterCarousel/ArtClip/CharacterArt
 @onready var _character_previous_art: TextureRect = $CharacterCarousel/ArtClip/PreviousArt
@@ -371,22 +372,24 @@ func _refresh_stats(ship: ShipDef, character: CharacterDef) -> void:
 		child.queue_free()
 	var stats := StatBlock.new(StatCatalog.get_all())
 	Loadout.apply(stats, ship, character)
+	var active_modifiers := stats.get_active_modifiers()
 	for index in STAT_IDS.size():
 		var stat_id := STAT_IDS[index]
-		var row := HBoxContainer.new()
-		row.custom_minimum_size = Vector2(0, 13)
+		var row := VBoxContainer.new()
+		row.custom_minimum_size = Vector2(0, 18)
+		row.add_theme_constant_override(&"separation", 1)
 		var label := Label.new()
-		label.custom_minimum_size = Vector2(73, 0)
 		label.text = STAT_LABELS[index]
 		label.add_theme_font_size_override(&"font_size", 8)
 		row.add_child(label)
 		var segments := HBoxContainer.new()
 		segments.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		segments.add_theme_constant_override(&"separation", 2)
-		var fill := roundi(_normalized(stat_id, stats.get_stat(stat_id)) * 10.0)
-		for segment_index in 10:
+		segments.add_theme_constant_override(&"separation", 4)
+		var value := stats.get_stat(stat_id)
+		var fill := _stat_score(stat_id, value, _has_stat_presence(ship, active_modifiers, stat_id))
+		for segment_index in STAT_SEGMENT_COUNT:
 			var segment := ColorRect.new()
-			segment.custom_minimum_size = Vector2(6, 8)
+			segment.custom_minimum_size = Vector2(14, 8)
 			segment.color = Color("69f6d9") if segment_index < fill else Color("203044")
 			segments.add_child(segment)
 		row.add_child(segments)
@@ -395,7 +398,8 @@ func _refresh_stats(ship: ShipDef, character: CharacterDef) -> void:
 func _rebuild_ranges() -> void:
 	_ranges.clear()
 	for stat_id in STAT_IDS:
-		_ranges[stat_id] = {"min": INF, "max": -INF}
+		var default_base := StatCatalog.get_stat(stat_id).default_base
+		_ranges[stat_id] = {"min": default_base, "max": default_base}
 	for ship in _ships:
 		for character in _roster:
 			var stats := StatBlock.new(StatCatalog.get_all())
@@ -411,6 +415,28 @@ func _normalized(stat_id: StringName, value: float) -> float:
 	if range.is_empty() or is_equal_approx(float(range["max"]), float(range["min"])):
 		return 1.0
 	return clampf((value - float(range["min"])) / (float(range["max"]) - float(range["min"])), 0.0, 1.0)
+
+func _has_stat_presence(ship: ShipDef, active_modifiers: Array[StatModifierDef], stat_id: StringName) -> bool:
+	if ship != null:
+		for base_stat in ship.base_stats:
+			if base_stat != null and base_stat.stat == stat_id:
+				return true
+	return _has_active_stat_modifier(active_modifiers, stat_id)
+
+func _has_active_stat_modifier(active_modifiers: Array[StatModifierDef], stat_id: StringName) -> bool:
+	for modifier in active_modifiers:
+		if modifier != null and modifier.stat == stat_id:
+			return true
+	return false
+
+func _stat_score(stat_id: StringName, value: float, is_present: bool) -> int:
+	if not is_present:
+		return 0
+	var range: Dictionary = _ranges.get(stat_id, {})
+	if range.is_empty() or is_equal_approx(float(range["max"]), float(range["min"])):
+		return 1
+	var normalized := clampf((value - float(range["min"])) / (float(range["max"]) - float(range["min"])), 0.0, 1.0)
+	return clampi(1 + roundi(3.0 * normalized), 1, STAT_SEGMENT_COUNT)
 
 func _confirm_selection() -> void:
 	if _emitted or selected_ship_id().is_empty() or selected_character_id().is_empty():

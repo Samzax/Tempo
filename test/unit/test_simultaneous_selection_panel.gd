@@ -27,12 +27,188 @@ func after_each() -> void:
 	_pressed_keys.clear()
 	_pressed_joypad_buttons.clear()
 
-func test_scene_has_valid_initial_pair_and_six_ten_metric_layout() -> void:
+func test_scene_has_valid_initial_pair_and_six_four_metric_layout() -> void:
 	assert_ne(panel.selected_ship_id(), &"")
 	assert_ne(panel.selected_character_id(), &"")
 	assert_eq(panel.get_node("StatsPanel/Stats").get_child_count(), 6)
 	for row in panel.get_node("StatsPanel/Stats").get_children():
-		assert_eq(row.get_child(1).get_child_count(), 10)
+		assert_true(row is VBoxContainer)
+		assert_true(row.get_child(0) is Label)
+		var segments := row.get_child(1) as HBoxContainer
+		assert_eq(segments.get_child_count(), 4)
+		assert_eq(segments.get_theme_constant("separation"), 4)
+		for segment in segments.get_children():
+			assert_eq((segment as ColorRect).custom_minimum_size, Vector2(14, 8))
+			assert_true((segment as ColorRect).color in [Color("69f6d9"), Color("203044")])
+
+func test_stats_rows_and_segments_are_contained_in_480x270_viewport() -> void:
+	get_viewport().size = Vector2i(480, 270)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var root_rect := Rect2(panel.global_position, panel.size)
+	var stats_panel := panel.get_node("StatsPanel") as Control
+	var stats := panel.get_node("StatsPanel/Stats") as Control
+	var stats_panel_rect := Rect2(stats_panel.global_position, stats_panel.size)
+	var stats_rect := Rect2(stats.global_position, stats.size)
+	var viewport_rect := Rect2(Vector2.ZERO, Vector2(480, 270))
+	assert_true(viewport_rect.encloses(root_rect))
+	assert_true(viewport_rect.encloses(stats_panel_rect))
+	assert_true(stats_panel_rect.encloses(stats_rect))
+	assert_lte(stats_panel.size.x, 72.0)
+	assert_lte(stats_panel.size.y, 142.0)
+	assert_gte(stats_panel.size.x, 68.0)
+	assert_gte(stats_panel.size.y, 135.0)
+	assert_eq(stats.get_child_count(), panel.STAT_IDS.size())
+	for row_node in stats.get_children():
+		var row := row_node as Control
+		assert_true(stats_rect.encloses(Rect2(row.global_position, row.size)))
+		assert_true(row.get_child(0) is Label)
+		var segments := row.get_child(1) as HBoxContainer
+		assert_true(stats_rect.encloses(Rect2(segments.global_position, segments.size)))
+		for segment_node in segments.get_children():
+			var segment := segment_node as Control
+			assert_true(stats_rect.encloses(Rect2(segment.global_position, segment.size)))
+
+func test_explicit_zero_base_value_is_present_and_scores_at_least_one() -> void:
+	var ship := ShipDef.new()
+	ship.id = &"fixture_zero_base"
+	var authored := BaseStatValue.new()
+	authored.stat = &"max_health"
+	authored.value = 0.0
+	ship.base_stats = [authored]
+	var zero_modifier := StatModifierDef.new()
+	zero_modifier.stat = &"max_speed"
+	zero_modifier.op = StatDef.Op.FLAT
+	zero_modifier.value = 0.0
+	zero_modifier.source_id = ship.id
+	ship.modifiers = [zero_modifier]
+	var character := CharacterDef.new()
+	character.id = &"fixture_character"
+	panel._refresh_stats(ship, character)
+	await get_tree().process_frame
+	var stats := StatBlock.new(StatCatalog.get_all())
+	Loadout.apply(stats, ship, character)
+	var active_modifiers := stats.get_active_modifiers()
+	assert_eq(active_modifiers.size(), 1)
+	assert_eq(active_modifiers[0].stat, zero_modifier.stat)
+	assert_eq(active_modifiers[0].op, zero_modifier.op)
+	assert_eq(active_modifiers[0].value, zero_modifier.value)
+	assert_eq(active_modifiers[0].source_id, zero_modifier.source_id)
+	assert_true(panel._has_stat_presence(ship, active_modifiers, &"max_health"))
+	assert_true(panel._has_stat_presence(ship, active_modifiers, &"max_speed"))
+	assert_gte(_score_for_stat(&"max_health"), 1)
+	assert_gte(_score_for_stat(&"max_speed"), 1)
+
+func test_all_modifier_operations_mark_presence_and_loadout_resolves_coherently() -> void:
+	var ship := ShipDef.new()
+	ship.id = &"fixture_operations"
+	var operations := [StatDef.Op.FLAT, StatDef.Op.ADD_PCT, StatDef.Op.MULT, StatDef.Op.OVERRIDE]
+	var stat_ids: Array[StringName] = [&"max_health", &"max_speed", &"acceleration", &"fire_rate"]
+	for index in operations.size():
+		var modifier := StatModifierDef.new()
+		modifier.stat = stat_ids[index]
+		modifier.op = operations[index]
+		modifier.value = 1.0
+		modifier.source_id = ship.id
+		modifier.priority = 2
+		ship.modifiers.append(modifier)
+	var character := CharacterDef.new()
+	character.id = &"fixture_operations_character"
+	var stats := StatBlock.new(StatCatalog.get_all())
+	Loadout.apply(stats, ship, character)
+	for index in operations.size():
+		assert_true(_expected_presence(ship, character, stat_ids[index]))
+		assert_gt(stats.get_stat(stat_ids[index]), 0.0)
+		assert_eq(stats.get_active_modifiers()[index].source_id, ship.id)
+
+func test_all_fifteen_combinations_have_four_segment_scores_and_explicit_presence() -> void:
+	var ranges := _expected_stat_ranges()
+	for ship in panel._ships:
+		for character in panel._roster:
+			assert_true(panel.set_selected_ids(ship.id, character.id))
+			await get_tree().process_frame
+			var stats := StatBlock.new(StatCatalog.get_all())
+			Loadout.apply(stats, ship, character)
+			for stat_index in panel.STAT_IDS.size():
+				var stat_id: StringName = panel.STAT_IDS[stat_index]
+				var score := _filled_segments_by_stat()[stat_index]
+				var present := _expected_presence(ship, character, stat_id)
+				var value := stats.get_stat(stat_id)
+				var expected := _expected_score(value, present, ranges[stat_id])
+				assert_eq(score, expected)
+
+func test_fire_rate_presence_contract_for_bruta_and_rastreadora() -> void:
+	for character_id in [&"hacker", &"guardian", &"chronomancer"]:
+		assert_true(panel.set_selected_ids(&"nave_bruta", character_id))
+		await get_tree().process_frame
+		assert_eq(_score_for_stat(&"fire_rate"), 0)
+		assert_true(panel.set_selected_ids(&"nave_rastreadora", character_id))
+		await get_tree().process_frame
+		assert_eq(_score_for_stat(&"fire_rate"), 1)
+
+func test_hacker_only_adds_aim_presence_to_shells_without_authorship() -> void:
+	for ship in panel._ships:
+		var ship_authored := _expected_presence(ship, null, &"aim_tier")
+		assert_true(panel.set_selected_ids(ship.id, &"hacker"))
+		await get_tree().process_frame
+		assert_true(_expected_presence(ship, panel._roster[0], &"aim_tier"))
+		assert_eq(_score_for_stat(&"aim_tier") > 0, true)
+		for character_id in [&"guardian", &"chronomancer"]:
+			var character := CharacterDef.resolve_id(character_id)
+			assert_true(panel.set_selected_ids(ship.id, character_id))
+			await get_tree().process_frame
+			assert_eq(_expected_presence(ship, character, &"aim_tier"), ship_authored)
+			assert_eq(_score_for_stat(&"aim_tier") > 0, ship_authored)
+
+func test_stat_score_contract_has_zero_absence_equal_range_and_four_buckets() -> void:
+	# The helper is used here because no catalog pair can manufacture a degenerate range.
+	panel._ranges[&"max_health"] = {"min": 10.0, "max": 10.0}
+	assert_eq(panel._stat_score(&"max_health", 10.0, true), 1)
+	assert_eq(panel._stat_score(&"max_health", 10.0, false), 0)
+	panel._ranges[&"max_health"] = {"min": 10.0, "max": 20.0}
+	assert_eq(panel._stat_score(&"max_health", 10.0, true), 1)
+	assert_eq(panel._stat_score(&"max_health", 20.0, true), 4)
+	assert_eq(panel._stat_score(&"max_health", 12.0, true), 2)
+	assert_eq(panel._stat_score(&"max_health", 15.0, true), 3)
+	assert_eq(panel._stat_score(&"max_health", 18.0, true), 3)
+	assert_eq(panel._stat_score(&"max_health", 19.0, true), 4)
+	assert_eq(panel._stat_score(&"max_health", 20.0, false), 0)
+
+func test_ranges_cover_fifteen_resolved_pairs_and_keep_baseline() -> void:
+	var expected: Dictionary = {}
+	for stat_id in panel.STAT_IDS:
+		expected[stat_id] = {"min": INF, "max": -INF}
+	for ship in panel._ships:
+		for character in panel._roster:
+			var stats := StatBlock.new(StatCatalog.get_all())
+			Loadout.apply(stats, ship, character)
+			for stat_id in panel.STAT_IDS:
+				expected[stat_id]["min"] = minf(expected[stat_id]["min"], stats.get_stat(stat_id))
+				expected[stat_id]["max"] = maxf(expected[stat_id]["max"], stats.get_stat(stat_id))
+	for stat_id in panel.STAT_IDS:
+		assert_eq(panel._ranges[stat_id], expected[stat_id])
+		assert_ne(panel._ranges[stat_id]["min"], INF)
+		assert_ne(panel._ranges[stat_id]["max"], -INF)
+		assert_lte(panel._ranges[stat_id]["min"], StatCatalog.get_stat(stat_id).default_base)
+		assert_gte(panel._ranges[stat_id]["max"], StatCatalog.get_stat(stat_id).default_base)
+
+	var isolated_ship := ShipDef.new()
+	isolated_ship.id = &"fixture_range_baseline_ship"
+	var authored_max_health := BaseStatValue.new()
+	authored_max_health.stat = &"max_health"
+	authored_max_health.value = StatCatalog.get_stat(&"max_health").default_base + 100.0
+	isolated_ship.base_stats = [authored_max_health]
+	var isolated_character := CharacterDef.new()
+	isolated_character.id = &"fixture_range_baseline_character"
+	var isolated_ships: Array[ShipDef] = [isolated_ship]
+	var isolated_roster: Array[CharacterDef] = [isolated_character]
+	panel._ships = isolated_ships
+	panel._roster = isolated_roster
+	panel._rebuild_ranges()
+	var max_health_range: Dictionary = panel._ranges[&"max_health"]
+	var default_max_health := StatCatalog.get_stat(&"max_health").default_base
+	assert_eq(max_health_range["min"], default_max_health)
+	assert_eq(max_health_range["max"], authored_max_health.value)
 
 func test_character_carousel_wraps_both_directions_and_only_changes_on_step() -> void:
 	watch_signals(panel)
@@ -373,12 +549,57 @@ func _send_mouse_button(button: MouseButton, pressed: bool, position: Vector2) -
 func _filled_segments_by_stat() -> Array[int]:
 	var filled: Array[int] = []
 	for row in panel.get_node("StatsPanel/Stats").get_children():
+		assert_true(row is VBoxContainer)
+		assert_true(row.get_child(0) is Label)
+		assert_true(row.get_child(1) is HBoxContainer)
 		var count := 0
 		for segment in row.get_child(1).get_children():
 			if segment.color == Color("69f6d9"):
 				count += 1
 		filled.append(count)
 	return filled
+
+func _score_for_stat(stat_id: StringName) -> int:
+	var index := panel.STAT_IDS.find(stat_id)
+	assert_gte(index, 0)
+	return _filled_segments_by_stat()[index]
+
+func _expected_presence(ship: ShipDef, character: CharacterDef, stat_id: StringName) -> bool:
+	var stats := StatBlock.new(StatCatalog.get_all())
+	Loadout.apply(stats, ship, character)
+	var active_modifiers := stats.get_active_modifiers()
+	for base_stat in ship.base_stats:
+		if base_stat != null and base_stat.stat == stat_id:
+			return true
+	for modifier in active_modifiers:
+		if modifier != null and modifier.stat == stat_id:
+			return true
+	return false
+
+func _expected_stat_ranges() -> Dictionary:
+	var ranges: Dictionary = {}
+	for stat_id in panel.STAT_IDS:
+		var baseline := StatCatalog.get_stat(stat_id).default_base
+		ranges[stat_id] = {"min": baseline, "max": baseline}
+	for ship in panel._ships:
+		for character in panel._roster:
+			var stats := StatBlock.new(StatCatalog.get_all())
+			Loadout.apply(stats, ship, character)
+			for stat_id in panel.STAT_IDS:
+				var value := stats.get_stat(stat_id)
+				ranges[stat_id]["min"] = minf(ranges[stat_id]["min"], value)
+				ranges[stat_id]["max"] = maxf(ranges[stat_id]["max"], value)
+	return ranges
+
+func _expected_score(value: float, present: bool, range: Dictionary) -> int:
+	if not present:
+		return 0
+	var minimum := float(range["min"])
+	var maximum := float(range["max"])
+	if is_equal_approx(maximum, minimum):
+		return 1
+	var normalized := clampf((value - minimum) / (maximum - minimum), 0.0, 1.0)
+	return clampi(1 + roundi(3.0 * normalized), 1, 4)
 
 func _send_key(keycode: Key, pressed: bool) -> void:
 	var event := InputEventKey.new()

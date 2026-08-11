@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ShipDef" load_steps=7 format=3 uid="uid://g1v5z7r3t6n8h"]
+[gd_resource type="Resource" script_class="ShipDef" load_steps=8 format=3 uid="uid://g1v5z7r3t6n8h"]
 
 [ext_resource type="Script" uid="uid://dxj8iu0hungha" path="res://scripts/items/ship_def.gd" id="1_ship_def"]
 [ext_resource type="Texture2D" path="res://assets/sprites/rastreadora_v2.png" id="2_texture"]
@@ -13,6 +13,11 @@ value = 2.0
 script = ExtResource("3_base_stat")
 stat = &"aim_tier"
 value = 3.0
+
+[sub_resource type="Resource" id="BaseStatValue_fire_rate"]
+script = ExtResource("3_base_stat")
+stat = &"fire_rate"
+value = 0.8
 
 [sub_resource type="Resource" id="BaseStatValue_projectile_speed"]
 script = ExtResource("3_base_stat")
@@ -34,5 +39,5 @@ atlas_grid_size = Vector2i(2, 2)
 visual_rotation_offset = -1.570796
 visual_scale = 0.05
 muzzle_offset = Vector2(0, -3.675)
-base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_aim"), SubResource("BaseStatValue_projectile_speed"), SubResource("BaseStatValue_projectile_lifetime")])
+base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_aim"), SubResource("BaseStatValue_fire_rate"), SubResource("BaseStatValue_projectile_speed"), SubResource("BaseStatValue_projectile_lifetime")])
 ability_q = &"sobrecarga"
