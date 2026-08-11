@@ -35,6 +35,7 @@ ability_shift = &"bruta_investida"
 can_blink = false
 movement_style = "omni"
 frame_size = Vector2i(32, 32)
+atlas_grid_size = Vector2i(1, 1)
 hurtbox_radius = 10.0
 collision_shape_type = "circle"
 has_muzzle = false
