@@ -19,7 +19,9 @@ signal resolved(enemy: Enemy, reason: int)
 const BURST_FX := preload("res://scenes/effects/burst_fx.tscn")
 
 @onready var health: HealthComponent = $HealthComponent
-@onready var sprite: Sprite2D = $Sprite2D
+## Chefes modulares podem expor o reator como visual principal em vez de um
+## Sprite2D de folha unica; inimigos legados continuam usando $Sprite2D.
+@onready var sprite: Sprite2D = get_node_or_null("Sprite2D") as Sprite2D
 
 var _player: Node2D = null
 var _effects: Node = null
@@ -29,13 +31,18 @@ var _room_cull_policy: int = RoomDef.CullPolicy.DESPAWN_BOTTOM
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 var _entry_inward := Vector2.DOWN
 var _has_entered_room := false
+## Estado público de duração restante para UI, efeitos e testes de comportamento.
+var stun_remaining := 0.0
 
 func _ready() -> void:
 	add_to_group("enemies")
+	if sprite == null:
+		sprite = get_node_or_null("CoreReactor") as Sprite2D
 	health.max_health = max_health
 	health.reset()
 	health.died.connect(_on_died)
-	sprite.modulate = tint
+	if sprite != null:
+		sprite.modulate = tint
 	_player = get_tree().get_first_node_in_group("player")
 	_effects = get_tree().get_first_node_in_group("effects")
 
@@ -43,6 +50,9 @@ func _physics_process(delta: float) -> void:
 	if _should_cull():
 		_resolve(ResolveReason.CULLED)
 		queue_free()
+		return
+	delta = _consume_stun_delta(delta)
+	if delta <= 0.0:
 		return
 	_phase += delta
 	match movement:
@@ -84,11 +94,37 @@ func _should_cull() -> bool:
 		return global_position.y > _room_bounds.end.y + 40.0
 	return _has_entered_room and not _room_bounds.grow(40.0).has_point(global_position)
 
-## Recebe dano dos projéteis do jogador.
-func take_damage(info: DamageInfo) -> void:
-	if info.trigger_depth > 3:
+## Atordoamento genérico: reaplicações apenas estendem a duração, nunca acumulam dano.
+func apply_stun(duration: float) -> void:
+	if not is_finite(duration) or duration <= 0.0 or _resolved:
 		return
-	health.apply_damage(info)
+	stun_remaining = maxf(stun_remaining, duration)
+
+func is_stunned() -> bool:
+	return stun_remaining > 0.0
+
+## Chamado pelas IAs derivadas antes de decidirem movimento ou ataques.
+func _update_stun(delta: float) -> bool:
+	if stun_remaining <= 0.0:
+		return false
+	return _consume_stun_delta(delta) <= 0.0
+
+## Consome somente a parcela do frame coberta pelo stun e devolve o tempo que
+## a IA ainda pode simular neste mesmo frame.
+func _consume_stun_delta(delta: float) -> float:
+	var frame_delta := maxf(delta, 0.0)
+	if stun_remaining <= 0.0:
+		return frame_delta
+	var stunned_delta := minf(frame_delta, stun_remaining)
+	stun_remaining = maxf(0.0, stun_remaining - stunned_delta)
+	velocity = Vector2.ZERO
+	return frame_delta - stunned_delta
+
+## Recebe dano dos projéteis do jogador.
+func take_damage(info: DamageInfo) -> float:
+	if info == null or info.trigger_depth > 3:
+		return 0.0
+	return health.apply_damage(info)
 
 func _on_died(fatal_info: DamageInfo) -> void:
 	_resolve_death(fatal_info)

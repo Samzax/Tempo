@@ -51,6 +51,9 @@ func _physics_process(delta: float) -> void:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 		return
+	delta = _consume_stun_delta(delta)
+	if delta <= 0.0:
+		return
 	var dash_finished := false
 	var state_elapsed_before := _state_elapsed
 	_state_elapsed += delta
@@ -150,10 +153,10 @@ func _on_died(fatal_info: DamageInfo) -> void:
 	_death_elapsed = 0.0
 	sprite.frame = DEATH_FIRST_FRAME
 
-func take_damage(info: DamageInfo) -> void:
+func take_damage(info: DamageInfo) -> float:
 	if _dead:
-		return
-	super(info)
+		return 0.0
+	return super(info)
 
 func _cancel_attack_cycle() -> void:
 	velocity = Vector2.ZERO

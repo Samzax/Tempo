@@ -6,6 +6,8 @@ extends ProviderDef
 @export var hull_texture: Texture2D
 @export var base_stats: Array[BaseStatValue] = []
 @export var ability_q: StringName
+## Habilidade exclusiva do Shift. Vazia preserva blink ou o fallback legado.
+@export var ability_shift: StringName
 ## Desliga o blink sem acoplar o controle a uma identidade de nave especifica.
 @export var can_blink: bool = true
 ## Defaults preserve the original aim-driven 16x24 ship presentation.
@@ -109,4 +111,6 @@ func validate_content() -> Array[String]:
 			seen_stats[base_stat.stat] = true
 	if not ability_q.is_empty() and not AbilityCatalog.is_valid(ability_q):
 		errors.append("Habilidade da nave desconhecida: %s." % ability_q)
+	if not ability_shift.is_empty() and not AbilityCatalog.is_valid(ability_shift):
+		errors.append("Habilidade de Shift da nave desconhecida: %s." % ability_shift)
 	return errors

@@ -16,6 +16,46 @@ func _damage(amount: float) -> DamageInfo:
 	info.amount = amount
 	return info
 
+func test_enemy_stun_timer_reapplies_by_maximum_blocks_motion_and_expires() -> void:
+	var enemy := ENEMY_SCENE.instantiate()
+	add_child_autofree(enemy)
+	await get_tree().process_frame
+	enemy.velocity = Vector2.RIGHT * 100.0
+	enemy.apply_stun(0.5)
+	enemy.apply_stun(0.2)
+	assert_true(enemy.is_stunned())
+	assert_almost_eq(enemy.stun_remaining, 0.5, 0.001)
+	enemy._physics_process(0.1)
+	assert_eq(enemy.velocity, Vector2.ZERO)
+	assert_almost_eq(enemy.stun_remaining, 0.4, 0.001)
+	enemy.apply_stun(0.8)
+	assert_almost_eq(enemy.stun_remaining, 0.8, 0.001)
+	enemy._physics_process(0.81)
+	assert_false(enemy.is_stunned())
+	assert_eq(enemy.stun_remaining, 0.0)
+	enemy.velocity = Vector2.RIGHT * 100.0
+	enemy._physics_process(0.01)
+	assert_ne(enemy.velocity, Vector2.ZERO)
+
+func test_enemy_stun_passes_residual_delta_to_ai_in_same_frame() -> void:
+	var enemy := ENEMY_SCENE.instantiate() as Enemy
+	add_child_autofree(enemy)
+	await get_tree().process_frame
+	enemy.set_room_cull_policy(RoomDef.CullPolicy.NONE)
+	enemy.set_entry_inward(Vector2.RIGHT)
+	enemy.movement = Enemy.Movement.DESCEND
+	enemy.speed = 100.0
+	enemy.global_position = Vector2.ZERO
+	enemy.apply_stun(0.10)
+
+	enemy._physics_process(0.16)
+
+	# 0,10 s fica bloqueado e os 0,06 s restantes ainda movem a IA.
+	assert_almost_eq(enemy.stun_remaining, 0.0, 0.000001)
+	assert_almost_eq(enemy.global_position.x, 6.0, 0.001)
+	assert_almost_eq(enemy.global_position.y, 0.0, 0.001)
+	assert_false(enemy.is_stunned())
+
 func _cell_image(image: Image, frame: int) -> Image:
 	var cell := Rect2i((frame % 6) * 32, (frame / 6) * 32, 32, 32)
 	return image.get_region(cell)
@@ -182,6 +222,27 @@ func test_health_component_damage_causes_real_death_and_cancels_attack() -> void
 	assert_eq(hunter.velocity, Vector2.ZERO)
 	hunter._physics_process(10.0)
 	assert_eq(hunter.velocity, Vector2.ZERO)
+
+func test_hunter_take_damage_returns_damage_consumed_by_health_component() -> void:
+	var hunter := await _hunter()
+	assert_almost_eq(hunter.take_damage(_damage(2.5)), 2.5, 0.001)
+	assert_almost_eq(hunter.health.health, hunter.health.max_health - 2.5, 0.001)
+	var overkill := hunter.take_damage(_damage(999.0))
+	assert_almost_eq(overkill, hunter.health.max_health - 2.5, 0.001)
+	assert_almost_eq(hunter.health.health, 0.0, 0.001)
+	assert_eq(hunter.take_damage(_damage(1.0)), 0.0)
+
+func test_hunter_take_damage_rejects_null_and_excessive_trigger_depth() -> void:
+	var hunter := await _hunter()
+	var before := hunter.health.health
+
+	assert_eq(hunter.take_damage(null), 0.0)
+	assert_eq(hunter.health.health, before)
+
+	var chained := _damage(2.0)
+	chained.trigger_depth = 4
+	assert_eq(hunter.take_damage(chained), 0.0)
+	assert_eq(hunter.health.health, before)
 
 func test_hunter_death_grants_one_echo_directly_without_pickup() -> void:
 	var hunter := await _hunter()

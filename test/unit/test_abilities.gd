@@ -6,6 +6,12 @@ func test_catalog_resolves_overdrive() -> void:
 	assert_true(AbilityCatalog.is_valid(&"escudo"))
 	assert_false(AbilityCatalog.is_valid(&"nao_existe"))
 
+func test_catalog_resolves_bruta_charge() -> void:
+	var ability := AbilityCatalog.get_ability(&"bruta_investida")
+	assert_true(ability is BrutaChargeAbility)
+	assert_eq(ability.id, &"bruta_investida")
+	assert_true(AbilityCatalog.is_valid(&"bruta_investida"))
+
 func test_catalog_resolves_interceptor_blink() -> void:
 	var ability := AbilityCatalog.get_ability(&"interceptadora_blink")
 	assert_true(ability is InterceptorBlinkAbility)

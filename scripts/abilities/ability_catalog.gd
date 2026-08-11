@@ -3,6 +3,7 @@ extends RefCounted
 ## Reune as habilidades ativas disponiveis para loadouts.
 
 static var _abilities: Dictionary = {}
+const BRUTA_CHARGE_ABILITY := preload("res://scripts/abilities/bruta_charge_ability.gd")
 
 ## Inicializa o catalogo apenas na primeira consulta.
 static func _ensure() -> void:
@@ -11,10 +12,12 @@ static func _ensure() -> void:
 		var shield := ShieldAbility.new()
 		var engineer_deploy := EngineerDeployAbility.new()
 		var interceptor_blink := InterceptorBlinkAbility.new()
+		var bruta_charge := BRUTA_CHARGE_ABILITY.new() as AbilityDef
 		_abilities[overdrive.id] = overdrive
 		_abilities[shield.id] = shield
 		_abilities[engineer_deploy.id] = engineer_deploy
 		_abilities[interceptor_blink.id] = interceptor_blink
+		_abilities[bruta_charge.id] = bruta_charge
 		var guardian_shield := GuardianShieldAbility.new()
 		var hacker_overdrive := HackerOverdriveAbility.new()
 		var time_warp := TimeWarpAbility.new()

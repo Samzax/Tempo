@@ -33,6 +33,9 @@ func _physics_process(delta: float) -> void:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 		return
+	delta = _consume_stun_delta(delta)
+	if delta <= 0.0:
+		return
 	_elapsed += delta
 	match attack_state:
 		AttackState.DRIFT:

@@ -36,6 +36,18 @@ func test_hud_with_bruta_shows_exactly_five_pips() -> void:
 	assert_eq(_pip_count(hud), 5)
 	assert_eq(hud._pips.size(), 5)
 
+func test_hud_uses_charge_indicator_for_bruta_and_blink_for_common_ship() -> void:
+	var hud := await _hud()
+	var bruta_player := await _player(BRUTA)
+	hud._bind_player(bruta_player)
+	hud._process(0.0)
+	assert_true(hud._blink_icon.use_charge_indicator)
+
+	var common_player := await _player(RASTREADORA)
+	hud._bind_player(common_player)
+	hud._process(0.0)
+	assert_false(hud._blink_icon.use_charge_indicator)
+
 
 func test_hud_with_rastreadora_shows_exactly_two_pips() -> void:
 	var hud := await _hud()

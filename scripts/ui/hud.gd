@@ -1,11 +1,12 @@
 extends Control
 
-class BlinkCooldownIcon:
+class ShiftCooldownIcon:
 	extends Control
 
 	const CORE_TEXTURE := preload("res://assets/ui/blink_core.png")
 	const ICON_SIZE := 32
 	var cooldown_ratio: float = 0.0
+	var use_charge_indicator := false
 	var _pulse_step: int = -1
 
 	func _ready() -> void:
@@ -31,6 +32,12 @@ class BlinkCooldownIcon:
 			if was_ready or ratio_changed:
 				queue_redraw()
 
+	func set_charge_indicator(value: bool) -> void:
+		if use_charge_indicator == value:
+			return
+		use_charge_indicator = value
+		queue_redraw()
+
 	func _process(_delta: float) -> void:
 		if cooldown_ratio <= 0.0:
 			_update_pulse_step()
@@ -42,6 +49,9 @@ class BlinkCooldownIcon:
 			queue_redraw()
 
 	func _draw() -> void:
+		if use_charge_indicator:
+			_draw_charge_indicator()
+			return
 		var full_rect := Rect2(Vector2.ZERO, Vector2.ONE * ICON_SIZE)
 		if cooldown_ratio <= 0.0:
 			# Alterna apenas a cor: o pulso mantém pixels inteiros e sem blur.
@@ -56,12 +66,24 @@ class BlinkCooldownIcon:
 		if covered_height < ICON_SIZE:
 			var revealed_rect := Rect2(0, covered_height, ICON_SIZE, ICON_SIZE - covered_height)
 			draw_texture_rect_region(CORE_TEXTURE, revealed_rect, revealed_rect, Color.WHITE)
+
+	## Três células de energia: um sinal neutro de carga, sem sugerir teleporte.
+	func _draw_charge_indicator() -> void:
+		var ready_ratio := 1.0 - cooldown_ratio
+		var ready_tint := Color(1.0, 0.78, 0.35) if _pulse_step < 2 else Color(1.0, 0.9, 0.52)
+		var frame_tint := Color(0.46, 0.29, 0.12, 0.95)
+		for index in 3:
+			var cell := Rect2(5.0, 5.0 + index * 8.0, 22.0, 5.0)
+			draw_rect(cell, frame_tint, false, 1.0)
+			var fill_width := clampf(ready_ratio * 22.0 - index * 3.0, 0.0, 22.0)
+			if fill_width > 0.0:
+				draw_rect(Rect2(cell.position, Vector2(fill_width, cell.size.y)), ready_tint)
 ## HUD: pontuação, vidas, vida (pips) e estado do blink, com tela de fim de jogo.
 ## Lê os valores por polling a cada quadro — simples e suficiente para esta UI.
 
 var _score: Label
 var _lives: Label
-var _blink_icon: BlinkCooldownIcon
+var _blink_icon: ShiftCooldownIcon
 var _game_over: Label
 var _pips_row: HBoxContainer
 var _pips: Array[ColorRect] = []
@@ -92,7 +114,7 @@ func _build() -> void:
 	_pips_row.add_theme_constant_override("separation", 2)
 	box.add_child(_pips_row)
 
-	_blink_icon = BlinkCooldownIcon.new()
+	_blink_icon = ShiftCooldownIcon.new()
 	_blink_icon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_blink_icon.offset_left = -44
 	_blink_icon.offset_top = -44
@@ -125,11 +147,14 @@ func _process(_dt: float) -> void:
 		_score.text = "PONTOS  %d" % _gs.score
 		_lives.text = "VIDAS  %d" % _gs.player_lives
 	var blink_ratio := 0.0
+	var use_charge_indicator := false
 	if _player != null and is_instance_valid(_player) and _player.health != null and is_instance_valid(_player.health):
 		var hp: int = floori(_player.health.health)
 		for i in _pips.size():
 			_pips[i].color = Color(1.0, 0.3, 0.35) if i < hp else Color(0.25, 0.25, 0.3)
-		blink_ratio = clampf(_player.blink_cooldown_ratio(), 0.0, 1.0)
+		blink_ratio = clampf(_player.shift_cooldown_ratio(), 0.0, 1.0)
+		use_charge_indicator = _player.has_method(&"uses_bruta_charge_shift") and bool(_player.call(&"uses_bruta_charge_shift"))
+	_blink_icon.set_charge_indicator(use_charge_indicator)
 	_blink_icon.set_cooldown_ratio(blink_ratio)
 	if not _over and _gs != null and _gs.player_lives <= 0:
 		_trigger_over()
