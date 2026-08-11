@@ -23,7 +23,12 @@ func test_updated_enemy_visuals_and_telegraph_contract() -> void:
 	if aim == null:
 		return
 	assert_eq(aim.texture.resource_path, "res://assets/enemies/atirador_de_fresta/atirador_de_fresta_aim.png")
+	assert_eq(aim.texture.get_width(), 2304)
+	assert_eq(aim.texture.get_height(), 64)
 	assert_eq(aim.hframes, 6)
+	assert_false(aim.centered)
+	assert_eq(aim.offset, Vector2(-8.0, -32.0))
+	assert_eq(aim.scale, Vector2(0.9, 0.9))
 	assert_eq(aim.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST)
 	assert_eq(enemy.telegraph.width, 1.5)
 
@@ -48,7 +53,10 @@ func test_projectile_scene_loads_with_updated_visual_and_circular_collider() -> 
 	if circle == null:
 		return
 	assert_eq(sprite.texture.resource_path, "res://assets/projectiles/atirador_de_fresta_lancet.png")
+	assert_eq(sprite.texture.get_width(), 256)
+	assert_eq(sprite.texture.get_height(), 32)
 	assert_eq(sprite.hframes, 4)
+	assert_eq(sprite.scale, Vector2(0.5, 0.5))
 	assert_eq(sprite.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST)
 	assert_eq(circle.radius, 4.0)
 
