@@ -26,6 +26,8 @@ func test_fire_uses_aim_vector_for_all_aim_tiers_even_with_enemy_in_legacy_cone(
 	for aim_tier in [1, 2, 3]:
 		_player._stats.set_base(&"aim_tier", float(aim_tier))
 		_player._aim_vector = Vector2.RIGHT
+		_player._last_aim_source = Player.AimSource.JOYPAD
+		_player._joypad_aim_was_active = true
 		_player._fire()
 
 		assert_gt(_projectiles.get_child_count(), 0)

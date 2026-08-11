@@ -47,6 +47,8 @@ const OMNI_STOP_SPIN_DURATION := 0.35
 const OMNI_STOP_SPIN_ANTICIPATION := 0.15
 const OMNI_STOP_SPIN_SETTLE := 0.12
 const OMNI_STOP_SPIN_ANTICIPATION_ANGLE := PI / 18.0
+## Resposta exponencial: a sensacao de giro nao varia com a taxa de quadros.
+const VISUAL_AIM_TURN_SPEED := 16.0
 
 var _fire_cooldown: float = 0.0
 var _blink_cd: float = 0.0
@@ -66,6 +68,8 @@ var is_sandbox_invulnerable: bool = false
 var _aim_vector: Vector2 = Vector2.UP
 var _last_aim_source: AimSource = AimSource.NONE
 var _joypad_aim_was_active: bool = false
+# Angulo global independente do corpo: impede que a rotacao fisica anule o smoothing.
+var _visual_aim_global_angle := 0.0
 var _spawn_point: Vector2 = Vector2.ZERO
 var _projectiles: Node = null
 var _effects: Node = null
@@ -208,6 +212,7 @@ func _reset_ship_visual_state() -> void:
 		_base_muzzle_position = muzzle.position
 		_has_base_muzzle_position = true
 	muzzle.position = _base_muzzle_position + (ship.muzzle_offset if ship != null else Vector2.ZERO)
+	_reset_visual_aim()
 	visual_root.rotation = 0.0
 	sprite.scale = Vector2.ONE
 	sprite.rotation = ship.visual_rotation_offset if ship != null else 0.0
@@ -425,6 +430,7 @@ func _physics_process(delta: float) -> void:
 		rotation = _aim_vector.angle() + PI / 2.0
 	_check_contact()
 	_update_omni_stop_spin(delta, movement_direction if omni else Vector2.ZERO)
+	_update_visual_aim(delta)
 	_update_bank(movement_direction if omni else Vector2.ZERO)
 	_update_thruster(movement_direction if omni else Vector2.DOWN, is_thrusting)
 	_update_engine_trail(is_thrusting and not blink_consumed)
@@ -504,6 +510,24 @@ func _reset_omni_stop_spin() -> void:
 	if is_instance_valid(visual_root):
 		visual_root.rotation = 0.0
 
+## O VisualRoot acompanha a mira sem afetar o corpo, o muzzle ou as colisoes.
+## Naves omni continuam reservando essa rotacao para bank e para a pirueta da Bruta.
+func _update_visual_aim(delta: float) -> void:
+	if _is_omni_ship():
+		return
+	var target_rotation := _aim_vector.angle() + PI / 2.0
+	var weight := 1.0 - exp(-VISUAL_AIM_TURN_SPEED * delta)
+	_visual_aim_global_angle = lerp_angle(_visual_aim_global_angle, target_rotation, weight)
+	# VisualRoot e filho do corpo; converte o angulo global suavizado para o espaco local.
+	visual_root.rotation = angle_difference(global_rotation, _visual_aim_global_angle)
+
+## Configuracao e respawn descartam qualquer interpolacao deixada pelo casco anterior.
+func _reset_visual_aim() -> void:
+	if not is_instance_valid(visual_root):
+		return
+	visual_root.rotation = 0.0
+	_visual_aim_global_angle = global_rotation
+
 ## Detecta o mouse antes da interface para preservar a troca de fonte da mira.
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -513,11 +537,10 @@ func _input(event: InputEvent) -> void:
 func _update_aim() -> void:
 	var joypad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
 	var joypad_active := joypad_aim.length() > 0.2
-	if joypad_active and not _joypad_aim_was_active:
+	if joypad_active:
 		_last_aim_source = AimSource.JOYPAD
-	if _last_aim_source == AimSource.JOYPAD and joypad_active:
 		_aim_vector = joypad_aim.normalized()
-	elif _last_aim_source != AimSource.JOYPAD or not joypad_active:
+	else:
 		_last_aim_source = AimSource.MOUSE
 		_refresh_mouse_aim()
 	_joypad_aim_was_active = joypad_active
@@ -859,6 +882,7 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 		return  # sem renascer: o HUD assume o fim de jogo
 	global_position = _spawn_point
 	velocity = Vector2.ZERO
+	_reset_visual_aim()
 	_reset_omni_stop_spin()
 	health.reset()
 	_blink_cd = 0.0
@@ -886,7 +910,6 @@ func _update_bank(omni_direction: Vector2 = Vector2.ZERO) -> void:
 		var target := clampf(omni_direction.x * deg_to_rad(3.0), -deg_to_rad(3.0), deg_to_rad(3.0))
 		visual_root.rotation = lerpf(visual_root.rotation, target, 0.2)
 		return
-	visual_root.rotation = 0.0
 	if sprite.animation != &"neutral":
 		sprite.play(&"neutral")
 
@@ -1040,13 +1063,24 @@ func _handle_fire(delta: float) -> void:
 func _fire() -> void:
 	if _projectiles == null or (ship != null and not ship.has_muzzle):
 		return
-	var fire_dir := _aim_vector
+	var fire_dir := _fire_direction_from_muzzle()
+	if fire_dir == Vector2.ZERO:
+		return
 	var b := Pools.acquire(BULLET)
 	if b.get_parent() == null:
 		_projectiles.add_child(b)
 	b.set_room_bounds(_room_bounds)
 	b.activate(muzzle.global_position, fire_dir, self, _stats.get_stat(&"damage"))
 	_dispatcher.dispatch(&"on_fire", null, 0)
+
+## Sem stick ativo, o mouse e avaliado no disparo a partir do muzzle.
+func _fire_direction_from_muzzle() -> Vector2:
+	if not _joypad_aim_was_active:
+		var mouse_direction := get_global_mouse_position() - muzzle.global_position
+		if mouse_direction.length_squared() > 0.000001:
+			return mouse_direction.normalized()
+	var fallback := _aim_vector.normalized()
+	return fallback if fallback.length_squared() > 0.000001 else Vector2.ZERO
 
 func _gather_effects() -> Array[EffectDef]:
 	var effects: Array[EffectDef] = []
