@@ -4,14 +4,17 @@ extends Enemy
 enum AttackState { APPROACH, TELEGRAPH, DASH, RECOVER }
 @export var attack_state: AttackState = AttackState.APPROACH
 @export var telegraph_duration := 0.45
-@export var dash_duration := 0.32
+@export var dash_duration := 0.55
 @export var recover_duration := 0.5
 @export var engagement_distance := 210.0
 @export var dash_speed := 310.0
 
 var dash_direction := Vector2.DOWN
 var _elapsed := 0.0
-var _pulse: Tween
+
+const DETONATE_FX := preload("res://scenes/effects/kamikaze_detonate_fx.tscn")
+
+@onready var animation_sprite: AnimatedSprite2D = $AnimatedSprite2D
 
 func _ready() -> void:
 	super()
@@ -46,19 +49,32 @@ func _physics_process(delta: float) -> void:
 func _enter_state(next: AttackState) -> void:
 	attack_state = next
 	_elapsed = 0.0
-	if is_instance_valid(_pulse): _pulse.kill()
-	sprite.scale = Vector2.ONE
-	sprite.modulate = tint
-	if next == AttackState.TELEGRAPH:
-		sprite.modulate = Color(1.0, 0.35, 0.35)
-		_pulse = create_tween().set_loops()
-		_pulse.tween_property(sprite, "scale", Vector2.ONE * 1.22, 0.1)
-		_pulse.tween_property(sprite, "scale", Vector2.ONE, 0.1)
+	match next:
+		AttackState.APPROACH, AttackState.RECOVER:
+			animation_sprite.rotation = 0.0
+			animation_sprite.play(&"approach")
+		AttackState.TELEGRAPH:
+			animation_sprite.rotation = 0.0
+			animation_sprite.play(&"warning")
+		AttackState.DASH:
+			animation_sprite.rotation = dash_direction.angle() + PI
+			animation_sprite.play(&"dash")
 
 func _on_died(fatal_info: DamageInfo) -> void:
-	if is_instance_valid(_pulse): _pulse.kill()
+	_spawn_detonation_fx()
 	_spawn_fragment_feedback()
 	super(fatal_info)
+
+func _spawn_detonation_fx() -> void:
+	var host: Node = _effects.get_parent() if is_instance_valid(_effects) else get_parent()
+	if host == null:
+		return
+	var detonate_fx := DETONATE_FX.instantiate() as AnimatedSprite2D
+	if detonate_fx == null:
+		return
+	host.add_child(detonate_fx)
+	detonate_fx.global_position = global_position
+	detonate_fx.play(&"detonate")
 
 ## Reaproveita a rajada existente para sugerir estilhacos sem criar corpos
 ## persistentes, assets novos ou alterar o telegraph/investida.

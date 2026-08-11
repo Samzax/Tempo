@@ -1,0 +1,41 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/effects/kamikaze_detonate_fx.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/kamikaze_mina/detonate_fx_strip.png" id="2_texture"]
+
+[sub_resource type="AtlasTexture" id="Atlas_0"]
+atlas = ExtResource("2_texture")
+region = Rect2(0, 0, 128, 128)
+[sub_resource type="AtlasTexture" id="Atlas_1"]
+atlas = ExtResource("2_texture")
+region = Rect2(128, 0, 128, 128)
+[sub_resource type="AtlasTexture" id="Atlas_2"]
+atlas = ExtResource("2_texture")
+region = Rect2(256, 0, 128, 128)
+[sub_resource type="AtlasTexture" id="Atlas_3"]
+atlas = ExtResource("2_texture")
+region = Rect2(384, 0, 128, 128)
+[sub_resource type="AtlasTexture" id="Atlas_4"]
+atlas = ExtResource("2_texture")
+region = Rect2(512, 0, 128, 128)
+[sub_resource type="AtlasTexture" id="Atlas_5"]
+atlas = ExtResource("2_texture")
+region = Rect2(640, 0, 128, 128)
+[sub_resource type="AtlasTexture" id="Atlas_6"]
+atlas = ExtResource("2_texture")
+region = Rect2(768, 0, 128, 128)
+[sub_resource type="AtlasTexture" id="Atlas_7"]
+atlas = ExtResource("2_texture")
+region = Rect2(896, 0, 128, 128)
+[sub_resource type="SpriteFrames" id="SpriteFrames_detonate"]
+animations = [{
+"frames": [{"duration": 1.0, "texture": SubResource("Atlas_0")}, {"duration": 1.0, "texture": SubResource("Atlas_1")}, {"duration": 1.0, "texture": SubResource("Atlas_2")}, {"duration": 1.0, "texture": SubResource("Atlas_3")}, {"duration": 1.0, "texture": SubResource("Atlas_4")}, {"duration": 1.0, "texture": SubResource("Atlas_5")}, {"duration": 1.0, "texture": SubResource("Atlas_6")}, {"duration": 1.0, "texture": SubResource("Atlas_7")}],
+"loop": false, "name": &"detonate", "speed": 18.0
+}]
+
+[node name="KamikazeDetonateFx" type="AnimatedSprite2D"]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_detonate")
+animation = &"detonate"
+scale = Vector2(0.5, 0.5)
+script = ExtResource("1_script")
