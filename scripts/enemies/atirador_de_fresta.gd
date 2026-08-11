@@ -1,12 +1,13 @@
 class_name AtiradorDeFresta
 extends Enemy
 
-enum AttackState { DRIFT, TELEGRAPH, FIRE, VULNERABLE }
+enum AttackState { DRIFT, TELEGRAPH, FIRE, VULNERABLE, IDLE }
 const ENEMY_PROJECTILE := preload("res://scenes/projectiles/enemy_projectile.tscn")
 
 @export var attack_state: AttackState = AttackState.DRIFT
 @export var telegraph_duration := 0.7
 @export var vulnerable_duration := 0.7
+@export var idle_duration := 1.0
 
 var locked_direction := Vector2.DOWN
 var _elapsed := 0.0
@@ -50,19 +51,23 @@ func _physics_process(delta: float) -> void:
 			velocity = Vector2.ZERO
 			fire_fx.frame = mini(7, int(_elapsed / 0.18 * 8.0))
 			if _elapsed >= vulnerable_duration:
+				_enter_state(AttackState.IDLE)
+		AttackState.IDLE:
+			velocity = Vector2.ZERO
+			if _elapsed >= idle_duration:
 				_enter_state(AttackState.DRIFT)
 	move_and_slide()
 	if attack_state == AttackState.DRIFT:
 		_mark_room_entry()
 
-func take_damage(info: DamageInfo) -> void:
+func take_damage(info: DamageInfo) -> float:
 	# Mantem o mesmo limite de cadeias de Enemy antes de criar o dano derivado.
 	if info == null or info.trigger_depth > 3:
-		return
+		return 0.0
 	if attack_state == AttackState.VULNERABLE:
-		health.apply_damage(info.create_chain_damage(info.amount * 3.0, [&"vulnerable"]))
-		return
-	super(info)
+		var actual_drop := health.apply_damage(info.create_chain_damage(info.amount * 3.0, [&"vulnerable"]))
+		return actual_drop / 3.0
+	return super(info)
 
 func _process_drift() -> void:
 	velocity = _entry_inward * _entry_speed

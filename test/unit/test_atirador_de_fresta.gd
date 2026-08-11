@@ -41,14 +41,24 @@ func test_vulnerability_multiplies_damage_only_after_fire_and_preserves_original
 	var enemy := await _enemy()
 	var original := _damage(2.0)
 	enemy._enter_state(SCRIPT.AttackState.TELEGRAPH)
-	enemy.take_damage(original)
+	assert_almost_eq(enemy.take_damage(original), 2.0, 0.001)
 	assert_almost_eq(enemy.health.health, 10.0, 0.001)
 	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
 	var vulnerable := _damage(2.0)
-	enemy.take_damage(vulnerable)
+	assert_almost_eq(enemy.take_damage(vulnerable), 2.0, 0.001)
 	assert_almost_eq(enemy.health.health, 4.0, 0.001)
 	assert_almost_eq(original.amount, 2.0, 0.001)
 	assert_almost_eq(vulnerable.amount, 2.0, 0.001)
+
+func test_vulnerability_returns_normalized_consumption_and_emits_actual_drop() -> void:
+	var enemy := await _enemy()
+	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
+	watch_signals(enemy.health)
+
+	var info := _damage(2.0)
+	assert_almost_eq(enemy.take_damage(info), 2.0, 0.001)
+	assert_almost_eq(enemy.health.health, 6.0, 0.001)
+	assert_signal_emit_count(enemy.health, &"damaged", 1)
 
 func test_fire_state_is_the_transition_that_opens_vulnerability() -> void:
 	var enemy := await _enemy()
@@ -68,7 +78,7 @@ func test_vulnerability_keeps_enemy_trigger_depth_protection() -> void:
 	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
 	var chained := _damage(2.0)
 	chained.trigger_depth = 4
-	enemy.take_damage(chained)
+	assert_almost_eq(enemy.take_damage(chained), 0.0, 0.001)
 	assert_almost_eq(enemy.health.health, 12.0, 0.001)
 
 func test_locked_direction_remains_the_projectile_direction() -> void:
@@ -106,7 +116,7 @@ func test_instance_draws_entry_values_once_from_run_rng() -> void:
 
 	enemy._physics_process(0.1)
 	assert_eq(RunManager.rng.get_state(), expected_rng.get_state())
-	for state in [SCRIPT.AttackState.TELEGRAPH, SCRIPT.AttackState.FIRE, SCRIPT.AttackState.VULNERABLE, SCRIPT.AttackState.DRIFT]:
+	for state in [SCRIPT.AttackState.TELEGRAPH, SCRIPT.AttackState.FIRE, SCRIPT.AttackState.VULNERABLE, SCRIPT.AttackState.IDLE, SCRIPT.AttackState.DRIFT]:
 		enemy._enter_state(state)
 		enemy._physics_process(0.1)
 	assert_eq(RunManager.rng.get_state(), expected_rng.get_state())
@@ -287,4 +297,32 @@ func test_vulnerable_duration_is_point_seven() -> void:
 	enemy._physics_process(0.69)
 	assert_eq(enemy.attack_state, SCRIPT.AttackState.VULNERABLE)
 	enemy._physics_process(0.01)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.IDLE)
+
+func test_idle_duration_is_one_second() -> void:
+	var enemy := await _enemy()
+	enemy._enter_state(SCRIPT.AttackState.IDLE)
+	enemy._physics_process(0.99)
+	assert_eq(enemy.attack_state, SCRIPT.AttackState.IDLE)
+
+	enemy._enter_state(SCRIPT.AttackState.IDLE)
+	enemy._physics_process(1.0)
 	assert_eq(enemy.attack_state, SCRIPT.AttackState.DRIFT)
+
+func test_idle_stops_movement_hides_effects_and_takes_normal_damage() -> void:
+	var enemy := await _enemy()
+	enemy._enter_state(SCRIPT.AttackState.IDLE)
+	enemy._physics_process(0.0)
+	assert_eq(enemy.velocity, Vector2.ZERO)
+	assert_false(enemy.telegraph.visible)
+	assert_false(enemy.fire_fx.visible)
+	var damage := _damage(2.0)
+	assert_almost_eq(enemy.take_damage(damage), 2.0, 0.001)
+	assert_almost_eq(enemy.health.health, 10.0, 0.001)
+
+func test_vulnerable_return_matches_effective_loss_after_chained_damage() -> void:
+	var enemy := await _enemy()
+	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
+	var damage := _damage(5.0)
+	assert_almost_eq(enemy.take_damage(damage), 4.0, 0.001)
+	assert_almost_eq(enemy.health.health, 0.0, 0.001)
