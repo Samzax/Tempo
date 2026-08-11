@@ -379,7 +379,7 @@ func _physics_process(delta: float) -> void:
 			movement_direction,
 			is_thrusting,
 			_stats.get_stat(&"acceleration") * 0.70,
-			_stats.get_stat(&"friction") * 1.45,
+			_stats.get_stat(&"friction") * 0.55,
 			_stats.get_stat(&"max_speed"),
 			delta,
 		)
