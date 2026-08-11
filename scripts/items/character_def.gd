@@ -5,6 +5,8 @@ extends ProviderDef
 @export var display_name: String
 @export var description: String
 @export var portrait: Texture2D
+## Arte de destaque usada na selecao. Quando ausente, a UI usa o retrato legado.
+@export var splash_art: Texture2D
 @export var ability_e: StringName
 @export var thrust_color: Color = Color.WHITE
 

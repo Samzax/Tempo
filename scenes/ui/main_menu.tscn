@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_main_menu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/character_selection_panel.tscn" id="2_character_selection"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ship_selection_panel.tscn" id="3_ship_selection"]
+[ext_resource type="PackedScene" path="res://scenes/ui/simultaneous_selection_panel.tscn" id="4_simultaneous_selection"]
 
 [node name="MainMenu" type="CanvasLayer"]
 layer = 10
@@ -74,6 +75,19 @@ offset_left = -105.0
 offset_top = -57.0
 offset_right = 105.0
 offset_bottom = 57.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SimultaneousSelectionPanel" parent="." instance=ExtResource("4_simultaneous_selection")]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = -135.0
+offset_right = 240.0
+offset_bottom = 135.0
 grow_horizontal = 2
 grow_vertical = 2
 

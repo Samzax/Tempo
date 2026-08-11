@@ -23,7 +23,7 @@ func test_catalog_populates_options_with_valid_ids_and_selects_first() -> void:
 
 func test_set_selected_id_accepts_valid_id_and_rejects_invalid_id() -> void:
 	var panel := await _panel()
-	var valid_id := ShipCatalog.all().back().id
+	var valid_id: StringName = ShipCatalog.all().back().id
 
 	assert_true(panel.set_selected_id(valid_id))
 	assert_eq(panel.selected_id(), valid_id)

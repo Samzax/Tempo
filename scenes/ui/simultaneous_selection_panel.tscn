@@ -1,0 +1,402 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/simultaneous_selection_panel.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/selection_ship_energy_fx.gd" id="2_ship_energy_fx"]
+
+[node name="SimultaneousSelectionPanel" type="Control"]
+custom_minimum_size = Vector2(480, 270)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 480.0
+offset_bottom = 270.0
+grow_horizontal = 0
+grow_vertical = 0
+texture_filter = 1
+focus_mode = 2
+script = ExtResource("1_script")
+
+[node name="NavyBackground" type="ColorRect" parent="."]
+layout_mode = 0
+offset_right = 480.0
+offset_bottom = 270.0
+color = Color(0.018, 0.035, 0.09, 0.98)
+mouse_filter = 2
+
+[node name="CharacterRailFrame" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 7.0
+offset_top = 5.0
+offset_right = 153.0
+offset_bottom = 246.5
+color = Color(0.08, 0.26, 0.42, 1)
+mouse_filter = 2
+
+[node name="CharacterRailFill" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 6.0
+offset_right = 152.0
+offset_bottom = 245.5
+color = Color(0.025, 0.075, 0.15, 1)
+mouse_filter = 2
+
+[node name="HeaderFrame" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 194.5
+offset_top = 6.0
+offset_right = 380.0
+offset_bottom = 29.5
+color = Color(0.12, 0.7, 0.82, 0.8)
+mouse_filter = 2
+
+[node name="HeaderFill" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 195.5
+offset_top = 7.0
+offset_right = 379.0
+offset_bottom = 28.5
+color = Color(0.025, 0.09, 0.17, 1)
+mouse_filter = 2
+
+[node name="Header" type="Control" parent="."]
+layout_mode = 0
+offset_left = 195.5
+offset_top = 7.0
+offset_right = 379.0
+offset_bottom = 28.5
+
+[node name="Combination" type="Label" parent="Header"]
+layout_mode = 0
+offset_right = 183.5
+offset_bottom = 21.5
+theme_override_colors/font_color = Color(0.411765, 0.964706, 0.85098, 1)
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AbilityFrame" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 204.5
+offset_top = 33.5
+offset_right = 371.5
+offset_bottom = 52.5
+color = Color(0.08, 0.44, 0.63, 0.9)
+mouse_filter = 2
+
+[node name="AbilityFill" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 205.5
+offset_top = 34.5
+offset_right = 370.5
+offset_bottom = 51.5
+color = Color(0.02, 0.07, 0.14, 1)
+mouse_filter = 2
+
+[node name="AbilitySlots" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 206.5
+offset_top = 35.0
+offset_right = 369.5
+offset_bottom = 51.0
+theme_override_constants/separation = 4
+
+[node name="CharacterAbility" type="Label" parent="AbilitySlots"]
+custom_minimum_size = Vector2(79.5, 16)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.411765, 0.964706, 0.85098, 1)
+theme_override_font_sizes/font_size = 7
+text = "E"
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="ShipAbility" type="Label" parent="AbilitySlots"]
+custom_minimum_size = Vector2(79.5, 16)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.411765, 0.964706, 0.85098, 1)
+theme_override_font_sizes/font_size = 7
+text = "Q"
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="CharacterCarousel" type="Control" parent="."]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 6.0
+offset_right = 152.0
+offset_bottom = 245.5
+
+[node name="PreviousFrame" type="ColorRect" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 11.0
+offset_right = 128.5
+offset_bottom = 55.0
+color = Color(0.12, 0.46, 0.66, 0.74)
+mouse_filter = 2
+
+[node name="SelectedFrame" type="ColorRect" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 9.0
+offset_top = 59.0
+offset_right = 135.0
+offset_bottom = 195.0
+color = Color(0.27, 0.95, 0.88, 1)
+mouse_filter = 2
+
+[node name="NextFrame" type="ColorRect" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 198.0
+offset_right = 128.5
+offset_bottom = 237.0
+color = Color(0.12, 0.46, 0.66, 0.74)
+mouse_filter = 2
+
+[node name="ArtClip" type="Control" parent="CharacterCarousel"]
+layout_mode = 0
+offset_right = 144.0
+offset_bottom = 239.5
+clip_contents = true
+
+[node name="PreviousArt" type="TextureRect" parent="CharacterCarousel/ArtClip"]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 127.5
+offset_bottom = 54.0
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 6
+modulate = Color(0.58, 0.66, 0.78, 0.54)
+
+[node name="CharacterArt" type="TextureRect" parent="CharacterCarousel/ArtClip"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 60.0
+offset_right = 134.0
+offset_bottom = 194.0
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 6
+
+[node name="NextArt" type="TextureRect" parent="CharacterCarousel/ArtClip"]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 199.0
+offset_right = 127.5
+offset_bottom = 236.0
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 6
+modulate = Color(0.58, 0.66, 0.78, 0.54)
+
+[node name="Previous" type="Label" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 17.0
+offset_top = 13.0
+offset_right = 127.0
+offset_bottom = 25.0
+theme_override_colors/font_color = Color(0.67, 0.78, 0.9, 0.9)
+theme_override_font_sizes/font_size = 8
+horizontal_alignment = 1
+
+[node name="CharacterName" type="Label" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 11.0
+offset_top = 177.0
+offset_right = 133.0
+offset_bottom = 192.0
+theme_override_colors/font_color = Color(0.411765, 0.964706, 0.85098, 1)
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+
+[node name="Next" type="Label" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 17.0
+offset_top = 220.0
+offset_right = 127.0
+offset_bottom = 233.0
+theme_override_colors/font_color = Color(0.67, 0.78, 0.9, 0.9)
+theme_override_font_sizes/font_size = 8
+horizontal_alignment = 1
+
+[node name="Up" type="Button" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 2.0
+offset_top = 118.0
+offset_right = 17.0
+offset_bottom = 137.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 9
+text = "^"
+
+[node name="Down" type="Button" parent="CharacterCarousel"]
+layout_mode = 0
+offset_left = 127.0
+offset_top = 118.0
+offset_right = 142.0
+offset_bottom = 137.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 9
+text = "v"
+
+[node name="ShipCarousel" type="Control" parent="."]
+layout_mode = 0
+offset_left = 177.5
+offset_top = 69.0
+offset_right = 385.0
+offset_bottom = 236.5
+
+[node name="PreviewFrame" type="ColorRect" parent="ShipCarousel"]
+layout_mode = 0
+offset_left = 54.0
+offset_right = 187.0
+offset_bottom = 133.0
+color = Color(0.08, 0.45, 0.64, 0.85)
+mouse_filter = 2
+
+[node name="PreviewInner" type="ColorRect" parent="ShipCarousel"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 2.0
+offset_right = 185.0
+offset_bottom = 131.0
+color = Color(0.018, 0.075, 0.15, 1)
+mouse_filter = 2
+
+[node name="PreviewRing" type="Line2D" parent="ShipCarousel"]
+points = PackedVector2Array(120.5, 2, 144.2, 6.7, 164.3, 20.2, 177.8, 40.3, 182.5, 64, 177.8, 87.7, 164.3, 107.8, 144.2, 121.3, 120.5, 126, 96.8, 121.3, 76.7, 107.8, 63.2, 87.7, 58.5, 64, 63.2, 40.3, 76.7, 20.2, 96.8, 6.7)
+width = 1.0
+default_color = Color(0.26, 0.9, 0.87, 0.85)
+closed = true
+antialiased = true
+mouse_filter = 2
+
+[node name="PreviewClip" type="Control" parent="ShipCarousel"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 2.0
+offset_right = 185.0
+offset_bottom = 131.0
+clip_contents = true
+
+[node name="ShipEnergyFx" type="Control" parent="ShipCarousel/PreviewClip"]
+layout_mode = 0
+offset_right = 129.0
+offset_bottom = 129.0
+mouse_filter = 2
+script = ExtResource("2_ship_energy_fx")
+
+[node name="ShipPreview" type="TextureRect" parent="ShipCarousel/PreviewClip"]
+layout_mode = 0
+offset_left = 46.0
+offset_top = 46.0
+offset_right = 82.0
+offset_bottom = 82.0
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 5
+pivot_offset = Vector2(18, 18)
+
+[node name="Left" type="Button" parent="ShipCarousel"]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 58.0
+offset_right = 54.0
+offset_bottom = 76.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 9
+text = "<"
+
+[node name="Right" type="Button" parent="ShipCarousel"]
+layout_mode = 0
+offset_left = 187.0
+offset_top = 58.0
+offset_right = 201.0
+offset_bottom = 76.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 9
+text = ">"
+
+[node name="ShipRing" type="HBoxContainer" parent="ShipCarousel"]
+layout_mode = 0
+offset_left = 0.0
+offset_top = 120.0
+offset_right = 207.5
+offset_bottom = 143.0
+theme_override_constants/separation = 5
+alignment = 1
+
+[node name="ShipName" type="Label" parent="ShipCarousel"]
+layout_mode = 0
+offset_left = 0.0
+offset_top = 146.0
+offset_right = 207.5
+offset_bottom = 160.0
+theme_override_colors/font_color = Color(0.411765, 0.964706, 0.85098, 1)
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+
+[node name="StatsFrame" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 400.5
+offset_top = 56.0
+offset_right = 474.5
+offset_bottom = 197.5
+color = Color(0.1, 0.55, 0.72, 0.9)
+mouse_filter = 2
+
+[node name="StatsPanel" type="PanelContainer" parent="."]
+layout_mode = 0
+offset_left = 401.5
+offset_top = 57.0
+offset_right = 473.5
+offset_bottom = 196.5
+
+[node name="Stats" type="VBoxContainer" parent="StatsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Actions" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 401.5
+offset_top = 201.0
+offset_right = 473.5
+offset_bottom = 230.0
+theme_override_constants/separation = 4
+
+[node name="Back" type="Button" parent="Actions"]
+custom_minimum_size = Vector2(32, 26)
+layout_mode = 2
+focus_mode = 1
+theme_override_font_sizes/font_size = 7
+text = "VOLTAR"
+
+[node name="Confirm" type="Button" parent="Actions"]
+custom_minimum_size = Vector2(36, 26)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 1
+theme_override_font_sizes/font_size = 7
+text = "CONFIRMAR"
+
+[node name="FooterFrame" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 7.0
+offset_top = 251.0
+offset_right = 474.0
+offset_bottom = 266.0
+color = Color(0.08, 0.46, 0.65, 0.9)
+mouse_filter = 2
+
+[node name="Footer" type="Label" parent="."]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 252.0
+offset_right = 473.0
+offset_bottom = 265.0
+theme_override_colors/font_color = Color(0.62, 0.76, 0.86, 1)
+theme_override_font_sizes/font_size = 8
+text = "W/S PERSONAGEM       A/D NAVE       ENTER CONFIRMAR"
+horizontal_alignment = 1
+vertical_alignment = 1
