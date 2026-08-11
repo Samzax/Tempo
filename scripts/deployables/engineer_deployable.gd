@@ -16,6 +16,8 @@ const STATION_CONTACT_DAMAGE := 1.0
 const STATION_CONTACT_INTERVAL := 0.5
 const STATION_FIRE_RATE_BONUS := 0.20
 const STATION_BUFF_REFRESH := 0.2
+## Mantem a resposta visual proporcional ao giro da mira da nave.
+const VISUAL_AIM_TURN_SPEED := 16.0
 
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 
@@ -33,6 +35,7 @@ var _target_position := Vector2.ZERO
 var _station_shield_recipients: Dictionary = {}
 var _station_buff_source := StringName()
 var _drone_fire_cooldown := 0.0
+var _drone_visual_angle := 0.0
 
 func _ready() -> void:
 	influence.body_entered.connect(_on_influence_body_entered)
@@ -62,6 +65,7 @@ func _physics_process(delta: float) -> void:
 			_move_drone(delta)
 			if not _has_active_deploying_player():
 				return
+			_update_drone_visual_aim(delta)
 			_fire_drone(delta)
 			for body in influence.get_overlapping_bodies():
 				_damage_enemy(body as Node2D, DRONE_DAMAGE, DRONE_HIT_INTERVAL)
@@ -84,7 +88,8 @@ func _fire_drone(delta: float) -> void:
 	_drone_fire_cooldown = maxf(0.0, _drone_fire_cooldown - delta)
 	if _drone_fire_cooldown > 0.0 or not _has_active_deploying_player():
 		return
-	var direction := _owner_aim_direction()
+	# A fisica consulta a mira no instante do disparo; nunca usa o angulo visual suavizado.
+	var direction := _owner_fire_direction()
 	if direction == Vector2.ZERO:
 		return
 	var projectiles := get_tree().get_first_node_in_group(&"projectiles")
@@ -108,13 +113,34 @@ func _fire_drone(delta: float) -> void:
 	)
 	_drone_fire_cooldown = DRONE_FIRE_INTERVAL
 
-func _owner_aim_direction() -> Vector2:
-	if not deploying_player.has_method(&"get_aim_direction"):
+## Compartilha a resolucao de mira entre sprite e projetil, preservando stubs legados.
+func _owner_fire_direction() -> Vector2:
+	if not _has_active_deploying_player():
 		return Vector2.ZERO
-	var direction: Variant = deploying_player.call(&"get_aim_direction")
+	var direction: Variant = Vector2.ZERO
+	if deploying_player.has_method(&"get_fire_direction_from"):
+		direction = deploying_player.call(&"get_fire_direction_from", muzzle.global_position)
+	elif deploying_player.has_method(&"get_aim_direction"):
+		direction = deploying_player.call(&"get_aim_direction")
 	if direction is Vector2 and direction.is_finite() and direction.length_squared() > 0.0001:
 		return direction.normalized()
 	return Vector2.ZERO
+
+## Somente o sprite gira: muzzle, colisores e corpo permanecem no espaco fisico.
+func _update_drone_visual_aim(delta: float) -> void:
+	var direction := _owner_fire_direction()
+	if direction == Vector2.ZERO:
+		return
+	var target_visual_angle := direction.angle() + PI / 2.0
+	var target_local_angle := angle_difference(global_rotation, target_visual_angle)
+	var weight := 1.0 - exp(-VISUAL_AIM_TURN_SPEED * delta)
+	_drone_visual_angle = lerp_angle(_drone_visual_angle, target_local_angle, weight)
+	drone_sprite.rotation = _drone_visual_angle
+
+func _reset_drone_visual_aim() -> void:
+	_drone_visual_angle = 0.0
+	if is_instance_valid(drone_sprite):
+		drone_sprite.rotation = _drone_visual_angle
 
 func _owner_projectile_stat(stat_id: StringName, fallback: float) -> float:
 	if deploying_player.has_method(&"get_projectile_stat"):
@@ -138,6 +164,7 @@ func _apply_kind() -> void:
 	# Camada 3 (inimigos) para contato e camada 5 (projeteis inimigos) para dano a distancia.
 	hurtbox.collision_mask = 20
 	drone_sprite.visible = kind == Kind.DRONE
+	_reset_drone_visual_aim()
 	if kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
 		health.max_health = STATION_MAX_HEALTH
 		health.reset()
@@ -237,6 +264,7 @@ func _detonate() -> void:
 	queue_free()
 
 func _on_died(_fatal_info: DamageInfo) -> void:
+	_reset_drone_visual_aim()
 	queue_free()
 
 func _exit_tree() -> void:

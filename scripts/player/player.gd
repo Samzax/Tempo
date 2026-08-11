@@ -1063,7 +1063,7 @@ func _handle_fire(delta: float) -> void:
 func _fire() -> void:
 	if _projectiles == null or (ship != null and not ship.has_muzzle):
 		return
-	var fire_dir := _fire_direction_from_muzzle()
+	var fire_dir := get_fire_direction_from(muzzle.global_position)
 	if fire_dir == Vector2.ZERO:
 		return
 	var b := Pools.acquire(BULLET)
@@ -1074,13 +1074,19 @@ func _fire() -> void:
 	_dispatcher.dispatch(&"on_fire", null, 0)
 
 ## Sem stick ativo, o mouse e avaliado no disparo a partir do muzzle.
-func _fire_direction_from_muzzle() -> Vector2:
+## Expoe a direcao de tiro para origens auxiliares, como o muzzle do Drone.
+func get_fire_direction_from(origin: Vector2) -> Vector2:
 	if not _joypad_aim_was_active:
-		var mouse_direction := get_global_mouse_position() - muzzle.global_position
-		if mouse_direction.length_squared() > 0.000001:
+		var mouse_direction := get_global_mouse_position() - origin
+		if mouse_direction.is_finite() and mouse_direction.length_squared() > 0.000001:
 			return mouse_direction.normalized()
-	var fallback := _aim_vector.normalized()
+	var fallback := _aim_vector if _aim_vector.is_finite() else Vector2.ZERO
+	fallback = fallback.normalized()
 	return fallback if fallback.length_squared() > 0.000001 else Vector2.ZERO
+
+## Mantido para testes e chamadas legadas do muzzle da propria nave.
+func _fire_direction_from_muzzle() -> Vector2:
+	return get_fire_direction_from(muzzle.global_position)
 
 func _gather_effects() -> Array[EffectDef]:
 	var effects: Array[EffectDef] = []
