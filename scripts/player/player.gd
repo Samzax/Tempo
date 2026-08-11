@@ -767,7 +767,22 @@ func _update_engine_trail(movement_input_active: bool) -> void:
 	_engine_trail_manager.emit_from_anchors(
 		visual_root.to_global(Vector2(-4.0, 8.0)),
 		visual_root.to_global(Vector2(4.0, 8.0)),
+		_engine_trail_movement_state(minimum_speed),
 	)
+
+func _engine_trail_movement_state(minimum_speed: float) -> StringName:
+	if not _engine_trail_manager._has_last_anchors:
+		return &"IGNITION"
+	var forward := -visual_root.global_transform.y.normalized()
+	var velocity_direction := velocity.normalized()
+	var alignment := forward.dot(velocity_direction)
+	if alignment < -0.25:
+		return &"BRAKE"
+	if alignment < 0.82:
+		return &"TURN"
+	if velocity.length() < minimum_speed * 1.35:
+		return &"IGNITION"
+	return &"CRUISE"
 
 func _clear_engine_trail_segments() -> void:
 	if is_instance_valid(_engine_trail_manager):

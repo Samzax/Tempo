@@ -300,10 +300,10 @@ func test_engine_trail_contract_is_opt_in_and_interestelar_defaults_are_exact() 
 	assert_true(interestelar.engine_trail_enabled)
 	assert_eq(interestelar.engine_trail_damage, 1.0)
 	assert_eq(interestelar.engine_trail_width, 16.0)
-	assert_eq(interestelar.engine_trail_duration, 0.8)
+	assert_eq(interestelar.engine_trail_duration, 0.7)
 	assert_eq(interestelar.engine_trail_min_speed_ratio, 0.5)
 	assert_eq(interestelar.engine_trail_damage_cooldown, 0.5)
-	assert_eq(interestelar.engine_trail_segment_spacing, 32.0)
+	assert_eq(interestelar.engine_trail_segment_spacing, 7.0)
 	assert_eq(interestelar.validate_content().size(), 0)
 
 	for ship in ShipCatalog.all():
