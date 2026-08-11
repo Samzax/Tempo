@@ -68,7 +68,7 @@ func test_acceleration_uses_raw_stat_times_player_factor() -> void:
 	var raw_acceleration := player._stats.get_stat(&"acceleration")
 	var result := _thrust_deterministically(player, delta)
 
-	assert_almost_eq(result.length(), raw_acceleration * 0.70 * delta, 0.0001)
+	assert_almost_eq(result.length(), raw_acceleration * 0.60 * delta, 0.0001)
 
 func test_friction_uses_raw_stat_times_player_factor() -> void:
 	var player := await _player()
@@ -80,7 +80,7 @@ func test_friction_uses_raw_stat_times_player_factor() -> void:
 	player.velocity = Vector2(initial_speed, 0.0)
 	player._physics_process(delta)
 
-	assert_almost_eq(player.velocity.length(), initial_speed - raw_friction * 0.55 * delta, 0.0001)
+	assert_almost_eq(player.velocity.length(), initial_speed - raw_friction * 0.35 * delta, 0.0001)
 	assert_almost_eq(player.velocity.normalized().dot(Vector2.RIGHT), 1.0, 0.0001)
 
 func test_max_speed_is_observed_and_blink_distance_is_not_scaled() -> void:
