@@ -22,12 +22,14 @@ func launch(origin: Vector2, direction: Vector2, source: Node, amount: float = 1
 	_source = source
 	damage = amount
 	_velocity = direction.normalized() * speed
-	rotation = _velocity.angle() + PI * 0.5
+	rotation = _velocity.angle()
 	_life = lifetime
+	$Sprite2D.frame = 0
 
 func _physics_process(delta: float) -> void:
 	global_position += _velocity * delta
 	_life -= delta
+	$Sprite2D.frame = mini($Sprite2D.hframes - 1, int((lifetime - _life) / lifetime * $Sprite2D.hframes))
 	if _life <= 0.0 or not _room_bounds.grow(24.0).has_point(global_position):
 		queue_free()
 

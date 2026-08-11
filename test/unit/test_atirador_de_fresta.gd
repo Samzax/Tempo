@@ -2,6 +2,7 @@ extends GutTest
 
 const SCENE := preload("res://scenes/enemies/atirador_de_fresta.tscn")
 const SCRIPT := preload("res://scripts/enemies/atirador_de_fresta.gd")
+const PROJECTILE_SCENE := preload("res://scenes/projectiles/enemy_projectile.tscn")
 
 func _enemy() -> Node:
 	var enemy := SCENE.instantiate()
@@ -13,6 +14,65 @@ func _damage(amount: float) -> DamageInfo:
 	var info := DamageInfo.new()
 	info.amount = amount
 	return info
+
+func test_updated_enemy_visuals_and_telegraph_contract() -> void:
+	var enemy := await _enemy()
+	var aim := enemy.get_node("Telegraph/AimVisual") as Sprite2D
+
+	assert_not_null(aim)
+	if aim == null:
+		return
+	assert_eq(aim.texture.resource_path, "res://assets/enemies/atirador_de_fresta/atirador_de_fresta_aim.png")
+	assert_eq(aim.hframes, 6)
+	assert_eq(aim.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST)
+	assert_eq(enemy.telegraph.width, 1.5)
+
+	enemy.locked_direction = Vector2.RIGHT
+	enemy._enter_state(SCRIPT.AttackState.TELEGRAPH)
+	assert_eq(enemy.telegraph.points, PackedVector2Array([Vector2.ZERO, Vector2.RIGHT * 340.0]))
+	assert_eq(enemy.telegraph.points[1].length(), 340.0)
+
+func test_projectile_scene_loads_with_updated_visual_and_circular_collider() -> void:
+	var projectile := PROJECTILE_SCENE.instantiate()
+	add_child_autofree(projectile)
+	await get_tree().process_frame
+	var sprite := projectile.get_node("Sprite2D") as Sprite2D
+	var collider := projectile.get_node("CollisionShape2D") as CollisionShape2D
+
+	assert_not_null(sprite)
+	assert_not_null(collider)
+	if sprite == null or collider == null:
+		return
+	var circle := collider.shape as CircleShape2D
+	assert_not_null(circle)
+	if circle == null:
+		return
+	assert_eq(sprite.texture.resource_path, "res://assets/projectiles/atirador_de_fresta_lancet.png")
+	assert_eq(sprite.hframes, 4)
+	assert_eq(sprite.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST)
+	assert_eq(circle.radius, 4.0)
+
+func test_projectile_motion_contract_keeps_speed_damage_lifetime_and_rotation_path() -> void:
+	var projectile := PROJECTILE_SCENE.instantiate() as EnemyProjectile
+	add_child_autofree(projectile)
+	await get_tree().process_frame
+	assert_eq(projectile.speed, 260.0)
+	assert_eq(projectile.damage, 1.0)
+	assert_eq(projectile.lifetime, 2.5)
+
+	projectile.launch(Vector2.ZERO, Vector2.RIGHT, self, 7.0)
+	assert_eq(projectile.damage, 7.0)
+	assert_eq(projectile.speed, 260.0)
+	assert_eq(projectile.lifetime, 2.5)
+	assert_eq(projectile._velocity, Vector2.RIGHT * projectile.speed)
+	assert_almost_eq(projectile.rotation, projectile._velocity.angle(), 0.001)
+	assert_eq(projectile._life, projectile.lifetime)
+
+	projectile.launch(Vector2.ZERO, Vector2.DOWN, self, 7.0)
+	assert_eq(projectile.speed, 260.0)
+	assert_eq(projectile.lifetime, 2.5)
+	assert_eq(projectile._velocity, Vector2.DOWN * projectile.speed)
+	assert_almost_eq(projectile.rotation, projectile._velocity.angle(), 0.001)
 
 func test_scene_has_approved_assets_and_frames() -> void:
 	var enemy := await _enemy()

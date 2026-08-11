@@ -18,6 +18,7 @@ var _entry_start_position := Vector2.ZERO
 
 @onready var telegraph: Line2D = $Telegraph
 @onready var fire_fx: Sprite2D = $FireFx
+@onready var aim_visual: Sprite2D = $Telegraph/AimVisual
 
 func _ready() -> void:
 	super()
@@ -42,6 +43,7 @@ func _physics_process(delta: float) -> void:
 				_enter_state(AttackState.TELEGRAPH)
 		AttackState.TELEGRAPH:
 			velocity = Vector2.ZERO
+			aim_visual.frame = mini(aim_visual.hframes - 1, int(_elapsed / telegraph_duration * aim_visual.hframes))
 			if _elapsed >= telegraph_duration:
 				_enter_state(AttackState.FIRE)
 		AttackState.FIRE:
@@ -92,6 +94,8 @@ func _enter_state(next: AttackState) -> void:
 	if next == AttackState.TELEGRAPH:
 		velocity = Vector2.ZERO
 		telegraph.points = PackedVector2Array([Vector2.ZERO, locked_direction * 340.0])
+		aim_visual.rotation = locked_direction.angle()
+		aim_visual.frame = 0
 	if next == AttackState.VULNERABLE:
 		fire_fx.frame = 0
 
