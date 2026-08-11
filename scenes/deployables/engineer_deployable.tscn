@@ -20,7 +20,7 @@ scale = Vector2(0.333333, 0.333333)
 visible = false
 
 [node name="Muzzle" type="Marker2D" parent="."]
-position = Vector2(0, -12)
+position = Vector2(0, -4)
 
 [node name="Influence" type="Area2D" parent="."]
 collision_layer = 0

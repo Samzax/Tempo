@@ -20,6 +20,14 @@ func test_engineer_deployable_scene_has_textured_drone_sprite() -> void:
 		assert_eq(drone_sprite.hframes, 1)
 		assert_eq(drone_sprite.vframes, 1)
 
+func test_engineer_deployable_scene_exposes_muzzle_offset() -> void:
+	var deployable := ENGINEER_DEPLOYABLE_SCENE.instantiate() as EngineerDeployable
+	add_child_autofree(deployable)
+
+	var muzzle := deployable.get_node(^"Muzzle") as Marker2D
+	assert_eq(muzzle.position, Vector2(0, -4))
+
+
 func test_drone_sprite_visibility_matches_deployable_kind() -> void:
 	var deployable := ENGINEER_DEPLOYABLE_SCENE.instantiate() as EngineerDeployable
 	var deploying_player := Node2D.new()

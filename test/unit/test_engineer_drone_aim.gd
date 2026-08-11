@@ -61,6 +61,18 @@ func test_visual_aim_only_changes_drone_sprite_and_fire_uses_muzzle_origin() -> 
 	var bullet := projectiles.get_child(0) as Area2D
 	assert_eq(bullet._velocity.normalized(), owner.fire_direction)
 
+func test_drone_fire_activates_bullet_at_real_muzzle_global_position() -> void:
+	var fixture := await _fixture()
+	var drone: EngineerDeployable = fixture[0]
+	var projectiles: Node2D = fixture[2]
+	var expected_position := drone.muzzle.global_position
+
+	drone._fire_drone(0.0)
+
+	assert_eq(projectiles.get_child_count(), 1)
+	var bullet := projectiles.get_child(0) as Area2D
+	assert_almost_eq(bullet.global_position, expected_position, Vector2(0.01, 0.01))
+
 func test_configure_modes_reset_drone_visibility_and_rotation() -> void:
 	var fixture := await _fixture()
 	var drone: EngineerDeployable = fixture[0]
