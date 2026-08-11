@@ -20,6 +20,8 @@ const BRUTA_CHARGE_WINDUP := 0.12
 const BRUTA_CHARGE_DURATION := 0.75
 const BRUTA_CHARGE_MIN_SPEED := 180.0
 const BRUTA_CHARGE_MAX_SPEED := 620.0
+const BRUTA_CHARGE_TURN_RATE := 4.1887902047863905
+const BRUTA_CHARGE_STEERING_STEP := 1.0 / 240.0
 const BRUTA_CHARGE_DAMAGE_REDUCTION := 0.40
 const BRUTA_CHARGE_STUN_DURATION := 0.75
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
@@ -84,6 +86,7 @@ var _bruta_charge_direction := Vector2.ZERO
 var _bruta_charge_windup_remaining := 0.0
 var _bruta_charge_remaining := 0.0
 var _bruta_charge_hit_targets: Dictionary = {}
+var _bruta_charge_aim_source: AimSource = AimSource.NONE
 
 func _ready() -> void:
 	if ship == null:
@@ -638,6 +641,7 @@ func start_bruta_charge() -> bool:
 	if direction.length_squared() <= 0.001:
 		return false
 	_bruta_charge_direction = direction.normalized()
+	_bruta_charge_aim_source = _last_aim_source
 	_bruta_charge_windup_remaining = BRUTA_CHARGE_WINDUP
 	_bruta_charge_remaining = BRUTA_CHARGE_DURATION
 	_bruta_charge_hit_targets.clear()
@@ -655,6 +659,10 @@ func _is_bruta_charge_active() -> bool:
 func _update_bruta_charge(delta: float) -> void:
 	var remaining_delta := maxf(delta, 0.0)
 	if _bruta_charge_windup_remaining > 0.0:
+		# A preparacao permite corrigir a mira ate o inicio do deslocamento.
+		var windup_direction := _bruta_charge_desired_direction()
+		if windup_direction != Vector2.ZERO:
+			_bruta_charge_direction = windup_direction
 		var windup_delta := minf(remaining_delta, _bruta_charge_windup_remaining)
 		_bruta_charge_windup_remaining = maxf(0.0, _bruta_charge_windup_remaining - windup_delta)
 		remaining_delta -= windup_delta
@@ -665,23 +673,45 @@ func _update_bruta_charge(delta: float) -> void:
 		_cancel_bruta_charge()
 		return
 	var active_delta := minf(remaining_delta, _bruta_charge_remaining)
-	var elapsed := BRUTA_CHARGE_DURATION - _bruta_charge_remaining
-	var next_elapsed := elapsed + active_delta
 	var acceleration_range := BRUTA_CHARGE_MAX_SPEED - BRUTA_CHARGE_MIN_SPEED
-	var distance := BRUTA_CHARGE_MIN_SPEED * active_delta + acceleration_range * (pow(next_elapsed / BRUTA_CHARGE_DURATION, 3.0) - pow(elapsed / BRUTA_CHARGE_DURATION, 3.0)) * BRUTA_CHARGE_DURATION / 3.0
-	var start := global_position
-	var intended_end := start + _bruta_charge_direction * distance
-	var bounded_end := _clamped_charge_position(intended_end)
-	var hit_wall := bounded_end != intended_end
-	var collision := move_and_collide(bounded_end - start)
-	if collision != null:
-		hit_wall = true
-	_resolve_bruta_charge_hits(start, global_position)
-	_bruta_charge_remaining = maxf(0.0, _bruta_charge_remaining - active_delta)
-	var progress := clampf(next_elapsed / BRUTA_CHARGE_DURATION, 0.0, 1.0)
-	velocity = _bruta_charge_direction * (BRUTA_CHARGE_MIN_SPEED + acceleration_range * progress * progress)
-	if hit_wall or _bruta_charge_remaining <= 0.0:
-		_cancel_bruta_charge()
+	while active_delta > 0.0:
+		var step_delta := minf(BRUTA_CHARGE_STEERING_STEP, active_delta)
+		var desired_direction := _bruta_charge_desired_direction()
+		if desired_direction != Vector2.ZERO:
+			var turn := clampf(
+				_bruta_charge_direction.angle_to(desired_direction),
+				-BRUTA_CHARGE_TURN_RATE * step_delta,
+				BRUTA_CHARGE_TURN_RATE * step_delta,
+			)
+			_bruta_charge_direction = _bruta_charge_direction.rotated(turn)
+		var elapsed := BRUTA_CHARGE_DURATION - _bruta_charge_remaining
+		var next_elapsed := elapsed + step_delta
+		var distance := BRUTA_CHARGE_MIN_SPEED * step_delta + acceleration_range * (pow(next_elapsed / BRUTA_CHARGE_DURATION, 3.0) - pow(elapsed / BRUTA_CHARGE_DURATION, 3.0)) * BRUTA_CHARGE_DURATION / 3.0
+		var start := global_position
+		var intended_end := start + _bruta_charge_direction * distance
+		var bounded_end := _clamped_charge_position(intended_end)
+		var hit_wall := bounded_end != intended_end
+		var collision := move_and_collide(bounded_end - start)
+		if collision != null:
+			hit_wall = true
+		_resolve_bruta_charge_hits(start, global_position)
+		_bruta_charge_remaining = maxf(0.0, _bruta_charge_remaining - step_delta)
+		var progress := clampf(next_elapsed / BRUTA_CHARGE_DURATION, 0.0, 1.0)
+		velocity = _bruta_charge_direction * (BRUTA_CHARGE_MIN_SPEED + acceleration_range * progress * progress)
+		if hit_wall or _bruta_charge_remaining <= 0.0:
+			_cancel_bruta_charge()
+			return
+		active_delta -= step_delta
+
+func _bruta_charge_desired_direction() -> Vector2:
+	if _bruta_charge_aim_source == AimSource.JOYPAD:
+		var joypad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
+		return joypad_aim.normalized() if joypad_aim.length() > 0.2 else Vector2.ZERO
+	if _bruta_charge_aim_source == AimSource.MOUSE:
+		var mouse_aim := get_global_mouse_position() - global_position
+		return mouse_aim.normalized() if mouse_aim.length_squared() > 0.001 else Vector2.ZERO
+	# Mantem a compatibilidade de chamadas internas que configuram a charge diretamente.
+	return _aim_vector.normalized() if _aim_vector.length_squared() > 0.001 else Vector2.ZERO
 
 func _clamped_charge_position(position: Vector2) -> Vector2:
 	var margin := 10.0
@@ -694,6 +724,7 @@ func _cancel_bruta_charge() -> void:
 	_bruta_charge_windup_remaining = 0.0
 	_bruta_charge_remaining = 0.0
 	_bruta_charge_hit_targets.clear()
+	_bruta_charge_aim_source = AimSource.NONE
 	velocity = Vector2.ZERO
 
 func _resolve_bruta_charge_hits(origin: Vector2, destination: Vector2) -> void:

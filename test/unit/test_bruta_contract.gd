@@ -393,6 +393,7 @@ func test_bruta_charge_does_not_teleport_and_accelerates_after_windup() -> void:
 	var player: Player = await _bruta_player()
 	player.global_position = Vector2(100.0, 100.0)
 	player._bruta_charge_direction = Vector2.RIGHT
+	player._aim_vector = Vector2.RIGHT
 	player._bruta_charge_windup_remaining = 0.12
 	player._bruta_charge_remaining = 0.75
 	player._update_bruta_charge(0.12)
@@ -419,6 +420,75 @@ func test_bruta_charge_preparation_012_seconds_has_no_displacement() -> void:
 	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
 	assert_almost_eq(player._bruta_charge_windup_remaining, 0.0, 0.000001)
 	assert_almost_eq(player._bruta_charge_remaining, 0.75, 0.000001)
+
+
+func test_bruta_charge_windup_tracks_valid_aim_without_displacement() -> void:
+	var player: Player = await _bruta_player()
+	player.global_position = Vector2(100.0, 100.0)
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.12
+	player._bruta_charge_remaining = 0.75
+	player._aim_vector = Vector2.DOWN
+
+	player._update_bruta_charge(0.06)
+
+	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.DOWN)
+	_assert_vector_almost_eq(player.global_position, Vector2(100.0, 100.0))
+	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
+
+
+func test_bruta_charge_active_turn_is_limited_by_turn_rate() -> void:
+	var player: Player = await _bruta_player()
+	player.global_position = Vector2(100.0, 100.0)
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	player._aim_vector = Vector2.DOWN
+	var active_delta := 0.1
+
+	player._update_bruta_charge(active_delta)
+
+	var turn_limit := Player.BRUTA_CHARGE_TURN_RATE * active_delta
+	assert_gt(player._bruta_charge_direction.angle(), 0.0)
+	assert_lte(player._bruta_charge_direction.angle(), turn_limit + 0.000001)
+	assert_almost_eq(player._bruta_charge_direction.angle(), turn_limit, 0.000001)
+
+
+func test_bruta_charge_active_deadzone_keeps_current_direction() -> void:
+	var player: Player = await _bruta_player()
+	player.global_position = Vector2(100.0, 100.0)
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_aim_source = Player.AimSource.JOYPAD
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	player._aim_vector = Vector2.DOWN
+	Input.action_press(&"aim_down", 0.1)
+
+	player._update_bruta_charge(0.1)
+
+	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.RIGHT)
+	Input.action_release(&"aim_down")
+
+
+func test_bruta_charge_hits_target_on_curved_active_segment() -> void:
+	var player: Player = await _bruta_player()
+	player.global_position = Vector2(100.0, 100.0)
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._aim_vector = Vector2.DOWN
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	var enemy := ChargeEnemyStub.new()
+	# Em 0.1 s, o caminho sobe para fora do segmento horizontal original.
+	# O alvo fica fora desse segmento, mas sobre a curva integrada em subpassos.
+	enemy.global_position = Vector2(117.0, 111.0)
+	add_child_autofree(enemy)
+	await get_tree().process_frame
+
+	player._update_bruta_charge(0.1)
+
+	assert_gt(player._bruta_charge_direction.angle(), 0.0)
+	assert_eq(enemy.damage_calls, 1)
+	assert_eq(enemy.stun_calls, 1)
 
 
 func test_bruta_charge_first_active_frame_starts_at_180_pixels_per_second() -> void:
@@ -482,6 +552,7 @@ func test_bruta_charge_stops_at_safe_room_boundary_and_clears_state() -> void:
 	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(200.0, 160.0)))
 	player.global_position = Vector2(100.0, 80.0)
 	player._bruta_charge_direction = Vector2.RIGHT
+	player._aim_vector = Vector2.RIGHT
 	player._bruta_charge_windup_remaining = 0.0
 	player._bruta_charge_remaining = 0.75
 
@@ -498,6 +569,7 @@ func test_bruta_charge_integrates_same_active_displacement_at_60hz_and_large_del
 	for player in [stepped, large_step]:
 		player.global_position = Vector2(100.0, 100.0)
 		player._bruta_charge_direction = Vector2.RIGHT
+		player._aim_vector = Vector2.RIGHT
 		player._bruta_charge_windup_remaining = 0.0
 		player._bruta_charge_remaining = 0.75
 
@@ -513,7 +585,59 @@ func test_bruta_charge_integrates_same_active_displacement_at_60hz_and_large_del
 	assert_almost_eq(stepped.velocity.length(), 0.0, 0.001)
 	assert_almost_eq(large_step.velocity.length(), 0.0, 0.001)
 
-func test_bruta_charge_uses_mouse_direction_when_mouse_is_active() -> void:
+func test_bruta_charge_steering_static_right_to_down_is_deterministic_and_curved() -> void:
+	var players: Array[Player] = []
+	for _i in 3:
+		var player: Player = await _bruta_player()
+		player.global_position = Vector2(100.0, 100.0)
+		player._bruta_charge_direction = Vector2.RIGHT
+		player._bruta_charge_aim_source = Player.AimSource.JOYPAD
+		player._bruta_charge_windup_remaining = 0.0
+		player._bruta_charge_remaining = 0.75
+		Input.action_press(&"aim_down")
+		players.append(player)
+	# Todos usam o mesmo alvo estático; 1/240 s torna o resultado independente
+	# do delta externo, com tolerância pequena para arredondamento de ponto flutuante.
+	for _frame in 42:
+		players[0]._update_bruta_charge(1.0 / 60.0)
+	for _frame in 84:
+		players[1]._update_bruta_charge(1.0 / 120.0)
+	players[2]._update_bruta_charge(0.70)
+	Input.action_release(&"aim_down")
+
+	_assert_vector_almost_eq(players[0].global_position, players[1].global_position, 0.05)
+	_assert_vector_almost_eq(players[0].global_position, players[2].global_position, 0.05)
+	_assert_vector_almost_eq(players[0]._bruta_charge_direction, players[1]._bruta_charge_direction, 0.0002)
+	_assert_vector_almost_eq(players[0]._bruta_charge_direction, players[2]._bruta_charge_direction, 0.0002)
+	assert_gt(players[0].global_position.x, 100.0)
+	assert_gt(players[0].global_position.y, 100.0)
+	assert_gt(players[0]._bruta_charge_direction.angle(), 0.05)
+	# No meio da carga, a posição não pode estar na corda instantânea RIGHT->DOWN.
+	var midpoint: Player = await _bruta_player()
+	midpoint.global_position = Vector2(100.0, 100.0)
+	midpoint._bruta_charge_direction = Vector2.RIGHT
+	midpoint._bruta_charge_aim_source = Player.AimSource.JOYPAD
+	midpoint._bruta_charge_windup_remaining = 0.0
+	midpoint._bruta_charge_remaining = 0.70
+	Input.action_press(&"aim_down")
+	midpoint._update_bruta_charge(0.35)
+	Input.action_release(&"aim_down")
+	assert_gt(midpoint.global_position.x - 100.0, 1.0)
+	assert_gt(midpoint.global_position.y - 100.0, 1.0)
+
+func test_bruta_charge_steering_uses_short_path_across_pi_wrap() -> void:
+	var player: Player = await _bruta_player()
+	player._bruta_charge_direction = Vector2(-1.0, 0.01).normalized()
+	player._bruta_charge_aim_source = Player.AimSource.JOYPAD
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	Input.action_press(&"aim_left")
+	player._update_bruta_charge(0.01)
+	Input.action_release(&"aim_left")
+	assert_almost_eq(player._bruta_charge_direction.length(), 1.0, 0.000001)
+	assert_lt(absf(player._bruta_charge_direction.angle() - PI), 0.05)
+
+func test_bruta_charge_captures_mouse_aim_against_joystick_during_charge() -> void:
 	var player: Player = await _bruta_player()
 	player.global_position = Vector2(200.0, 200.0)
 	player._last_aim_source = Player.AimSource.MOUSE
@@ -521,6 +645,13 @@ func test_bruta_charge_uses_mouse_direction_when_mouse_is_active() -> void:
 	player.get_viewport().warp_mouse(Vector2(300.0, 200.0))
 	assert_true(player.start_bruta_charge())
 	assert_eq(player._bruta_charge_direction, Vector2.RIGHT)
+	player._bruta_charge_windup_remaining = 0.0
+
+	Input.action_press(&"aim_left")
+	player._update_bruta_charge(0.1)
+	Input.action_release(&"aim_left")
+
+	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.RIGHT)
 
 func test_bruta_charge_uses_active_joypad_direction_over_opposite_cursor() -> void:
 	var player: Player = await _bruta_player()
@@ -595,6 +726,7 @@ func test_bruta_charge_stops_at_obstacle_before_bounded_endpoint() -> void:
 	add_child_autofree(obstacle)
 	await get_tree().physics_frame
 	player._bruta_charge_direction = Vector2.RIGHT
+	player._aim_vector = Vector2.RIGHT
 	player._bruta_charge_remaining = 0.75
 
 	player._update_bruta_charge(0.75)
