@@ -9,6 +9,8 @@ const COMBAT_POOL := preload("res://resources/loot/combat_pool.tres")
 const BOSS_POOL := preload("res://resources/loot/boss_pool.tres")
 const ENGINEER_DEPLOYABLE := preload("res://scenes/deployables/engineer_deployable.tscn")
 const ENGINEER_DEPLOYABLE_LIMIT := 3
+const REGENTE_PREVIEW := preload("res://scenes/enemies/bosses/regente_dos_ecos.tscn")
+const REGENTE_PREVIEW_META := &"sandbox_regente_preview"
 
 @export var player_path: NodePath
 @export var camera_path: NodePath
@@ -317,6 +319,34 @@ func sandbox_clear_room() -> bool:
 		return false
 	var controller := _active_room.get_node_or_null("RoomController") as RoomController
 	return controller != null and controller.sandbox_clear()
+
+## Cria uma unica Regente de previa fora do RoomRuntime para nao afetar a limpeza.
+func sandbox_spawn_regente_preview() -> bool:
+	if not _room_active or not is_instance_valid(_active_room) or not is_instance_valid(_player):
+		return false
+	var enemies := _active_room.get_node_or_null("Enemies") as Node2D
+	var controller := _active_room.get_node_or_null("RoomController") as RoomController
+	if enemies == null or controller == null or controller.room_def == null:
+		return false
+	for child in enemies.get_children():
+		if child.get_meta(REGENTE_PREVIEW_META, false):
+			return false
+	var bounds := controller.room_def.get_bounds()
+	var boss := REGENTE_PREVIEW.instantiate() as RegenteDosEcos
+	if boss == null:
+		return false
+	boss.set_room_bounds(bounds)
+	boss.set_room_cull_policy(controller.room_def.cull_policy)
+	boss.global_position = _regente_preview_position(bounds)
+	boss.set_meta(REGENTE_PREVIEW_META, true)
+	enemies.add_child(boss)
+	return true
+
+func _regente_preview_position(bounds: Rect2) -> Vector2:
+	var padding := Vector2(minf(96.0, bounds.size.x * 0.25), minf(96.0, bounds.size.y * 0.25))
+	var safe_bounds := Rect2(bounds.position + padding, bounds.size - padding * 2.0)
+	var desired := _player.global_position + Vector2(140.0, -72.0)
+	return desired.clamp(safe_bounds.position, safe_bounds.end)
 
 func _persist_active_offer() -> void:
 	if not is_instance_valid(_active_room) or run_state == null:

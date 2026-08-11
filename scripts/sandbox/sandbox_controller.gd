@@ -45,6 +45,11 @@ func clear_room() -> bool:
 		return false
 	return _session.sandbox_clear_room()
 
+func spawn_regente_preview() -> bool:
+	if _session == null:
+		return false
+	return _session.sandbox_spawn_regente_preview()
+
 func warp(seed_value: int, sector_index: int, node_id: int, node_type: int) -> bool:
 	if _session == null:
 		return false

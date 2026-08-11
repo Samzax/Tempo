@@ -6,6 +6,7 @@ extends Control
 @export var session_path: NodePath
 
 var _controller: SandboxController
+var _session: Session
 var _status: Label
 var _stat_id: OptionButton
 var _stat_value: LineEdit
@@ -16,14 +17,19 @@ var _seed: LineEdit
 var _sector: SpinBox
 var _node: SpinBox
 var _node_type: OptionButton
+var _regente_preview_button: Button
 var _tree_was_paused := false
 var _enabled := true
 
 func _ready() -> void:
 	process_mode = PROCESS_MODE_ALWAYS
-	_controller = SandboxController.new(get_node_or_null(player_path), get_node_or_null(session_path) as Session)
+	_session = get_node_or_null(session_path) as Session
+	_controller = SandboxController.new(get_node_or_null(player_path), _session)
 	_build_ui()
 	hide()
+
+func _process(_delta: float) -> void:
+	_sync_regente_preview_button()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _enabled:
@@ -54,7 +60,7 @@ func _build_ui() -> void:
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.position = Vector2(-180, -125)
-	panel.size = Vector2(360, 250)
+	panel.size = Vector2(360, 280)
 	add_child(panel)
 	var box := VBoxContainer.new()
 	panel.add_child(box)
@@ -106,6 +112,10 @@ func _build_ui() -> void:
 	actions.add_child(_god_mode)
 	actions.add_child(_button("Limpar sala", _on_clear_room))
 	box.add_child(actions)
+	var previews := HBoxContainer.new()
+	_regente_preview_button = _button("Spawn Regente (Preview)", _on_spawn_regente_preview)
+	previews.add_child(_regente_preview_button)
+	box.add_child(previews)
 	var warp := HBoxContainer.new()
 	_seed = _line("seed", "1")
 	_seed.custom_minimum_size.x = 70
@@ -130,6 +140,7 @@ func _build_ui() -> void:
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_status)
+	_sync_regente_preview_button()
 
 func _line(placeholder: String, value: String) -> LineEdit:
 	var line := LineEdit.new()
@@ -176,6 +187,36 @@ func _on_god_mode(enabled: bool) -> void:
 
 func _on_clear_room() -> void:
 	_status.text = "Sala sendo limpa." if _controller.clear_room() else "Nenhuma sala ativa."
+
+func _on_spawn_regente_preview() -> void:
+	if _regente_preview_button != null and _regente_preview_button.disabled:
+		return
+	var spawned := _controller.spawn_regente_preview()
+	if spawned and _regente_preview_button != null:
+		_regente_preview_button.disabled = true
+	if spawned:
+		_status.text = "Regente posicionada para previa."
+		return
+	_status.text = "Previa indisponivel ou ja ativa."
+	_sync_regente_preview_button()
+
+func _sync_regente_preview_button() -> void:
+	if _regente_preview_button != null:
+		_regente_preview_button.disabled = _session_has_regente_preview()
+
+func _session_has_regente_preview() -> bool:
+	if _session == null or not is_instance_valid(_session):
+		return false
+	var active_room := _session.get(&"_active_room") as Node
+	if active_room == null or not is_instance_valid(active_room):
+		return false
+	var enemies := active_room.get_node_or_null("Enemies")
+	if enemies == null:
+		return false
+	for child in enemies.get_children():
+		if child.get_meta(&"sandbox_regente_preview", false):
+			return true
+	return false
 
 func _on_warp() -> void:
 	if not _seed.text.is_valid_int():
