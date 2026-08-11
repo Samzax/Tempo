@@ -85,9 +85,26 @@ func command_engineer_drone(player: Node2D) -> bool:
 	for child in container.get_children():
 		var deployable := child as EngineerDeployable
 		if deployable != null and deployable.deploying_player == player and deployable.kind == EngineerDeployable.Kind.DRONE:
-			deployable.command_to(_engineer_target_for(player))
+			deployable.command_to(_engineer_command_target_for(player))
 			return true
 	return false
+
+## Remove os deployables do jogador na sala atual e esquece a sequencia de implantacao.
+func clear_engineer_deployables_for(player: Node) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	var player_id := player.get_instance_id()
+	_engineer_deploy_sequence_by_player.erase(player_id)
+	if not is_instance_valid(_active_room):
+		return
+	var container := _active_room.get_node_or_null("Deployables")
+	if container == null or not is_instance_valid(container):
+		return
+	for child in container.get_children():
+		var deployable := child as EngineerDeployable
+		if deployable != null and is_instance_valid(deployable) and deployable.deploying_player == player:
+			container.remove_child(deployable)
+			deployable.queue_free()
 
 func _next_engineer_kind(sequence: int, deployed: Array[EngineerDeployable]) -> EngineerDeployable.Kind:
 	const DEPLOY_ORDER := [
@@ -118,6 +135,12 @@ func _engineer_target_for(player: Node2D) -> Vector2:
 	if player.has_method(&"get_engineer_deploy_target"):
 		return player.call(&"get_engineer_deploy_target", EngineerDeployable.DEPLOY_RANGE)
 	return player.global_position + Vector2.UP * EngineerDeployable.DEPLOY_RANGE
+
+## Mantem mocks minimos compativeis quando o Player ainda nao expoe o alvo de comando.
+func _engineer_command_target_for(player: Node2D) -> Vector2:
+	if player.has_method(&"get_engineer_drone_command_target"):
+		return player.call(&"get_engineer_drone_command_target")
+	return _engineer_target_for(player)
 
 func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAULT_CHARACTER_ID) -> void:
 	if _has_started:

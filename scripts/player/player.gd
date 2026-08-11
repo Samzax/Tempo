@@ -133,13 +133,70 @@ func deploy_engineer_gadget() -> bool:
 	var session := get_tree().get_first_node_in_group(&"session")
 	return session != null and session.has_method(&"deploy_engineer_deployable") and bool(session.call(&"deploy_engineer_deployable", self))
 
-## Alvo comum de implantacao e comando: sempre a alcance fixo na direcao da mira.
+## Alvo de implantacao: sempre a alcance fixo na direcao da mira.
 func get_engineer_deploy_target(distance: float) -> Vector2:
 	var target := global_position + _aim_vector.normalized() * distance
 	var margin := 10.0
 	target.x = clampf(target.x, _room_bounds.position.x + margin, _room_bounds.end.x - margin)
 	target.y = clampf(target.y, _room_bounds.position.y + margin, _room_bounds.end.y - margin)
 	return target
+
+## Alvo de comando: mouse usa o cursor; joystick projeta a mira ate a borda segura.
+func get_engineer_drone_command_target() -> Vector2:
+	return resolve_engineer_drone_command_target(
+		_last_aim_source,
+		_aim_vector,
+		get_global_mouse_position(),
+		_room_bounds,
+		global_position,
+	)
+
+## Resolve o alvo sem depender do Node, para que a selecao de destino seja testavel.
+static func resolve_engineer_drone_command_target(
+	aim_source: AimSource,
+	aim_direction: Vector2,
+	cursor_global_position: Vector2,
+	room_bounds: Rect2,
+	player_position: Vector2,
+) -> Vector2:
+	var safe_bounds := _safe_bounds_for(room_bounds)
+	var fallback := _clamp_position_to_bounds(player_position, safe_bounds)
+	if aim_source == AimSource.NONE:
+		return fallback
+
+	if aim_source == AimSource.MOUSE:
+		if not cursor_global_position.is_finite():
+			return fallback
+		return _clamp_position_to_bounds(cursor_global_position, safe_bounds)
+	if aim_source != AimSource.JOYPAD:
+		return fallback
+	if not aim_direction.is_finite() or aim_direction.length_squared() <= 0.0001:
+		return fallback
+
+	var origin := fallback
+	var direction := aim_direction.normalized()
+	var distance := INF
+	if absf(direction.x) > 0.0001:
+		distance = minf(distance, ((safe_bounds.end.x if direction.x > 0.0 else safe_bounds.position.x) - origin.x) / direction.x)
+	if absf(direction.y) > 0.0001:
+		distance = minf(distance, ((safe_bounds.end.y if direction.y > 0.0 else safe_bounds.position.y) - origin.y) / direction.y)
+	if not is_finite(distance):
+		return fallback
+	return _clamp_position_to_bounds(origin + direction * maxf(distance, 0.0), safe_bounds)
+
+static func _safe_bounds_for(room_bounds: Rect2) -> Rect2:
+	var margin := Vector2(
+		minf(10.0, room_bounds.size.x * 0.5),
+		minf(10.0, room_bounds.size.y * 0.5),
+	)
+	return Rect2(room_bounds.position + margin, room_bounds.size - margin * 2.0)
+
+static func _clamp_position_to_bounds(position: Vector2, bounds: Rect2) -> Vector2:
+	var candidate := position if position.is_finite() else bounds.get_center()
+	return Vector2(
+		clampf(candidate.x, bounds.position.x, bounds.end.x),
+		clampf(candidate.y, bounds.position.y, bounds.end.y),
+	)
 
 ## Contratos de autoria usados pelo Drone da Engenheira.
 func get_aim_direction() -> Vector2:
@@ -870,6 +927,7 @@ func _on_enemy_died(_enemy: Node, fatal_info: DamageInfo) -> void:
 
 func _on_died(_fatal_info: DamageInfo) -> void:
 	_cancel_bruta_charge()
+	_clear_engineer_deployables()
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
 	_reset_omni_stop_spin()
 	_clear_engine_trail_segments()
@@ -895,6 +953,14 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 	_shield_charges.clear()
 	_invuln_timer = _stats.get_stat(&"respawn_invuln")
 	_spawn_teleport_fx(_spawn_point)
+
+func _clear_engineer_deployables() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var session := tree.get_first_node_in_group(&"session")
+	if session != null and is_instance_valid(session) and session.has_method(&"clear_engineer_deployables_for"):
+		session.call(&"clear_engineer_deployables_for", self)
 
 ## Mantém a nave dentro da arena atual.
 func _clamp_to_bounds() -> void:

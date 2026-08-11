@@ -85,6 +85,19 @@ func test_thrust_follows_mouse_heading_and_preserves_inertia() -> void:
 
 	assert_eq(result, Vector2(10.0, 10.0))
 
+func test_engineer_mouse_command_target_uses_cursor_clamped_to_safe_bounds() -> void:
+	var target := Player.resolve_engineer_drone_command_target(Player.AimSource.MOUSE, Vector2.RIGHT, Vector2(999.0, -20.0), Rect2(Vector2.ZERO, Vector2(200.0, 120.0)), Vector2(80.0, 60.0))
+	assert_eq(target, Vector2(190.0, 10.0))
+
+func test_engineer_joystick_command_target_projects_to_safe_boundary() -> void:
+	var target := Player.resolve_engineer_drone_command_target(Player.AimSource.JOYPAD, Vector2(1.0, -0.5), Vector2.ZERO, Rect2(Vector2.ZERO, Vector2(200.0, 120.0)), Vector2(80.0, 60.0))
+	assert_almost_eq(target.x, 180.0, 0.0001)
+	assert_almost_eq(target.y, 10.0, 0.0001)
+
+func test_engineer_command_target_without_valid_aim_falls_back_inside_safe_bounds() -> void:
+	var target := Player.resolve_engineer_drone_command_target(Player.AimSource.JOYPAD, Vector2.ZERO, Vector2.ZERO, Rect2(Vector2.ZERO, Vector2(200.0, 120.0)), Vector2(-20.0, 140.0))
+	assert_eq(target, Vector2(10.0, 110.0))
+
 func test_release_uses_friction_and_keeps_heading_of_inertia() -> void:
 	var result := MOTION.calculate_velocity(Vector2(10.0, 0.0), Vector2.RIGHT, false, 100.0, 3.0, 150.0, 1.0)
 
@@ -203,14 +216,15 @@ func test_engineer_shift_does_not_teleport_and_commands_drone_path() -> void:
 	Input.action_release(&"aim_up")
 	assert_ne(player.global_position, before)
 	assert_eq(drone._target_position, target_before_shift)
-	var target_after_aim := session._engineer_target_for(player)
+	var position_after_movement := player.global_position
+	var target_after_aim := session._engineer_command_target_for(player)
 	Input.action_press(&"blink")
 	assert_false(player._handle_blink_input())
 	Input.action_release(&"blink")
-	assert_ne(player.global_position, before)
-	assert_eq(player.global_position, before + player.velocity * (1.0 / 60.0))
+	assert_eq(player.global_position, position_after_movement)
 	assert_eq(drone._target_position, target_after_aim)
 	assert_ne(drone._target_position, target_before_shift)
+	assert_eq(drone._target_position, Vector2(360.0, 10.0))
 
 func test_shift_input_keeps_blink_for_common_ship() -> void:
 	var player := await _blink_player(BASE_SHIP)

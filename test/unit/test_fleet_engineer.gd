@@ -219,6 +219,74 @@ func test_engineer_deploy_sequence_is_per_player_and_resets_per_room() -> void:
 	assert_true(session.deploy_engineer_deployable(first_player))
 	assert_eq((deployables.get_child(0) as EngineerDeployable).kind, EngineerDeployable.Kind.DRONE)
 
+func test_player_death_clears_owned_deployables_and_resets_sequence() -> void:
+	var session := _session_with_room()
+	var player := preload("res://scenes/player/player.tscn").instantiate() as Player
+	player.name = "Player"
+	session.get_node("../").add_child(player)
+	var second_player := preload("res://scenes/player/player.tscn").instantiate() as Player
+	second_player.name = "SecondPlayer"
+	session.get_node("../").add_child(second_player)
+	await get_tree().process_frame
+	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_engenheira")))
+	assert_true(second_player.configure_ship(ShipCatalog.get_ship(&"nave_engenheira")))
+	assert_true(session.deploy_engineer_deployable(player))
+	assert_true(session.deploy_engineer_deployable(player))
+	assert_true(session.deploy_engineer_deployable(second_player))
+	var deployables := session._active_room.get_node("Deployables")
+	assert_eq(deployables.get_child_count(), 3)
+	var prior_lives := GameState.player_lives
+	GameState.player_lives = 2
+	player._on_died(DamageInfo.new())
+	await get_tree().process_frame
+	assert_eq(GameState.player_lives, 1)
+	assert_eq(deployables.get_child_count(), 1)
+	assert_eq((deployables.get_child(0) as EngineerDeployable).deploying_player, second_player)
+	assert_eq((deployables.get_child(0) as EngineerDeployable).kind, EngineerDeployable.Kind.DRONE)
+	assert_true(session.deploy_engineer_deployable(player))
+	assert_eq(deployables.get_child_count(), 2)
+	assert_eq((deployables.get_child(1) as EngineerDeployable).kind, EngineerDeployable.Kind.DRONE)
+	GameState.player_lives = prior_lives
+
+func test_last_player_life_clears_owned_deployables_before_game_over_state() -> void:
+	var session := _session_with_room()
+	var player := preload("res://scenes/player/player.tscn").instantiate() as Player
+	player.name = "Player"
+	session.get_node("../").add_child(player)
+	await get_tree().process_frame
+	assert_true(player.configure_ship(ShipCatalog.get_ship(&"nave_engenheira")))
+	assert_true(session.deploy_engineer_deployable(player))
+	var deployables := session._active_room.get_node("Deployables")
+	var prior_lives := GameState.player_lives
+	GameState.player_lives = 1
+	player._on_died(DamageInfo.new())
+	await get_tree().process_frame
+	assert_eq(deployables.get_child_count(), 0)
+	assert_eq(GameState.player_lives, 0)
+	assert_false(player.visible)
+	assert_false(player.is_physics_processing())
+	GameState.player_lives = prior_lives
+
+func test_command_target_fallback_keeps_minimal_mock_safe() -> void:
+	var session := _session_with_room()
+	var player := MinimalEngineerPlayer.new()
+	player.global_position = Vector2(100.0, 100.0)
+	session.get_node("../").add_child(player)
+	assert_eq(session._engineer_command_target_for(player), player.global_position + Vector2.UP * EngineerDeployable.DEPLOY_RANGE)
+
+func test_command_keeps_current_drone_target_until_command_is_dispatched() -> void:
+	var session := _session_with_room()
+	var player := session.get_node("../Player") as Node2D
+	assert_true(session.deploy_engineer_deployable(player))
+	var drone := session._active_room.get_node("Deployables").get_child(0) as EngineerDeployable
+	var deployed_target := drone._target_position
+	player.command_target = Vector2(600.0, 300.0)
+
+	assert_eq(drone._target_position, deployed_target)
+	assert_true(session.command_engineer_drone(player))
+	assert_eq(drone._target_position, player.command_target)
+	assert_ne(drone._target_position, deployed_target)
+
 func test_limit_fifo_preserves_drone_and_replaces_oldest_non_drone() -> void:
 	var session := _session_with_room()
 	var player := session.get_node("../Player") as Node2D
@@ -564,8 +632,13 @@ class TestSession extends Session:
 		add_to_group(&"session")
 
 class EngineerRoomPlayer extends Node2D:
+	var command_target := Vector2.ZERO
+
 	func set_room_bounds(_bounds: Rect2) -> void:
 		pass
+
+	func get_engineer_drone_command_target() -> Vector2:
+		return command_target
 
 class EnemyContactStub extends CharacterBody2D:
 	var contact_damage := 1.0
@@ -606,6 +679,10 @@ class RoomClearPlayerStub extends Node2D:
 
 	func on_room_clear() -> void:
 		room_clear_calls += 1
+
+class MinimalEngineerPlayer extends Node2D:
+	func get_engineer_deploy_target(distance: float) -> Vector2:
+		return global_position + Vector2.UP * distance
 
 class DroneOwnerStub extends Node2D:
 	var aim_direction := Vector2.RIGHT
