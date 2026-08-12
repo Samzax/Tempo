@@ -9,8 +9,13 @@ extends ActionDef
 @export var max_targets: int = 8
 
 func execute(context: EffectContext) -> void:
+	if context == null or context.owner == null:
+		return
 	var owner := context.owner
-	if owner == null or not owner.has_method("get_tree"):
+	if not owner.is_inside_tree():
+		return
+	var tree := owner.get_tree()
+	if tree == null:
 		return
 	var depth := context.trigger_depth + 1
 	if depth > 3:
@@ -23,7 +28,7 @@ func execute(context: EffectContext) -> void:
 	else:
 		return
 	var hit := 0
-	for e in owner.get_tree().get_nodes_in_group(&"enemies"):
+	for e in tree.get_nodes_in_group(&"enemies"):
 		if not is_instance_valid(e) or e.is_queued_for_deletion():
 			continue
 		if not (e is Node2D):
