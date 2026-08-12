@@ -8,6 +8,7 @@ const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const COMBAT_POOL := preload("res://resources/loot/combat_pool.tres")
 const BOSS_POOL := preload("res://resources/loot/boss_pool.tres")
 const TREASURE_POOL := preload("res://resources/loot/treasure_pool.tres")
+const RISK_POOL := preload("res://resources/loot/risk_pool.tres")
 const ENGINEER_DEPLOYABLE := preload("res://scenes/deployables/engineer_deployable.tscn")
 const ENGINEER_DEPLOYABLE_LIMIT := 3
 const REGENTE_PREVIEW := preload("res://scenes/enemies/bosses/regente_dos_ecos.tscn")
@@ -190,7 +191,7 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	var room_bounds := room_def.get_bounds()
 	controller.room_def = room_def
 	_configure_room_geometry(room, room_bounds)
-	chest.configure(_player, run_state.sector_index, node_id, 0, 0, _pool_for(node_def), run_state.get_offer(run_state.sector_index, node_id, 0, 0), node_def.node_type == SectorNode.NodeType.TREASURE)
+	chest.configure(_player, run_state.sector_index, node_id, 0, 0, _pool_for(node_def), run_state.get_offer(run_state.sector_index, node_id, 0, 0), node_def.node_type == SectorNode.NodeType.TREASURE, node_def.node_type == SectorNode.NodeType.RISK)
 	chest.position = Vector2(room_def.size.x * 0.5, room_def.size.y - 52.0)
 	controller.room_cleared.connect(_on_room_cleared.bind(node_def, room_generation))
 	chest.offer_created.connect(run_state.save_offer)
@@ -386,8 +387,10 @@ func _open_offer(offer: RewardOffer, player: Node) -> void:
 func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 	var def := RoomDef.new()
 	def.id = StringName(str(node_def.id))
-	def.room_type = RoomDef.RoomType.BOSS if node_def.node_type == SectorNode.NodeType.BOSS else (RoomDef.RoomType.OPENING if node_def.node_type == SectorNode.NodeType.OPENING else (RoomDef.RoomType.TREASURE if node_def.node_type == SectorNode.NodeType.TREASURE else RoomDef.RoomType.COMBAT))
+	def.room_type = RoomDef.RoomType.BOSS if node_def.node_type == SectorNode.NodeType.BOSS else (RoomDef.RoomType.OPENING if node_def.node_type == SectorNode.NodeType.OPENING else (RoomDef.RoomType.TREASURE if node_def.node_type == SectorNode.NodeType.TREASURE else (RoomDef.RoomType.RISK if node_def.node_type == SectorNode.NodeType.RISK else RoomDef.RoomType.COMBAT)))
 	if is_revisit:
+		def.finite_spawn_count = 0
+	elif node_def.node_type == SectorNode.NodeType.RISK:
 		def.finite_spawn_count = 0
 	elif node_def.room_profile == &"upper":
 		def.configure_upper_waves()
@@ -401,4 +404,6 @@ func _is_phase_one_wave_node(node_def: SectorNode) -> bool:
 func _pool_for(node_def: SectorNode) -> ItemPoolDef:
 	if node_def.node_type == SectorNode.NodeType.TREASURE:
 		return TREASURE_POOL
+	if node_def.node_type == SectorNode.NodeType.RISK:
+		return RISK_POOL
 	return BOSS_POOL if node_def.node_type == SectorNode.NodeType.BOSS else COMBAT_POOL

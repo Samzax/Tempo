@@ -31,6 +31,17 @@ func apply_damage(info: DamageInfo) -> float:
 		died.emit(info)
 	return actual_drop
 
+func try_spend_health(amount: float, minimum_remaining: float = 1.0) -> bool:
+	if not is_finite(amount) or not is_finite(minimum_remaining) or not is_finite(health):
+		return false
+	if amount <= 0.0 or minimum_remaining < 0.0:
+		return false
+	var remaining := health - amount
+	if not is_finite(remaining) or remaining < minimum_remaining:
+		return false
+	health = remaining
+	return true
+
 ## Recupera vida ate o maximo. Ignora valores nao-positivos.
 func heal(amount: float) -> void:
 	if amount <= 0.0:

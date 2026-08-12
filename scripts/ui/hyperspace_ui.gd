@@ -78,6 +78,8 @@ func _label_for_node_type(node_type: int) -> String:
 		return "BOSS"
 	if node_type == SectorNode.NodeType.TREASURE:
 		return "TESOURO"
+	if node_type == SectorNode.NodeType.RISK:
+		return "RISCO"
 	return "COMBATE"
 
 func _draw() -> void:

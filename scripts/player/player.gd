@@ -442,6 +442,11 @@ func buy_item(item: ItemDef, cost: int) -> bool:
 func can_acquire_item(item: ItemDef) -> bool:
 	return item != null and _inventory != null and _inventory.can_acquire(item)
 
+func try_spend_health(amount: float, minimum_remaining: float = 1.0) -> bool:
+	if not is_instance_valid(health):
+		return false
+	return health.try_spend_health(amount, minimum_remaining)
+
 ## APIs usadas exclusivamente pelo overlay de sandbox.
 func sandbox_set_stat_override(stat_id: StringName, value: float) -> bool:
 	if _stats == null or not StatCatalog.has_stat(stat_id):

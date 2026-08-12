@@ -114,10 +114,10 @@ func test_build_ui_populates_sorted_stat_and_item_dropdowns() -> void:
 		actual_items.append(sandbox_ui._item_id.get_item_text(index))
 	assert_eq(actual_items, expected_items)
 	assert_eq(sandbox_ui._item_id.selected, 0 if not expected_items.is_empty() else -1)
-	assert_eq(sandbox_ui._node_type.item_count, 4)
-	var expected_node_types := ["Opening", "Combat", "Boss", "Treasure"]
-	var expected_node_ids := [SectorNode.NodeType.OPENING, SectorNode.NodeType.COMBAT, SectorNode.NodeType.BOSS, SectorNode.NodeType.TREASURE]
-	for index in 4:
+	assert_eq(sandbox_ui._node_type.item_count, 5)
+	var expected_node_types := ["Opening", "Combat", "Boss", "Treasure", "Risk"]
+	var expected_node_ids := [SectorNode.NodeType.OPENING, SectorNode.NodeType.COMBAT, SectorNode.NodeType.BOSS, SectorNode.NodeType.TREASURE, SectorNode.NodeType.RISK]
+	for index in 5:
 		assert_eq(sandbox_ui._node_type.get_item_text(index), expected_node_types[index])
 		assert_eq(sandbox_ui._node_type.get_item_id(index), expected_node_ids[index])
 

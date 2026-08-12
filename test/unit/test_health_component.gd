@@ -53,3 +53,50 @@ func test_damage_and_death_signals_keep_single_application_behavior() -> void:
 	assert_signal_emitted_with_parameters(health, &"died", [fatal_hit])
 	assert_eq(health.apply_damage(_damage(1.0)), 0.0)
 	assert_signal_emit_count(health, &"died", 1)
+
+func test_try_spend_health_success_is_silent_and_exact() -> void:
+	var health := await _health(2.0)
+	health.health = 2.0
+	watch_signals(health)
+	assert_true(health.try_spend_health(1.0))
+	assert_eq(health.health, 1.0)
+	assert_signal_emit_count(health, &"damaged", 0)
+	assert_signal_emit_count(health, &"died", 0)
+	assert_false(health.try_spend_health(1.0))
+	assert_eq(health.health, 1.0)
+	assert_signal_emit_count(health, &"damaged", 0)
+	assert_signal_emit_count(health, &"died", 0)
+
+func test_try_spend_health_honors_custom_minimum_without_partial_debit() -> void:
+	var health := await _health(10.0)
+	health.health = 3.0
+	assert_true(health.try_spend_health(1.0, 2.0))
+	assert_eq(health.health, 2.0)
+	assert_false(health.try_spend_health(1.0, 2.0))
+	assert_eq(health.health, 2.0)
+	assert_false(health.try_spend_health(2.0, 1.0))
+	assert_eq(health.health, 2.0)
+
+func test_try_spend_health_rejects_invalid_amount_minimum_and_health() -> void:
+	for amount in [0.0, -1.0, NAN, INF]:
+		var health := await _health(5.0); health.health = 3.0
+		assert_false(health.try_spend_health(amount)); assert_eq(health.health, 3.0)
+	for minimum in [-1.0, NAN, INF]:
+		var health := await _health(5.0); health.health = 3.0
+		assert_false(health.try_spend_health(1.0, minimum)); assert_eq(health.health, 3.0)
+	for current in [NAN, INF]:
+		var health := await _health(5.0); health.health = current
+		assert_false(health.try_spend_health(1.0))
+		if is_nan(current):
+			assert_true(is_nan(health.health))
+		else:
+			assert_eq(health.health, INF)
+
+func test_try_spend_health_rejects_nonfinite_remaining_and_sequential_calls_are_atomic() -> void:
+	var health := await _health(5.0)
+	health.health = 1.0
+	assert_false(health.try_spend_health(INF, 0.0))
+	assert_eq(health.health, 1.0)
+	health.health = 1.0e308
+	assert_false(health.try_spend_health(-1.0e308, 0.0))
+	assert_eq(health.health, 1.0e308)
