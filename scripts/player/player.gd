@@ -437,7 +437,7 @@ func acquire_item(item: ItemDef) -> bool:
 	return _inventory.acquire(item)
 
 func can_acquire_item(item: ItemDef) -> bool:
-	return item != null and _inventory != null and _inventory.count(item.id) < item.max_stacks
+	return item != null and _inventory != null and _inventory.can_acquire(item)
 
 ## APIs usadas exclusivamente pelo overlay de sandbox.
 func sandbox_set_stat_override(stat_id: StringName, value: float) -> bool:

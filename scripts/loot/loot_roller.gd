@@ -8,7 +8,7 @@ const MODULUS: int = 2147483647
 const MULTIPLIER: int = 48271
 const COMPONENT_MULTIPLIER: int = 69621
 
-static func roll_offer(pool: ItemPoolDef, run_seed: int, sector_index: int, node_id: int, player_slot: int, reward_index: int, luck: float = 0.0) -> RewardOffer:
+static func roll_offer(pool: ItemPoolDef, run_seed: int, sector_index: int, node_id: int, player_slot: int, reward_index: int, luck: float = 0.0, is_eligible: Callable = Callable()) -> RewardOffer:
 	var offer := RewardOffer.new()
 	offer.run_seed = run_seed
 	offer.sector_index = sector_index
@@ -27,6 +27,9 @@ static func roll_offer(pool: ItemPoolDef, run_seed: int, sector_index: int, node
 		if entry == null or entry.item == null or entry.item.id.is_empty() or entry.base_weight <= 0.0:
 			continue
 		if not entry.item.validate_content().is_empty():
+			continue
+		# Predicados devem ser puros e somente leitura: sao avaliados uma vez por entrada valida antes do RNG.
+		if is_eligible.is_valid() and not bool(is_eligible.call(entry.item)):
 			continue
 		var weight := entry.base_weight * (1.0 + maxf(luck, 0.0) * _rarity_bonus(entry.item.rarity))
 		if weight <= 0.0:

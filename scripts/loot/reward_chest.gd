@@ -28,8 +28,7 @@ func _ready() -> void:
 	if _room_controller == null:
 		push_error("RewardChest requires a RoomController.")
 		return
-	if _pending_offer != null and _room_controller.runtime != null:
-		_room_controller.runtime.reward_offer = _pending_offer
+	_restore_pending_offer_if_possible()
 	_room_controller.room_cleared.connect(_unlock)
 	# Uma sala sem spawns pode ser limpa durante o _ready do controlador.
 	if _room_controller.runtime != null and _room_controller.runtime.is_cleared():
@@ -62,7 +61,15 @@ func _is_chest_click(viewport_position: Vector2) -> bool:
 func open_offer() -> void:
 	if not _available or _room_controller == null or _room_controller.runtime == null or _player == null:
 		return
-	offer_requested.emit(_room_controller.runtime.reward_offer, _player)
+	var offer := _room_controller.runtime.reward_offer
+	if offer == null or offer.claimed:
+		return
+	if offer.options.is_empty():
+		offer.claimed = true
+		offer.claimed_item_id = &""
+		queue_redraw()
+		return
+	offer_requested.emit(offer, _player)
 
 func configure(player: Node, new_sector_index: int, new_node_id: int, new_player_slot: int, new_reward_index: int, new_pool: ItemPoolDef, existing_offer: RewardOffer) -> void:
 	_player = player
@@ -71,12 +78,19 @@ func configure(player: Node, new_sector_index: int, new_node_id: int, new_player
 	player_slot = new_player_slot
 	reward_index = new_reward_index
 	pool = new_pool
-	_pending_offer = existing_offer
+	if existing_offer != null:
+		_pending_offer = existing_offer
+	_restore_pending_offer_if_possible()
+
+func _restore_pending_offer_if_possible() -> void:
+	if _pending_offer == null or _room_controller == null or _room_controller.runtime == null or _room_controller.runtime.reward_offer != null:
+		return
+	_room_controller.runtime.reward_offer = _pending_offer
 
 func _ensure_offer() -> void:
 	if _room_controller == null or _room_controller.runtime == null or _room_controller.runtime.reward_offer != null or _player == null:
 		return
-	_room_controller.runtime.reward_offer = LootRoller.roll_offer(pool, RunManager.seed_value, sector_index, node_id, player_slot, reward_index, _player.get_luck())
+	_room_controller.runtime.reward_offer = LootRoller.roll_offer(pool, RunManager.seed_value, sector_index, node_id, player_slot, reward_index, _player.get_luck(), Callable(_player, &"can_acquire_item"))
 	offer_created.emit(_room_controller.runtime.reward_offer)
 
 func _draw() -> void:
