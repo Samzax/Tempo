@@ -255,6 +255,139 @@ func test_stale_clear_callback_cannot_open_hyperspace_after_sandbox_warp() -> vo
 	assert_false(session._awaiting_boss_advance)
 	assert_false(hyperspace.visible)
 
+func test_regente_preview_button_delegates_to_session_and_disables_after_success() -> void:
+	var session := SandboxSessionDouble.new()
+	var sandbox_ui := SandboxUI.new()
+	add_child_autofree(sandbox_ui)
+	autofree(session)
+	sandbox_ui._session = session
+	sandbox_ui._controller = SandboxController.new(null, session)
+	sandbox_ui._status = Label.new()
+	sandbox_ui._regente_preview_button = Button.new()
+	add_child_autofree(sandbox_ui._status)
+	add_child_autofree(sandbox_ui._regente_preview_button)
+	sandbox_ui._regente_preview_button.text = "Spawn Regente (Preview)"
+
+	sandbox_ui._on_spawn_regente_preview()
+
+	assert_eq(sandbox_ui._regente_preview_button.text, "Spawn Regente (Preview)")
+	assert_eq(session.regente_preview_calls, 1)
+	assert_true(sandbox_ui._regente_preview_button.disabled)
+	assert_eq(sandbox_ui._status.text, "Regente posicionada para previa.")
+
+func test_regente_preview_button_reenables_when_active_room_changes_or_preview_is_removed() -> void:
+	var session := _make_regente_preview_session()
+	var sandbox_ui := SandboxUI.new()
+	add_child_autofree(sandbox_ui)
+	sandbox_ui._session = session
+	sandbox_ui._regente_preview_button = Button.new()
+	add_child_autofree(sandbox_ui._regente_preview_button)
+
+	assert_true(session.sandbox_spawn_regente_preview())
+	sandbox_ui._sync_regente_preview_button()
+	assert_true(sandbox_ui._regente_preview_button.disabled)
+	var preview := _regente_preview_in(session._active_room)
+	preview.queue_free()
+	await get_tree().process_frame
+	sandbox_ui._sync_regente_preview_button()
+	assert_false(sandbox_ui._regente_preview_button.disabled)
+
+	assert_true(session.sandbox_spawn_regente_preview())
+	sandbox_ui._sync_regente_preview_button()
+	assert_true(sandbox_ui._regente_preview_button.disabled)
+	var target_node := session.sector.get_node(session.sector.start_node_id)
+	assert_true(session.sandbox_warp(1337, 0, target_node.id, target_node.node_type))
+	sandbox_ui._sync_regente_preview_button()
+	assert_false(sandbox_ui._regente_preview_button.disabled)
+
+func test_session_spawns_regente_preview_in_real_room_without_affecting_runtime_and_warp_discards_it() -> void:
+	var session := _make_regente_preview_session()
+	var room := session._active_room
+	var controller := room.get_node("RoomController") as RoomController
+	var enemies := room.get_node("Enemies") as Node2D
+	var bounds := controller.room_def.get_bounds()
+	var active_count := controller.runtime.active_enemy_count()
+
+	assert_not_null(controller.runtime)
+	assert_false(_has_regente_preview(enemies))
+	assert_true(session.sandbox_spawn_regente_preview())
+	var preview := _regente_preview_in(room) as RegenteDosEcos
+	assert_not_null(preview)
+	assert_true(preview.get_meta(&"sandbox_regente_preview", false))
+	assert_eq(preview.get("_room_bounds"), bounds)
+	assert_eq(preview.get("_room_cull_policy"), controller.room_def.cull_policy)
+	assert_true(bounds.has_point(preview.global_position))
+	assert_eq(controller.runtime.active_enemy_count(), active_count)
+	assert_false(session.sandbox_spawn_regente_preview())
+
+	var target_node := session.sector.get_node(session.sector.start_node_id)
+	assert_true(session.sandbox_warp(1337, 0, target_node.id, target_node.node_type))
+	assert_true(preview.is_queued_for_deletion())
+	assert_false(_has_regente_preview(session._active_room.get_node("Enemies")))
+
+func test_regente_preview_position_clamps_deterministically_at_room_edges() -> void:
+	var session := _make_regente_preview_session()
+	var bounds := (session._active_room.get_node("RoomController") as RoomController).room_def.get_bounds()
+	var padding := Vector2(minf(96.0, bounds.size.x * 0.25), minf(96.0, bounds.size.y * 0.25))
+	var safe_bounds := Rect2(bounds.position + padding, bounds.size - padding * 2.0)
+
+	session._player.global_position = Vector2(-10000.0, -10000.0)
+	assert_eq(session._regente_preview_position(bounds), safe_bounds.position)
+	assert_eq(session._regente_preview_position(bounds), safe_bounds.position)
+	session._player.global_position = Vector2(10000.0, 10000.0)
+	assert_eq(session._regente_preview_position(bounds), safe_bounds.end)
+	assert_eq(session._regente_preview_position(bounds), safe_bounds.end)
+
+func test_normal_session_flow_does_not_spawn_regente_preview_without_sandbox_action() -> void:
+	var session := _make_regente_preview_session()
+	var enemies := session._active_room.get_node("Enemies") as Node2D
+
+	assert_false(_has_regente_preview(enemies))
+	assert_eq((session._active_room.get_node("RoomController") as RoomController).runtime.active_enemy_count(), 0)
+
+func _make_regente_preview_session() -> Session:
+	var session := Session.new()
+	var player := preload("res://scenes/player/player.tscn").instantiate() as Node2D
+	var camera := Camera2D.new()
+	var room_host := Node2D.new()
+	var hyperspace := HyperspaceUI.new()
+	player.name = "Player"
+	camera.name = "Camera2D"
+	room_host.name = "RoomHost"
+	hyperspace.name = "HyperspaceUI"
+	session.add_child(player)
+	session.add_child(camera)
+	session.add_child(room_host)
+	session.add_child(hyperspace)
+	session.player_path = NodePath("Player")
+	session.camera_path = NodePath("Camera2D")
+	session.room_host_path = NodePath("RoomHost")
+	session.hyperspace_path = NodePath("HyperspaceUI")
+	add_child_autofree(session)
+	session.run_state = RunState.new()
+	session.run_state.run_seed = 1337
+	session.run_state.sector_index = 0
+	session.sector = SectorGenerator.generate(1337, 0)
+	session._enter_node(session.sector.start_node_id)
+	return session
+
+func _regente_preview_in(room: Node) -> Node:
+	var enemies := room.get_node_or_null("Enemies")
+	if enemies == null:
+		return null
+	for child in enemies.get_children():
+		if child.get_meta(&"sandbox_regente_preview", false):
+			return child
+	return null
+
+func _has_regente_preview(enemies: Node) -> bool:
+	if enemies == null:
+		return false
+	for child in enemies.get_children():
+		if child.get_meta(&"sandbox_regente_preview", false):
+			return true
+	return false
+
 class SandboxPlayerDouble extends Node:
 	var stats: StatBlock
 	var inventory: Inventory
@@ -322,10 +455,14 @@ class SandboxSessionDouble extends Session:
 	var cleared := false
 	var warp_called := false
 	var warp_args: Array = []
+	var regente_preview_calls := 0
 	func sandbox_clear_room() -> bool:
 		cleared = true
 		return true
 	func sandbox_warp(seed_value: int, sector_index: int, node_id: int, node_type: int) -> bool:
 		warp_called = true
 		warp_args = [seed_value, sector_index, node_id, node_type]
+		return true
+	func sandbox_spawn_regente_preview() -> bool:
+		regente_preview_calls += 1
 		return true

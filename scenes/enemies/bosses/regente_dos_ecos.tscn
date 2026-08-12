@@ -1,9 +1,12 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/bosses/regente_dos_ecos.gd" id="1_regente"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
 [ext_resource type="Script" path="res://scripts/components/procedural_chain_2d.gd" id="3_chain"]
-[ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/assembled-reference.png" id="4_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/core-reactor.png" id="4_core"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/mask-crown.png" id="5_mask"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/arm-kit.png" id="6_arm"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/conduit-kit.png" id="7_conduit"]
 
 [sub_resource type="CircleShape2D" id="Circle_regente"]
 radius = 20.0
@@ -12,15 +15,17 @@ radius = 20.0
 collision_layer = 4
 collision_mask = 0
 script = ExtResource("1_regente")
+mask_axial_offset = -97.0
+crown_axial_offset = -103.0
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="CoreReactor" type="Sprite2D" parent="."]
 texture_filter = 1
-texture = ExtResource("4_sprite")
-offset = Vector2(27, 108)
-scale = Vector2(0.3205, 0.3205)
+texture = ExtResource("4_core")
+position = Vector2(3.5, 18)
+scale = Vector2(0.36, 0.36)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("Circle_regente")
@@ -31,30 +36,100 @@ top_level = true
 [node name="CrownPivot" type="Node2D" parent="."]
 top_level = true
 
+[node name="MaskCrown" type="Sprite2D" parent="CrownPivot"]
+texture_filter = 1
+texture = ExtResource("5_mask")
+position = Vector2(-3, 0)
+rotation = 0.0
+scale = Vector2(0.32, 0.32)
+
 [node name="Arms" type="Node2D" parent="."]
 
 [node name="LeftArmChain" type="Node2D" parent="Arms" groups=["regente_arm_chain"]]
-position = Vector2(-18, 8)
+position = Vector2(-25, -55)
 script = ExtResource("3_chain")
-link_count = 4
-link_length = 14.0
+link_count = 6
+link_length = 13.0
+rest_directions = PackedVector2Array(-0.84855867, 0.52910129, -0.77794118, 0.62833711, -0.68160366, 0.73172157, -0.54778594, 0.83661853, -0.38176015, 0.92426143, -0.18065152, 0.98354717)
+visual_texture = ExtResource("6_arm")
+joint_region = Rect2(43, 198, 76, 66)
+link_region = Rect2(132, 267, 62, 98)
+end_region = Rect2(118, 410, 82, 86)
+link_regions = [Rect2(35, 6, 73, 59), Rect2(34, 65, 47, 113), Rect2(34, 195, 44, 53), Rect2(44, 264, 39, 91), Rect2(59, 372, 33, 39), Rect2(58, 417, 47, 72)]
+visual_scale = Vector2(0.26, 0.26)
+visual_rotation_offset = -1.5708
+visual_marker_roles = PackedInt32Array(1, 1, 1, 1, 1, 1)
+visual_marker_spans = PackedVector2Array(-1, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5)
+visual_elbow_flex = 0.2
 
 [node name="RightArmChain" type="Node2D" parent="Arms" groups=["regente_arm_chain"]]
-position = Vector2(18, 8)
+position = Vector2(25, -55)
 script = ExtResource("3_chain")
-link_count = 4
-link_length = 14.0
+link_count = 6
+link_length = 13.0
+rest_directions = PackedVector2Array(0.84855867, 0.52910129, 0.77794118, 0.62833711, 0.68160366, 0.73172157, 0.54778594, 0.83661853, 0.38176015, 0.92426143, 0.18065152, 0.98354717)
+visual_texture = ExtResource("6_arm")
+joint_region = Rect2(231, 198, 76, 66)
+link_region = Rect2(132, 267, 62, 98)
+end_region = Rect2(268, 410, 82, 86)
+link_regions = [Rect2(35, 6, 73, 59), Rect2(34, 65, 47, 113), Rect2(34, 195, 44, 53), Rect2(44, 264, 39, 91), Rect2(59, 372, 33, 39), Rect2(58, 417, 47, 72)]
+visual_scale = Vector2(-0.26, 0.26)
+visual_rotation_offset = -1.5708
+visual_marker_roles = PackedInt32Array(1, 1, 1, 1, 1, 1)
+visual_marker_spans = PackedVector2Array(-1, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5)
+visual_elbow_flex = 0.2
 
 [node name="Conduits" type="Node2D" parent="."]
 
 [node name="LeftConduitChain" type="Node2D" parent="Conduits" groups=["regente_conduit_chain"]]
-position = Vector2(-10, 15)
+position = Vector2(-20, 40)
 script = ExtResource("3_chain")
-link_count = 3
-link_length = 10.0
+link_count = 7
+link_length = 19.0
+rest_directions = PackedVector2Array(-0.28, 0.96, -0.42, 0.91, -0.48, 0.88, -0.38, 0.93, -0.2, 0.98, -0.06, 1.0, 0.08, 1.0)
+visual_texture = ExtResource("7_conduit")
+joint_region = Rect2(160, 50, 54, 37)
+link_region = Rect2(213, 50, 58, 37)
+end_region = Rect2(158, 50, 55, 37)
+visual_scale = Vector2(0.34, 0.34)
+visual_marker_roles = PackedInt32Array(1, 1, 1, 1, 1, 1, 1)
+visual_marker_spans = PackedVector2Array(-1, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6)
+visual_marker_offsets = PackedVector2Array(0, 0, 0, 0, 0, 0, 3, 0)
+visual_terminal_midpoint = true
+visual_terminal_rotation_offset = 3.14159265
+
+[node name="CenterConduitChain" type="Node2D" parent="Conduits" groups=["regente_conduit_chain"]]
+position = Vector2(0, 70)
+script = ExtResource("3_chain")
+link_count = 6
+link_length = 14.0
+rest_directions = PackedVector2Array(0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1)
+visual_texture = ExtResource("7_conduit")
+joint_region = Rect2(160, 50, 54, 37)
+link_region = Rect2(213, 50, 58, 37)
+end_region = Rect2(158, 50, 55, 37)
+visual_scale = Vector2(0.336, 0.336)
+visual_marker_roles = PackedInt32Array(1, 1, 1, 1, 1, 1)
+visual_marker_spans = PackedVector2Array(-1, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5)
+visual_marker_offsets = PackedVector2Array(-0.5, 0, -1, 0, -1, 0, -1, 0, -1, 0, 1.5, 0)
+visual_marker_scales = PackedVector2Array(0.32, 0.336, 0.336, 0.336, 0.336, 0.336, 0.336, 0.336, 0.336, 0.336, 0.32, 0.336)
+visual_terminal_midpoint = true
+visual_terminal_rotation_offset = 3.14159265
 
 [node name="RightConduitChain" type="Node2D" parent="Conduits" groups=["regente_conduit_chain"]]
-position = Vector2(10, 15)
+position = Vector2(20, 40)
 script = ExtResource("3_chain")
-link_count = 3
-link_length = 10.0
+link_count = 7
+link_length = 19.0
+rest_directions = PackedVector2Array(0.28, 0.96, 0.42, 0.91, 0.48, 0.88, 0.38, 0.93, 0.2, 0.98, 0.06, 1.0, -0.08, 1.0)
+visual_texture = ExtResource("7_conduit")
+joint_region = Rect2(160, 50, 54, 37)
+link_region = Rect2(213, 50, 58, 37)
+end_region = Rect2(158, 50, 55, 37)
+visual_scale = Vector2(-0.34, 0.34)
+visual_rotation_offset = 3.14159265
+visual_marker_roles = PackedInt32Array(1, 1, 1, 1, 1, 1, 1)
+visual_marker_spans = PackedVector2Array(-1, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6)
+visual_marker_offsets = PackedVector2Array(0, 0, 0, 0, 0, 0, -3, 0)
+visual_terminal_midpoint = true
+visual_terminal_rotation_offset = 3.14159265

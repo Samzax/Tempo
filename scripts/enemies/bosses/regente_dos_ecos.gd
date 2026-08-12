@@ -1,5 +1,7 @@
 class_name RegenteDosEcos
 extends Enemy
+
+const VERTICAL_SPRITE_ROTATION_OFFSET := -PI / 2.0
 ## Infraestrutura de movimento do chefe. Ataques, fases, drones e efeitos
 ## pertencem a camadas futuras; esta classe so movimenta raiz, pivôs e cadeias.
 
@@ -7,8 +9,8 @@ extends Enemy
 @export_range(0.0, 1000.0, 1.0) var root_stop_distance: float = 20.0
 @export_range(0.01, 100.0, 0.01) var root_acceleration: float = 5.0
 @export_range(0.01, 100.0, 0.01) var root_deceleration: float = 7.0
-@export_range(0.0, 200.0, 0.1) var mask_axial_offset: float = 8.0
-@export_range(0.0, 200.0, 0.1) var crown_axial_offset: float = -10.0
+@export_range(-200.0, 200.0, 0.1) var mask_axial_offset: float = -97.0
+@export_range(-200.0, 200.0, 0.1) var crown_axial_offset: float = -103.0
 @export_range(0.01, 100.0, 0.01) var mask_follow_rate: float = 8.0
 @export_range(0.01, 100.0, 0.01) var crown_follow_rate: float = 5.0
 @export_range(0.01, 100.0, 0.01) var mask_turn_rate: float = 8.0
@@ -16,8 +18,8 @@ extends Enemy
 @export_group("Visual Culling")
 ## Margem extra alem da margem de sala da classe base, em pixels de mundo.
 ## Cobre o footprint aproximado do Sprite2D da Regente em torno da raiz.
-@export_range(64.0, 500.0, 1.0) var visual_cull_margin_x: float = 64.0
-@export_range(169.0, 500.0, 1.0) var visual_cull_margin_y: float = 169.0
+@export_range(64.0, 500.0, 1.0) var visual_cull_margin_x: float = 80.0
+@export_range(169.0, 500.0, 1.0) var visual_cull_margin_y: float = 190.0
 
 @onready var mask_pivot: Node2D = get_node_or_null("MaskPivot")
 @onready var crown_pivot: Node2D = get_node_or_null("CrownPivot")
@@ -30,22 +32,27 @@ func _ready() -> void:
 	super()
 	_initialize_pivots()
 	_reset_chains()
+	queue_redraw()
 
 func _physics_process(delta: float) -> void:
 	if _should_cull():
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 		return
-	var target_velocity := _target_velocity()
-	var response := root_acceleration if target_velocity.length_squared() > 0.000001 else root_deceleration
-	velocity = velocity.lerp(target_velocity, _exp_weight(response, delta))
-	if velocity.length_squared() > 0.000001:
-		_facing = velocity.normalized()
-	move_and_slide()
+	var frame_delta := delta
+	delta = _consume_stun_delta(delta)
+	if delta > 0.0:
+		var target_velocity := _target_velocity()
+		var response := root_acceleration if target_velocity.length_squared() > 0.000001 else root_deceleration
+		velocity = velocity.lerp(target_velocity, _exp_weight(response, delta))
+		if velocity.length_squared() > 0.000001:
+			_facing = velocity.normalized()
+	_integrate_physics_motion(delta, frame_delta)
 	if _room_bounds.grow(16.0).has_point(global_position):
 		_has_entered_room = true
-	_update_pivots(delta)
-	_step_chains(delta)
+	_update_pivots(frame_delta)
+	_step_chains(frame_delta)
+	queue_redraw()
 	if _should_cull():
 		_resolve(ResolveReason.CULLED)
 		queue_free()
@@ -73,20 +80,25 @@ func _should_cull() -> bool:
 	).has_point(global_position)
 
 func _update_pivots(delta: float) -> void:
+	var visual_rotation := _facing.angle() + VERTICAL_SPRITE_ROTATION_OFFSET
 	if is_instance_valid(mask_pivot):
-		mask_pivot.global_position = mask_pivot.global_position.lerp(global_position + _facing * mask_axial_offset, _exp_weight(mask_follow_rate, delta))
-		mask_pivot.global_rotation = lerp_angle(mask_pivot.global_rotation, _facing.angle(), _exp_weight(mask_turn_rate, delta))
+		var mask_position := mask_pivot.global_position.lerp(global_position + _facing * mask_axial_offset, _exp_weight(mask_follow_rate, delta))
+		var mask_rotation := lerp_angle(mask_pivot.global_rotation, visual_rotation, _exp_weight(mask_turn_rate, delta))
+		_set_pivot_global_transform(mask_pivot, mask_position, mask_rotation)
 	if is_instance_valid(crown_pivot):
-		crown_pivot.global_position = crown_pivot.global_position.lerp(global_position + _facing * crown_axial_offset, _exp_weight(crown_follow_rate, delta))
-		crown_pivot.global_rotation = lerp_angle(crown_pivot.global_rotation, _facing.angle(), _exp_weight(crown_turn_rate, delta))
+		var crown_position := crown_pivot.global_position.lerp(global_position + _facing * crown_axial_offset, _exp_weight(crown_follow_rate, delta))
+		var crown_rotation := lerp_angle(crown_pivot.global_rotation, visual_rotation, _exp_weight(crown_turn_rate, delta))
+		_set_pivot_global_transform(crown_pivot, crown_position, crown_rotation)
 
 func _initialize_pivots() -> void:
+	var visual_rotation := _facing.angle() + VERTICAL_SPRITE_ROTATION_OFFSET
 	if is_instance_valid(mask_pivot):
-		mask_pivot.global_position = global_position + _facing * mask_axial_offset
-		mask_pivot.global_rotation = _facing.angle()
+		_set_pivot_global_transform(mask_pivot, global_position + _facing * mask_axial_offset, visual_rotation)
 	if is_instance_valid(crown_pivot):
-		crown_pivot.global_position = global_position + _facing * crown_axial_offset
-		crown_pivot.global_rotation = _facing.angle()
+		_set_pivot_global_transform(crown_pivot, global_position + _facing * crown_axial_offset, visual_rotation)
+
+func _set_pivot_global_transform(pivot: Node2D, position: Vector2, rotation: float) -> void:
+	pivot.global_transform = Transform2D(rotation, position)
 
 func _step_chains(delta: float) -> void:
 	for chain in arm_chains + conduit_chains:
@@ -94,9 +106,18 @@ func _step_chains(delta: float) -> void:
 			chain.step(chain.global_position, delta)
 
 func _reset_chains() -> void:
-	for chain in arm_chains + conduit_chains:
+	for chain in arm_chains:
+		if chain is ProceduralChain2D:
+			chain.reset_chain(chain.global_position, _arm_chain_reset_direction(chain))
+	for chain in conduit_chains:
 		if chain is ProceduralChain2D:
 			chain.reset_chain(chain.global_position, _facing)
+
+func _arm_chain_reset_direction(chain: Node) -> Vector2:
+	var local_position := (chain as Node2D).position
+	if local_position.length_squared() > 0.000001:
+		return local_position.normalized()
+	return _facing
 
 func _nodes_in_group(group_name: StringName) -> Array[Node]:
 	var found: Array[Node] = []
