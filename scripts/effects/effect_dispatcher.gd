@@ -44,7 +44,7 @@ func dispatch(event: StringName, payload: Variant, depth: int) -> void:
 			continue
 		if effect.action != null:
 			effect.action.execute(context)
-		if effect.cooldown > 0.0:
+		if effect in _effects and effect.cooldown > 0.0:
 			_cooldowns[effect] = effect.cooldown
 
 func tick(delta: float) -> void:

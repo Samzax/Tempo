@@ -70,12 +70,18 @@ func add_modifier(def: StatModifierDef) -> void:
 	if def.source_id.is_empty():
 		push_error("Não é possível adicionar um modificador sem origem.")
 		return
-	var definition: StatDef = _definitions[def.stat]
-	if not definition.allowed_ops.has(def.op):
+	if not can_apply_modifier(def):
 		push_error("Operação não permitida para a estatística: %s" % def.stat)
 		return
 	_modifiers.append(ActiveModifier.new(def))
 	_dirty[def.stat] = true
+
+## Indica se este bloco concreto aceita o modificador, sem alterar estado.
+func can_apply_modifier(modifier_def: StatModifierDef) -> bool:
+	if modifier_def == null or not _definitions.has(modifier_def.stat):
+		return false
+	var definition: StatDef = _definitions[modifier_def.stat]
+	return definition.allowed_ops.has(modifier_def.op)
 
 ## Remove todos os modificadores pertencentes a uma origem.
 func remove_modifiers_by_source(source_id: StringName) -> void:
