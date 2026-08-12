@@ -131,6 +131,7 @@ func _build_ui() -> void:
 	_node_type.add_item("Opening", SectorNode.NodeType.OPENING)
 	_node_type.add_item("Combat", SectorNode.NodeType.COMBAT)
 	_node_type.add_item("Boss", SectorNode.NodeType.BOSS)
+	_node_type.add_item("Treasure", SectorNode.NodeType.TREASURE)
 	warp.add_child(_seed)
 	warp.add_child(_sector)
 	warp.add_child(_node)

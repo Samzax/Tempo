@@ -1,7 +1,7 @@
 class_name SectorNode
 extends Resource
 
-enum NodeType { OPENING, COMBAT, BOSS }
+enum NodeType { OPENING, COMBAT, BOSS, TREASURE }
 
 @export var id: int
 @export var column: int = 0

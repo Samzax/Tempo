@@ -5,6 +5,8 @@ extends Node2D
 signal offer_requested(offer: RewardOffer, player: Node)
 signal offer_created(offer: RewardOffer)
 
+const TreasurePricing := preload("res://scripts/loot/treasure_pricing.gd")
+
 @export var room_controller_path: NodePath
 @export var player_path: NodePath
 @export var pool: ItemPoolDef
@@ -17,6 +19,7 @@ var _room_controller: RoomController
 var _player: Node
 var _available := false
 var _pending_offer: RewardOffer
+var _paid_with_temporal_echoes := false
 
 const INTERACTION_RADIUS := 42.0
 const CLICK_RADIUS := 16.0
@@ -71,13 +74,14 @@ func open_offer() -> void:
 		return
 	offer_requested.emit(offer, _player)
 
-func configure(player: Node, new_sector_index: int, new_node_id: int, new_player_slot: int, new_reward_index: int, new_pool: ItemPoolDef, existing_offer: RewardOffer) -> void:
+func configure(player: Node, new_sector_index: int, new_node_id: int, new_player_slot: int, new_reward_index: int, new_pool: ItemPoolDef, existing_offer: RewardOffer, new_paid_with_temporal_echoes: bool = false) -> void:
 	_player = player
 	sector_index = new_sector_index
 	node_id = new_node_id
 	player_slot = new_player_slot
 	reward_index = new_reward_index
 	pool = new_pool
+	_paid_with_temporal_echoes = new_paid_with_temporal_echoes
 	if existing_offer != null:
 		_pending_offer = existing_offer
 	_restore_pending_offer_if_possible()
@@ -90,8 +94,13 @@ func _restore_pending_offer_if_possible() -> void:
 func _ensure_offer() -> void:
 	if _room_controller == null or _room_controller.runtime == null or _room_controller.runtime.reward_offer != null or _player == null:
 		return
-	_room_controller.runtime.reward_offer = LootRoller.roll_offer(pool, RunManager.seed_value, sector_index, node_id, player_slot, reward_index, _player.get_luck(), Callable(_player, &"can_acquire_item"))
-	offer_created.emit(_room_controller.runtime.reward_offer)
+	var offer := LootRoller.roll_offer(pool, RunManager.seed_value, sector_index, node_id, player_slot, reward_index, _player.get_luck(), Callable(_player, &"can_acquire_item"))
+	if _paid_with_temporal_echoes:
+		offer.paid_with_temporal_echoes = true
+		for item in offer.options:
+			offer.option_costs.append(TreasurePricing.cost_for(item))
+	_room_controller.runtime.reward_offer = offer
+	offer_created.emit(offer)
 
 func _draw() -> void:
 	if not _available:

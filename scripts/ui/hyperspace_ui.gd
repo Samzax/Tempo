@@ -71,6 +71,15 @@ func _row_for_node(node: SectorNode, row_count: int) -> int:
 		return 0
 	return node.row
 
+func _label_for_node_type(node_type: int) -> String:
+	if node_type == SectorNode.NodeType.OPENING:
+		return "INICIO"
+	if node_type == SectorNode.NodeType.BOSS:
+		return "BOSS"
+	if node_type == SectorNode.NodeType.TREASURE:
+		return "TESOURO"
+	return "COMBATE"
+
 func _draw() -> void:
 	if _sector == null:
 		return
@@ -89,7 +98,7 @@ func _draw() -> void:
 		if selectable and _cursor < _selectable.size() and _selectable[_cursor] == node.id:
 			draw_circle(pos, 15.0, Color(0.75, 0.94, 1.0, 0.25))
 		draw_circle(pos, 9.0, color)
-		var label := "BOSS" if node.node_type == SectorNode.NodeType.BOSS else ("INICIO" if node.node_type == SectorNode.NodeType.OPENING else "COMBATE")
+		var label := _label_for_node_type(node.node_type)
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-25, 25), label, HORIZONTAL_ALIGNMENT_CENTER, 50, 8, Color.WHITE)
 	var footer := "Clique ou Enter para viajar · Esc fecha · M reabre"
 	if _selectable.is_empty() and _sector.get_node(_sector.start_node_id) != null and _completed.has("%d:%s" % [_sector.sector_index, _sector.start_node_id + 6]):

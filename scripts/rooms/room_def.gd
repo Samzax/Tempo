@@ -1,7 +1,7 @@
 class_name RoomDef
 extends Resource
 
-enum RoomType { OPENING, COMBAT, BOSS }
+enum RoomType { OPENING, COMBAT, BOSS, TREASURE }
 enum CameraPolicy { FIXED }
 enum CullPolicy { DESPAWN_BOTTOM, NONE, DESPAWN_ALL_BORDERS }
 enum ClearPolicy { ALL_SPAWNS_RESOLVED }

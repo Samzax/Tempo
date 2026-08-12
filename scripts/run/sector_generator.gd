@@ -13,6 +13,8 @@ static func generate(run_seed: int, sector_index: int) -> SectorDef:
 	var right := _make_node(base_id + 2, 1, 1, SectorNode.NodeType.COMBAT)
 	var upper := _make_node(base_id + 3, 2, 0, SectorNode.NodeType.COMBAT)
 	upper.room_profile = &"upper"
+	if sector_index == 2:
+		upper.node_type = SectorNode.NodeType.TREASURE
 	var lower := _make_node(base_id + 4, 2, 1, SectorNode.NodeType.COMBAT)
 	var merge := _make_node(base_id + 5, 3, 0, SectorNode.NodeType.COMBAT)
 	var boss := _make_node(base_id + 6, 4, 0, SectorNode.NodeType.BOSS)

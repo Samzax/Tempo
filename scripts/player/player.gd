@@ -436,6 +436,9 @@ func remove_temporary_modifier(source_id: StringName) -> void:
 func acquire_item(item: ItemDef) -> bool:
 	return _inventory.acquire(item)
 
+func buy_item(item: ItemDef, cost: int) -> bool:
+	return ItemTransactionManager.purchase(_inventory, item, cost)
+
 func can_acquire_item(item: ItemDef) -> bool:
 	return item != null and _inventory != null and _inventory.can_acquire(item)
 
