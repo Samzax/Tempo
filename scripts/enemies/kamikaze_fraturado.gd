@@ -25,28 +25,38 @@ func _physics_process(delta: float) -> void:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 		return
+	var frame_delta := delta
 	delta = _consume_stun_delta(delta)
-	if delta <= 0.0:
-		return
+	var dash_finished := false
+	var state_elapsed_before := _elapsed
 	_elapsed += delta
-	match attack_state:
-		AttackState.APPROACH:
-			velocity = global_position.direction_to(_player.global_position) * speed if is_instance_valid(_player) else _entry_inward * speed
-			if is_instance_valid(_player) and global_position.distance_to(_player.global_position) <= engagement_distance:
-				_enter_state(AttackState.TELEGRAPH)
-		AttackState.TELEGRAPH:
-			velocity = Vector2.ZERO
-			if _elapsed >= telegraph_duration:
-				if is_instance_valid(_player): dash_direction = global_position.direction_to(_player.global_position)
-				if dash_direction == Vector2.ZERO: dash_direction = Vector2.DOWN
-				_enter_state(AttackState.DASH)
-		AttackState.DASH:
-			velocity = dash_direction * dash_speed
-			if _elapsed >= dash_duration: _enter_state(AttackState.RECOVER)
-		AttackState.RECOVER:
-			velocity = Vector2.ZERO
-			if _elapsed >= recover_duration: _enter_state(AttackState.APPROACH)
-	move_and_slide()
+	if delta > 0.0:
+		match attack_state:
+			AttackState.APPROACH:
+				velocity = global_position.direction_to(_player.global_position) * speed if is_instance_valid(_player) else _entry_inward * speed
+				if is_instance_valid(_player) and global_position.distance_to(_player.global_position) <= engagement_distance:
+					_enter_state(AttackState.TELEGRAPH)
+			AttackState.TELEGRAPH:
+				velocity = Vector2.ZERO
+				if _elapsed >= telegraph_duration:
+					if is_instance_valid(_player): dash_direction = global_position.direction_to(_player.global_position)
+					if dash_direction == Vector2.ZERO: dash_direction = Vector2.DOWN
+					_enter_state(AttackState.DASH)
+			AttackState.DASH:
+				velocity = dash_direction * dash_speed
+				var active_fraction := clampf((dash_duration - state_elapsed_before) / delta, 0.0, 1.0)
+				velocity *= active_fraction
+				if _elapsed >= dash_duration:
+					dash_finished = true
+			AttackState.RECOVER:
+				velocity = Vector2.ZERO
+				if _elapsed >= recover_duration: _enter_state(AttackState.APPROACH)
+	_integrate_physics_motion(delta, frame_delta)
+	if dash_finished:
+		_enter_state(AttackState.RECOVER)
+		_elapsed = maxf(0.0, delta - maxf(0.0, dash_duration - state_elapsed_before))
+		if _elapsed >= recover_duration:
+			_enter_state(AttackState.APPROACH)
 	if _room_bounds.grow(16.0).has_point(global_position): _has_entered_room = true
 
 func _enter_state(next: AttackState) -> void:

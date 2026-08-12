@@ -51,31 +51,30 @@ func _physics_process(delta: float) -> void:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 		return
+	var frame_delta := delta
 	delta = _consume_stun_delta(delta)
-	if delta <= 0.0:
-		return
 	var dash_finished := false
 	var state_elapsed_before := _state_elapsed
 	_state_elapsed += delta
-	match attack_state:
-		AttackState.CHASE:
-			_process_chase(delta)
-		AttackState.TELEGRAPH:
-			velocity = Vector2.ZERO
-			if _state_elapsed >= telegraph_duration:
-				_capture_dash_direction()
-				_enter_state(AttackState.DASH)
-		AttackState.DASH:
-			velocity = dash_direction * dash_speed
-			if delta > 0.0:
+	if delta > 0.0:
+		match attack_state:
+			AttackState.CHASE:
+				_process_chase(delta)
+			AttackState.TELEGRAPH:
+				velocity = Vector2.ZERO
+				if _state_elapsed >= telegraph_duration:
+					_capture_dash_direction()
+					_enter_state(AttackState.DASH)
+			AttackState.DASH:
+				velocity = dash_direction * dash_speed
 				velocity *= minf(1.0, maxf(0.0, dash_duration - state_elapsed_before) / delta)
-			if _state_elapsed >= dash_duration:
-				dash_finished = true
-		AttackState.RECOVER:
-			velocity = Vector2.ZERO
-			if _state_elapsed >= recover_duration:
-				_enter_state(AttackState.CHASE)
-	move_and_slide()
+				if _state_elapsed >= dash_duration:
+					dash_finished = true
+			AttackState.RECOVER:
+				velocity = Vector2.ZERO
+				if _state_elapsed >= recover_duration:
+					_enter_state(AttackState.CHASE)
+	_integrate_physics_motion(delta, frame_delta)
 	if dash_finished and not _dead:
 		_enter_state(AttackState.RECOVER)
 	if _room_bounds.grow(16.0).has_point(global_position):

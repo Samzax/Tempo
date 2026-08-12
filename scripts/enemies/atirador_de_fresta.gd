@@ -33,35 +33,35 @@ func _physics_process(delta: float) -> void:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 		return
+	var frame_delta := delta
 	delta = _consume_stun_delta(delta)
-	if delta <= 0.0:
-		return
 	_elapsed += delta
-	match attack_state:
-		AttackState.DRIFT:
-			_process_drift()
-			_mark_room_entry()
-			if _has_entered_room and (global_position.distance_to(_entry_start_position) >= _activation_distance or _elapsed >= _max_drift_time):
-				_lock_target()
-				_enter_state(AttackState.TELEGRAPH)
-		AttackState.TELEGRAPH:
-			velocity = Vector2.ZERO
-			aim_visual.frame = mini(aim_visual.hframes - 1, int(_elapsed / telegraph_duration * aim_visual.hframes))
-			if _elapsed >= telegraph_duration:
-				_enter_state(AttackState.FIRE)
-		AttackState.FIRE:
-			_fire_projectile()
-			_enter_state(AttackState.VULNERABLE)
-		AttackState.VULNERABLE:
-			velocity = Vector2.ZERO
-			fire_fx.frame = mini(7, int(_elapsed / 0.18 * 8.0))
-			if _elapsed >= vulnerable_duration:
-				_enter_state(AttackState.IDLE)
-		AttackState.IDLE:
-			velocity = Vector2.ZERO
-			if _elapsed >= idle_duration:
-				_enter_state(AttackState.DRIFT)
-	move_and_slide()
+	if delta > 0.0:
+		match attack_state:
+			AttackState.DRIFT:
+				_process_drift()
+				_mark_room_entry()
+				if _has_entered_room and (global_position.distance_to(_entry_start_position) >= _activation_distance or _elapsed >= _max_drift_time):
+					_lock_target()
+					_enter_state(AttackState.TELEGRAPH)
+			AttackState.TELEGRAPH:
+				velocity = Vector2.ZERO
+				aim_visual.frame = mini(aim_visual.hframes - 1, int(_elapsed / telegraph_duration * aim_visual.hframes))
+				if _elapsed >= telegraph_duration:
+					_enter_state(AttackState.FIRE)
+			AttackState.FIRE:
+				_fire_projectile()
+				_enter_state(AttackState.VULNERABLE)
+			AttackState.VULNERABLE:
+				velocity = Vector2.ZERO
+				fire_fx.frame = mini(7, int(_elapsed / 0.18 * 8.0))
+				if _elapsed >= vulnerable_duration:
+					_enter_state(AttackState.IDLE)
+			AttackState.IDLE:
+				velocity = Vector2.ZERO
+				if _elapsed >= idle_duration:
+					_enter_state(AttackState.DRIFT)
+	_integrate_physics_motion(delta, frame_delta)
 	if attack_state == AttackState.DRIFT:
 		_mark_room_entry()
 

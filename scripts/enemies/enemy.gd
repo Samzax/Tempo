@@ -12,11 +12,16 @@ signal resolved(enemy: Enemy, reason: int)
 @export var max_health: float = 3.0
 @export var speed: float = 60.0
 @export var contact_damage: float = 1.0
+@export var collision_mass: float = 1.0
+@export_range(0.0, 1.0) var collision_damage_resistance: float = 0.0
+@export var knockback_force: float = 1.0
+@export_range(0.0, 1.0) var knockback_resistance: float = 0.0
 @export var movement: Movement = Movement.CHASE
 @export var score_value: int = 10
 @export var tint: Color = Color.WHITE
 
 const BURST_FX := preload("res://scenes/effects/burst_fx.tscn")
+const COLLISION_KNOCKBACK_DECELERATION := 900.0
 
 @onready var health: HealthComponent = $HealthComponent
 ## Chefes modulares podem expor o reator como visual principal em vez de um
@@ -31,6 +36,7 @@ var _room_cull_policy: int = RoomDef.CullPolicy.DESPAWN_BOTTOM
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
 var _entry_inward := Vector2.DOWN
 var _has_entered_room := false
+var _collision_knockback_velocity := Vector2.ZERO
 ## Estado público de duração restante para UI, efeitos e testes de comportamento.
 var stun_remaining := 0.0
 
@@ -51,21 +57,21 @@ func _physics_process(delta: float) -> void:
 		_resolve(ResolveReason.CULLED)
 		queue_free()
 		return
+	var frame_delta := delta
 	delta = _consume_stun_delta(delta)
-	if delta <= 0.0:
-		return
 	_phase += delta
-	match movement:
-		Movement.CHASE:
-			if is_instance_valid(_player):
-				velocity = global_position.direction_to(_player.global_position) * speed
-			else:
+	if delta > 0.0:
+		match movement:
+			Movement.CHASE:
+				if is_instance_valid(_player):
+					velocity = global_position.direction_to(_player.global_position) * speed
+				else:
+					velocity = _entry_inward * speed
+			Movement.DESCEND:
 				velocity = _entry_inward * speed
-		Movement.DESCEND:
-			velocity = _entry_inward * speed
-		Movement.SINE:
-			velocity = _entry_inward * speed * 0.6 + _entry_inward.rotated(PI * 0.5) * sin(_phase * 3.0) * speed
-	move_and_slide()
+			Movement.SINE:
+				velocity = _entry_inward * speed * 0.6 + _entry_inward.rotated(PI * 0.5) * sin(_phase * 3.0) * speed
+	_integrate_physics_motion(delta, frame_delta)
 	if _room_bounds.grow(16.0).has_point(global_position):
 		_has_entered_room = true
 	if _should_cull():
@@ -120,11 +126,55 @@ func _consume_stun_delta(delta: float) -> float:
 	velocity = Vector2.ZERO
 	return frame_delta - stunned_delta
 
+## Canal externo somado apos a IA definir velocity, para que colisões não sejam
+## apagadas pela próxima decisão de movimento.
+func apply_collision_knockback(impulse: Vector2) -> void:
+	if _resolved or impulse == Vector2.ZERO:
+		return
+	_collision_knockback_velocity += impulse
+
+func _apply_collision_knockback(delta: float) -> void:
+	if _resolved:
+		_collision_knockback_velocity = Vector2.ZERO
+		return
+	velocity += _collision_knockback_velocity
+	_collision_knockback_velocity = _collision_knockback_velocity.move_toward(Vector2.ZERO, COLLISION_KNOCKBACK_DECELERATION * maxf(delta, 0.0))
+
+## Uma unica integracao por tick. Em expiracao parcial, o deslocamento da IA
+## e proporcional ao trecho ativo; knockback permanece ativo por todo o frame.
+func _integrate_physics_motion(active_delta: float, frame_delta: float) -> void:
+	if frame_delta > 0.0 and active_delta > 0.0 and active_delta < frame_delta:
+		velocity *= active_delta / frame_delta
+	_apply_collision_knockback(frame_delta)
+	_integrate_motion()
+
+func _integrate_motion() -> void:
+	move_and_slide()
+
 ## Recebe dano dos projéteis do jogador.
 func take_damage(info: DamageInfo) -> float:
 	if info == null or info.trigger_depth > 3:
 		return 0.0
 	return health.apply_damage(info)
+
+func get_collision_radius() -> float:
+	for child in get_children():
+		var collision := child as CollisionShape2D
+		if collision != null and collision.shape is CircleShape2D:
+			return (collision.shape as CircleShape2D).radius
+	return 10.0
+
+func get_collision_mass() -> float:
+	return collision_mass
+
+func get_collision_damage_resistance() -> float:
+	return collision_damage_resistance
+
+func get_knockback_force() -> float:
+	return knockback_force
+
+func get_knockback_resistance() -> float:
+	return knockback_resistance
 
 func _on_died(fatal_info: DamageInfo) -> void:
 	_resolve_death(fatal_info)
@@ -144,6 +194,7 @@ func _resolve(reason: int) -> void:
 	if _resolved:
 		return
 	_resolved = true
+	_collision_knockback_velocity = Vector2.ZERO
 	resolved.emit(self, reason)
 
 func _spawn_burst() -> void:

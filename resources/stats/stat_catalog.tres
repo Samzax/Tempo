@@ -22,7 +22,11 @@
 [ext_resource type="Resource" path="res://resources/stats/projectile_speed.tres" id="19_projectile_speed"]
 [ext_resource type="Resource" path="res://resources/stats/respawn_invuln.tres" id="20_respawn_invuln"]
 [ext_resource type="Resource" path="res://resources/stats/spread.tres" id="21_spread"]
+[ext_resource type="Resource" path="res://resources/stats/collision_mass.tres" id="22_collision_mass"]
+[ext_resource type="Resource" path="res://resources/stats/collision_damage_resistance.tres" id="23_collision_resistance"]
+[ext_resource type="Resource" path="res://resources/stats/knockback_force.tres" id="24_knockback_force"]
+[ext_resource type="Resource" path="res://resources/stats/knockback_resistance.tres" id="25_knockback_resistance"]
 
 [resource]
 script = ExtResource("1_catalog")
-stats = Array[ExtResource("2_stat_def")]([ExtResource("2_acceleration"), ExtResource("3_aim_tier"), ExtResource("4_blink_distance"), ExtResource("5_blink_haste"), ExtResource("6_blink_invuln"), ExtResource("7_crit_chance"), ExtResource("8_damage"), ExtResource("9_fire_rate"), ExtResource("10_friction"), ExtResource("11_hit_invuln"), ExtResource("12_luck"), ExtResource("13_max_health"), ExtResource("14_max_speed"), ExtResource("15_pickup_radius"), ExtResource("16_pierce"), ExtResource("17_projectile_count"), ExtResource("18_projectile_lifetime"), ExtResource("19_projectile_speed"), ExtResource("20_respawn_invuln"), ExtResource("21_spread")])
+stats = Array[ExtResource("2_stat_def")]([ExtResource("2_acceleration"), ExtResource("3_aim_tier"), ExtResource("4_blink_distance"), ExtResource("5_blink_haste"), ExtResource("6_blink_invuln"), ExtResource("7_crit_chance"), ExtResource("8_damage"), ExtResource("9_fire_rate"), ExtResource("10_friction"), ExtResource("11_hit_invuln"), ExtResource("12_luck"), ExtResource("13_max_health"), ExtResource("14_max_speed"), ExtResource("15_pickup_radius"), ExtResource("16_pierce"), ExtResource("17_projectile_count"), ExtResource("18_projectile_lifetime"), ExtResource("19_projectile_speed"), ExtResource("20_respawn_invuln"), ExtResource("21_spread"), ExtResource("22_collision_mass"), ExtResource("23_collision_resistance"), ExtResource("24_knockback_force"), ExtResource("25_knockback_resistance")])
