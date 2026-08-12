@@ -1,6 +1,7 @@
 extends GutTest
 
 const RESOLVER := preload("res://scripts/combat/collision_impact_resolver.gd")
+const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const ENEMY_SCRIPT := preload("res://scripts/enemies/enemy.gd")
 const ATIRADOR_SCENE := preload("res://scenes/enemies/atirador_de_fresta.tscn")
 const HUNTER_SCENE := preload("res://scenes/enemies/hunter.tscn")
@@ -389,12 +390,99 @@ func test_real_enemy_subclasses_skip_collision_knockback_after_lethal_callback()
 		assert_true(enemy.is_queued_for_deletion() or enemy.get(&"_dead") == true)
 
 func test_damage_snapshot_is_simultaneous_before_first_damage_callback() -> void:
+	# Contrato R1: a mutacao no primeiro callback nao altera o DamageInfo ja
+	# calculado para o outro lado do par atual.
 	var pair := _pair(100.0, 1.0, 1.0)
 	pair[0].mutation_target = pair[1]
 	pair[0].mutation_mass = 100.0
 	RESOLVER.resolve_overlaps(pair[0], {})
 	assert_almost_eq(pair[0].damage_amounts[0], 0.5, 0.00001)
 	assert_almost_eq(pair[1].damage_amounts[0], 0.5, 0.00001)
+
+	# O mesmo snapshot tambem delimita a operacao: a nova geracao do Player
+	# impede apenas os pares seguintes, sem desfazer a bilateralidade acima.
+	var player := ReentrantCollisionPlayer.new()
+	var first := CollisionStub.new()
+	var second := CollisionStub.new()
+	var third := CollisionStub.new()
+	player.velocity = Vector2.RIGHT * 100.0
+	player.global_position = Vector2.ZERO
+	for enemy in [first, second, third]:
+		enemy.global_position = Vector2(10.0, 0.0)
+		add_child_autofree(enemy)
+	player.overlap.bodies = [first, second, third]
+	add_child_autofree(player)
+	RESOLVER.resolve_overlaps(player, {})
+	# O primeiro par ainda e bilateral, embora o callback do Player reinicie
+	# sincronicamente seu ciclo. Nenhum segundo/terceiro par pode nascer.
+	assert_eq(player.damage_amounts.size(), 1)
+	assert_eq(first.damage_amounts.size(), 1)
+	assert_eq(second.damage_amounts.size(), 0)
+	assert_eq(third.damage_amounts.size(), 0)
+	assert_almost_eq(player.damage_amounts[0], first.damage_amounts[0], 0.00001)
+
+func test_segment_lethal_real_player_respawn_aborts_later_targets_and_same_tick_overlap() -> void:
+	var player := PLAYER_SCENE.instantiate() as Player
+	add_child_autofree(player)
+	await get_tree().process_frame
+	var first := CollisionStub.new()
+	var second := CollisionStub.new()
+	var third := CollisionStub.new()
+	for enemy in [first, second, third]:
+		enemy.global_position = Vector2(10.0, 0.0)
+		add_child_autofree(enemy)
+	await get_tree().process_frame
+
+	var prior_lives := GameState.player_lives
+	GameState.player_lives = 2
+	player.set_physics_process(false)
+	player.global_position = Vector2.ZERO
+	player.health.health = 0.01
+	# Reproduz o chamador real: a charge entra no segmento por _physics_process.
+	# Depois do respawn, a guarda de geracao deve impedir o _check_contact deste
+	# mesmo tick; chamar resolve_overlaps aqui diretamente seria outra operacao.
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	var generation_before := player.get_collision_impact_generation()
+	var spawn := player._spawn_point
+
+	player._physics_process(0.1)
+
+	assert_eq(first.damage_amounts.size(), 1)
+	assert_eq(second.damage_amounts.size(), 0)
+	assert_eq(third.damage_amounts.size(), 0)
+	assert_eq(second.received_knockback, Vector2.ZERO)
+	assert_eq(third.received_knockback, Vector2.ZERO)
+	# O callback de morte faz respawn sincrono: a prova da morte e a nova
+	# geracao/vida consumida; a vida cheia e o resultado correto do respawn.
+	assert_eq(player.get_collision_impact_generation(), generation_before + 1)
+	assert_eq(GameState.player_lives, 1)
+	assert_true(player.is_collision_impact_active())
+	assert_eq(player.health.health, player.health.max_health)
+	assert_eq(player.global_position, spawn)
+	assert_eq(player.velocity, Vector2.ZERO)
+	assert_eq(player._collision_knockback_velocity, Vector2.ZERO)
+	assert_eq(player._collision_impact_pairs.size(), 0)
+	assert_false(player._is_bruta_charging())
+	assert_eq(player._bruta_charge_windup_remaining, 0.0)
+	assert_eq(player._bruta_charge_remaining, 0.0)
+	# A guarda do chamador impede o overlap antigo de reabrir o par no tick
+	# letal. Em um tick futuro, sem memoria global no resolver, o par pode
+	# Um tick futuro, com uma nova charge e os corpos ainda no segmento, deve
+	# voltar a resolver legitimamente apos o cache do respawn ter sido limpo.
+	assert_eq(first.damage_amounts.size(), 1)
+	assert_eq(second.damage_amounts.size(), 0)
+	assert_eq(third.damage_amounts.size(), 0)
+	player._invuln_timer = 0.0
+	player.velocity = Vector2.RIGHT * 100.0
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	player.set_physics_process(true)
+	player._physics_process(0.1)
+	assert_eq(first.damage_amounts.size(), 2)
+	GameState.player_lives = prior_lives
 
 func test_new_collision_stats_load() -> void:
 	for id in [&"collision_mass", &"collision_damage_resistance", &"knockback_force", &"knockback_resistance"]:
@@ -423,6 +511,13 @@ class CollisionStub extends CharacterBody2D:
 	func _ready() -> void:
 		for group in groups: add_to_group(group)
 		add_child(overlap)
+		collision_layer = 4
+		collision_mask = 2
+		var shape := CollisionShape2D.new()
+		var circle := CircleShape2D.new()
+		circle.radius = 10.0
+		shape.shape = circle
+		add_child(shape)
 
 	func take_damage(info: DamageInfo) -> float:
 		damage_amounts.append(info.amount)
@@ -433,6 +528,21 @@ class CollisionStub extends CharacterBody2D:
 	func apply_collision_knockback(impulse: Vector2) -> void:
 		received_knockback += impulse
 		if impulse.is_finite(): velocity += impulse
+
+class ReentrantCollisionPlayer extends CollisionStub:
+	var collision_generation := 0
+	var collision_active := true
+
+	func take_damage(info: DamageInfo) -> float:
+		damage_amounts.append(info.amount)
+		collision_active = false
+		collision_generation += 1
+		# Simula o respawn sincrono da mesma instancia.
+		collision_active = true
+		return info.amount
+
+	func is_collision_impact_active() -> bool: return collision_active
+	func get_collision_impact_generation() -> int: return collision_generation
 
 class DamageableNode2D extends Node2D:
 	var damage_amounts: Array[float] = []

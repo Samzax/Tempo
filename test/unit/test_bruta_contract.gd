@@ -27,6 +27,14 @@ func _bruta_player() -> Player:
 	return player
 
 
+func _player_with_ship(ship_def: ShipDef) -> Player:
+	var player := PLAYER_SCENE.instantiate() as Player
+	player.ship = ship_def
+	add_child_autofree(player)
+	await get_tree().process_frame
+	return player
+
+
 func _release_inputs() -> void:
 	for action in INPUT_ACTIONS:
 		Input.action_release(action)
@@ -58,7 +66,7 @@ func test_ship_def_defaults_preserve_legacy_aim_forward_contract() -> void:
 func test_bruta_declares_omni_32_pixel_circle_without_muzzle() -> void:
 	assert_eq(BRUTA.id, &"nave_bruta")
 	assert_eq(BRUTA.display_name, "Bruta")
-	assert_eq(BRUTA.ability_q, &"sobrecarga")
+	assert_eq(BRUTA.ability_q, &"")
 	assert_eq(BRUTA.movement_style, "omni")
 	assert_eq(BRUTA.frame_size, Vector2i(32, 32))
 	assert_eq(BRUTA.hurtbox_radius, 10.0)
@@ -80,8 +88,13 @@ func test_bruta_resolves_shift_slot_to_bruta_investida() -> void:
 
 func test_bruta_shift_input_starts_charge_instead_of_try_blink() -> void:
 	var player: Player = await _bruta_player()
-	player.global_position = Vector2(100.0, 100.0)
-	player._aim_vector = Vector2.RIGHT
+	# A investida recaptura a mira quando a fonte ativa e o mouse; portanto,
+	# posiciona a nave relativamente ao cursor e atualiza a fonte pelo fluxo real.
+	var cursor := player.get_global_mouse_position()
+	player.global_position = cursor - Vector2.RIGHT * 100.0
+	player._update_aim()
+	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
+	_assert_vector_almost_eq(player._aim_vector, Vector2.RIGHT)
 	var before := player.global_position
 	Input.action_press(&"blink")
 
@@ -95,7 +108,11 @@ func test_bruta_shift_input_starts_charge_instead_of_try_blink() -> void:
 
 func test_bruta_shift_cooldown_rejects_second_activation() -> void:
 	var player: Player = await _bruta_player()
-	player._aim_vector = Vector2.RIGHT
+	var cursor := player.get_global_mouse_position()
+	player.global_position = cursor - Vector2.RIGHT * 100.0
+	player._update_aim()
+	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
+	_assert_vector_almost_eq(player._aim_vector, Vector2.RIGHT)
 	Input.action_press(&"blink")
 
 	assert_true(player._handle_blink_input())
@@ -103,6 +120,29 @@ func test_bruta_shift_cooldown_rejects_second_activation() -> void:
 	assert_false(player._handle_blink_input())
 	assert_eq(player._bruta_charge_windup_remaining, windup_before)
 	assert_gt(player.shift_cooldown_ratio(), 0.0)
+
+func test_bruta_collision_knockback_survives_charge_substeps_and_cancel() -> void:
+	var player: Player = await _bruta_player()
+	player.set_physics_process(false)
+	player.global_position = Vector2(100.0, 100.0)
+	player._aim_vector = Vector2.RIGHT
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_aim_source = Player.AimSource.NONE
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	player.apply_collision_knockback(Vector2(100.0, 0.0))
+
+	player._update_bruta_charge(0.01)
+	var after_first_substep := player._collision_knockback_velocity.x
+	player._update_bruta_charge(0.01)
+	var after_second_substep := player._collision_knockback_velocity.x
+
+	assert_gt(after_first_substep, 0.0)
+	assert_gt(after_second_substep, 0.0)
+	assert_lt(after_second_substep, after_first_substep)
+	player._cancel_bruta_charge()
+	assert_almost_eq(player.velocity.x, player._collision_knockback_velocity.x, 0.00001)
+	assert_gt(player.velocity.x, 0.0)
 
 func test_ship_def_accepts_empty_shift_and_rejects_unknown_shift_ability() -> void:
 	var empty_shift := ShipDef.new()
@@ -117,7 +157,7 @@ func test_ship_def_accepts_empty_shift_and_rejects_unknown_shift_ability() -> vo
 
 
 func test_bruta_declares_only_its_useful_authored_base_stats() -> void:
-	assert_eq(BRUTA.base_stats.size(), 4)
+	assert_eq(BRUTA.base_stats.size(), 5)
 	var values_by_stat: Dictionary = {}
 	for base_stat in BRUTA.base_stats:
 		assert_not_null(base_stat)
@@ -129,6 +169,7 @@ func test_bruta_declares_only_its_useful_authored_base_stats() -> void:
 		&"max_speed": 125.0,
 		&"acceleration": 850.0,
 		&"damage": 1.5,
+		&"collision_damage_resistance": 0.5,
 	})
 
 
@@ -383,10 +424,10 @@ func test_bruta_charge_hits_each_enemy_once_and_calls_stun_when_api_exists() -> 
 	player._resolve_bruta_charge_hits(player.global_position, Vector2(160.0, 100.0))
 	player._resolve_bruta_charge_hits(player.global_position, Vector2(160.0, 100.0))
 
-	assert_eq(enemy.damage_calls, 1)
+	assert_eq(enemy.damage_calls, 0)
 	assert_eq(enemy.stun_calls, 1)
 	assert_eq(enemy.last_stun_duration, 0.75)
-	assert_eq(second_enemy.damage_calls, 1)
+	assert_eq(second_enemy.damage_calls, 0)
 	assert_eq(second_enemy.stun_calls, 1)
 
 func test_bruta_charge_does_not_teleport_and_accelerates_after_windup() -> void:
@@ -472,17 +513,18 @@ func test_bruta_charge_active_deadzone_keeps_current_direction() -> void:
 
 func test_bruta_charge_hits_target_on_curved_active_segment() -> void:
 	var player: Player = await _bruta_player()
-	player.global_position = Vector2(100.0, 100.0)
-	player._bruta_charge_direction = Vector2.RIGHT
-	player._aim_vector = Vector2.DOWN
-	player._bruta_charge_windup_remaining = 0.0
-	player._bruta_charge_remaining = 0.75
 	var enemy := ChargeEnemyStub.new()
 	# Em 0.1 s, o caminho sobe para fora do segmento horizontal original.
 	# O alvo fica fora desse segmento, mas sobre a curva integrada em subpassos.
 	enemy.global_position = Vector2(117.0, 111.0)
 	add_child_autofree(enemy)
 	await get_tree().process_frame
+	player.set_physics_process(false)
+	player.global_position = Vector2(100.0, 100.0)
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._aim_vector = Vector2.DOWN
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
 
 	player._update_bruta_charge(0.1)
 
@@ -493,6 +535,8 @@ func test_bruta_charge_hits_target_on_curved_active_segment() -> void:
 
 func test_bruta_charge_first_active_frame_starts_at_180_pixels_per_second() -> void:
 	var player: Player = await _bruta_player()
+	player.set_physics_process(false)
+	player.global_position = Vector2(100.0, 100.0)
 	player._bruta_charge_direction = Vector2.RIGHT
 	player._bruta_charge_windup_remaining = 0.12
 	player._bruta_charge_remaining = 0.75
@@ -508,7 +552,11 @@ func test_bruta_charge_first_active_frame_starts_at_180_pixels_per_second() -> v
 
 func test_bruta_charge_last_active_frame_reaches_620_pixels_per_second() -> void:
 	var player: Player = await _bruta_player()
+	player.set_physics_process(false)
+	player.global_position = Vector2(100.0, 100.0)
+	player._aim_vector = Vector2.RIGHT
 	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_aim_source = Player.AimSource.NONE
 	player._bruta_charge_windup_remaining = 0.0
 	player._bruta_charge_remaining = 0.75
 
@@ -524,6 +572,8 @@ func test_bruta_charge_last_active_frame_reaches_620_pixels_per_second() -> void
 
 func test_bruta_charge_delta_crossing_windup_consumes_only_active_excess() -> void:
 	var player: Player = await _bruta_player()
+	player.set_physics_process(false)
+	player.global_position = Vector2(100.0, 100.0)
 	player._bruta_charge_direction = Vector2.RIGHT
 	player._bruta_charge_windup_remaining = 0.12
 	player._bruta_charge_remaining = 0.75
@@ -589,13 +639,15 @@ func test_bruta_charge_steering_static_right_to_down_is_deterministic_and_curved
 	var players: Array[Player] = []
 	for _i in 3:
 		var player: Player = await _bruta_player()
+		players.append(player)
+	for player in players:
+		player.set_physics_process(false)
 		player.global_position = Vector2(100.0, 100.0)
 		player._bruta_charge_direction = Vector2.RIGHT
 		player._bruta_charge_aim_source = Player.AimSource.JOYPAD
 		player._bruta_charge_windup_remaining = 0.0
 		player._bruta_charge_remaining = 0.75
 		Input.action_press(&"aim_down")
-		players.append(player)
 	# Todos usam o mesmo alvo estático; 1/240 s torna o resultado independente
 	# do delta externo, com tolerância pequena para arredondamento de ponto flutuante.
 	for _frame in 42:
@@ -614,6 +666,7 @@ func test_bruta_charge_steering_static_right_to_down_is_deterministic_and_curved
 	assert_gt(players[0]._bruta_charge_direction.angle(), 0.05)
 	# No meio da carga, a posição não pode estar na corda instantânea RIGHT->DOWN.
 	var midpoint: Player = await _bruta_player()
+	midpoint.set_physics_process(false)
 	midpoint.global_position = Vector2(100.0, 100.0)
 	midpoint._bruta_charge_direction = Vector2.RIGHT
 	midpoint._bruta_charge_aim_source = Player.AimSource.JOYPAD
@@ -627,6 +680,8 @@ func test_bruta_charge_steering_static_right_to_down_is_deterministic_and_curved
 
 func test_bruta_charge_steering_uses_short_path_across_pi_wrap() -> void:
 	var player: Player = await _bruta_player()
+	player.set_physics_process(false)
+	player.global_position = Vector2(100.0, 100.0)
 	player._bruta_charge_direction = Vector2(-1.0, 0.01).normalized()
 	player._bruta_charge_aim_source = Player.AimSource.JOYPAD
 	player._bruta_charge_windup_remaining = 0.0
@@ -639,19 +694,24 @@ func test_bruta_charge_steering_uses_short_path_across_pi_wrap() -> void:
 
 func test_bruta_charge_captures_mouse_aim_against_joystick_during_charge() -> void:
 	var player: Player = await _bruta_player()
-	player.global_position = Vector2(200.0, 200.0)
-	player._last_aim_source = Player.AimSource.MOUSE
-	player._aim_vector = Vector2.UP
-	player.get_viewport().warp_mouse(Vector2(300.0, 200.0))
+	player.set_physics_process(false)
+	player.set_room_bounds(Rect2(Vector2(-1000.0, -1000.0), Vector2(2000.0, 2000.0)))
+	var cursor := player.get_global_mouse_position()
+	player.global_position = cursor - Vector2.RIGHT * 100.0
+	player._update_aim()
+	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
 	assert_true(player.start_bruta_charge())
-	assert_eq(player._bruta_charge_direction, Vector2.RIGHT)
+	assert_eq(player._bruta_charge_aim_source, Player.AimSource.MOUSE)
+	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.RIGHT)
 	player._bruta_charge_windup_remaining = 0.0
+	player.global_position = cursor - Vector2.DOWN * 100.0
 
 	Input.action_press(&"aim_left")
 	player._update_bruta_charge(0.1)
 	Input.action_release(&"aim_left")
 
-	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.RIGHT)
+	assert_gt(player._bruta_charge_direction.angle(), 0.0)
+	assert_lt(player._bruta_charge_direction.angle(), PI / 2.0)
 
 func test_bruta_charge_uses_active_joypad_direction_over_opposite_cursor() -> void:
 	var player: Player = await _bruta_player()
@@ -664,14 +724,98 @@ func test_bruta_charge_uses_active_joypad_direction_over_opposite_cursor() -> vo
 	Input.action_release(&"aim_right")
 	assert_eq(player._bruta_charge_direction, Vector2.RIGHT)
 
-func test_bruta_charge_mitigates_damage_during_active_window() -> void:
+func test_bruta_charge_does_not_apply_generic_damage_mitigation() -> void:
 	var player: Player = await _bruta_player()
 	var info := DamageInfo.new()
 	info.amount = 1.0
 	player._bruta_charge_remaining = 0.75
 	var before := player.health.health
 	player.take_damage(info)
-	assert_almost_eq(player.health.health, before - 0.6, 0.001)
+	assert_almost_eq(player.health.health, before - 1.0, 0.001)
+
+
+func test_bruta_collision_resistance_is_half_while_enemy_receives_full_impact() -> void:
+	var bruta: Player = await _bruta_player()
+	var base: Player = await _player_with_ship(preload("res://resources/ships/base.tres"))
+	var bruta_enemy := CollisionEnemyStub.new()
+	var base_enemy := CollisionEnemyStub.new()
+	for enemy in [bruta_enemy, base_enemy]:
+		add_child_autofree(enemy)
+	await get_tree().process_frame
+	bruta.global_position = Vector2(100.0, 100.0)
+	base.global_position = Vector2(100.0, 200.0)
+	bruta_enemy.global_position = Vector2(115.0, 100.0)
+	base_enemy.global_position = Vector2(115.0, 200.0)
+	bruta.velocity = Vector2.RIGHT * 100.0
+	base.velocity = Vector2.RIGHT * 100.0
+	CollisionImpactResolver.resolve_segment(bruta, bruta.global_position, bruta.global_position + Vector2.RIGHT * 20.0, {})
+	CollisionImpactResolver.resolve_segment(base, base.global_position, base.global_position + Vector2.RIGHT * 20.0, {})
+
+	var bruta_damage := bruta.health.max_health - bruta.health.health
+	var base_damage := base.health.max_health - base.health.health
+	assert_almost_eq(bruta_damage, base_damage * 0.5, 0.0001)
+	assert_almost_eq(bruta_enemy.damage_amounts[0], base_enemy.damage_amounts[0], 0.0001)
+
+
+func test_bruta_collision_contact_is_spent_once_and_rearms_after_separation() -> void:
+	var player: Player = await _bruta_player()
+	var enemy := CollisionEnemyStub.new()
+	add_child_autofree(enemy)
+	await get_tree().process_frame
+	player.global_position = Vector2(100.0, 100.0)
+	enemy.global_position = Vector2(115.0, 100.0)
+	player.velocity = Vector2.RIGHT * 100.0
+	var pairs: Dictionary = {}
+	CollisionImpactResolver.resolve_segment(player, Vector2(100.0, 100.0), Vector2(120.0, 100.0), pairs)
+	CollisionImpactResolver.resolve_segment(player, Vector2(100.0, 100.0), Vector2(120.0, 100.0), pairs)
+	assert_eq(enemy.damage_amounts.size(), 1)
+	CollisionImpactResolver.resolve_segment(player, Vector2(200.0, 100.0), Vector2(220.0, 100.0), pairs)
+	player.velocity = Vector2.RIGHT * 100.0
+	CollisionImpactResolver.resolve_segment(player, Vector2(100.0, 100.0), Vector2(120.0, 100.0), pairs)
+	assert_eq(enemy.damage_amounts.size(), 2)
+
+
+func test_bruta_projectile_enemy_projectile_and_generic_damage_are_not_mitigated() -> void:
+	var player: Player = await _bruta_player()
+	for tag in [&"projectile", &"enemy_projectile", &"generic"]:
+		var info := DamageInfo.new()
+		info.amount = 1.0
+		info.tags = [tag]
+		player._invuln_timer = 0.0
+		var before := player.health.health
+		player.take_damage(info)
+		assert_almost_eq(player.health.health, before - 1.0, 0.001, String(tag))
+
+
+func test_bruta_lethal_first_charge_subpass_aborts_remaining_targets_and_state() -> void:
+	var player: Player = await _bruta_player()
+	var first := CollisionEnemyStub.new()
+	var second := CollisionEnemyStub.new()
+	add_child_autofree(first)
+	add_child_autofree(second)
+	await get_tree().process_frame
+	var prior_lives := GameState.player_lives
+	GameState.player_lives = 1
+	player.set_physics_process(false)
+	player.global_position = Vector2(100.0, 100.0)
+	player.health.health = 0.01
+	player._bruta_charge_direction = Vector2.RIGHT
+	player._bruta_charge_windup_remaining = 0.0
+	player._bruta_charge_remaining = 0.75
+	first.global_position = Vector2(112.0, 100.0)
+	# Ambos precisam estar no primeiro subpasso; caso contrario, o teste
+	# passaria mesmo que a geração continuasse depois da morte.
+	second.global_position = Vector2(116.0, 100.0)
+
+	player._update_bruta_charge(0.1)
+
+	assert_gt(first.damage_amounts.size(), 0)
+	assert_eq(second.damage_amounts.size(), 0)
+	assert_eq(second.stun_calls, 0)
+	assert_false(player._is_bruta_charging())
+	_assert_vector_almost_eq(player.velocity, Vector2.ZERO)
+	_assert_vector_almost_eq(player._collision_knockback_velocity, Vector2.ZERO)
+	GameState.player_lives = prior_lives
 
 
 func test_bruta_loadout_reconfiguration_clears_shift_cooldown_and_charge_state() -> void:
@@ -768,7 +912,7 @@ func test_bruta_charge_uses_large_target_collision_shape_when_tangential() -> vo
 	await get_tree().process_frame
 	player._resolve_bruta_charge_hits(player.global_position, Vector2(110.0, 100.0))
 
-	assert_eq(enemy.damage_calls, 1)
+	assert_eq(enemy.damage_calls, 0)
 	assert_eq(enemy.stun_calls, 1)
 	assert_almost_eq(enemy.last_stun_duration, 0.75, 0.0001)
 
@@ -804,3 +948,22 @@ class ChargeEnemyStub extends Node2D:
 	func apply_stun(duration: float) -> void:
 		stun_calls += 1
 		last_stun_duration = duration
+
+
+class CollisionEnemyStub extends Node2D:
+	var damage_amounts: Array[float] = []
+	var stun_calls := 0
+	var knockback := Vector2.ZERO
+
+	func _ready() -> void:
+		add_to_group(&"enemies")
+
+	func take_damage(info: DamageInfo) -> float:
+		damage_amounts.append(info.amount)
+		return info.amount
+
+	func apply_stun(_duration: float) -> void:
+		stun_calls += 1
+
+	func apply_collision_knockback(impulse: Vector2) -> void:
+		knockback += impulse

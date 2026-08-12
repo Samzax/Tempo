@@ -10,19 +10,31 @@ const SPEED_UNIT := 100.0
 const IMPACT_SCALE := 1.0 / SPEED_UNIT
 
 static func resolve_overlaps(player: Node2D, pairs: Dictionary, preserve_ids: Dictionary = {}) -> void:
-	if player == null or not is_instance_valid(player):
+	var player_snapshot := _collision_impact_snapshot(player)
+	if player_snapshot.is_empty():
 		return
 	var overlapping: Dictionary = {}
+	var snapshots: Dictionary = {}
 	for body in player.hurtbox.get_overlapping_bodies():
 		if not _is_damageable_enemy(body):
 			continue
 		overlapping[body.get_instance_id()] = body
+		snapshots[body.get_instance_id()] = _collision_impact_snapshot(body)
+	for body in overlapping.values():
+		var enemy_snapshot: Dictionary = snapshots.get(body.get_instance_id(), {})
+		# Cada novo par precisa pertencer ao mesmo ciclo de vida que iniciou
+		# esta varredura. O par atual permanece bilateral e pre-calculado.
+		if not _collision_impact_snapshot_is_current(player, player_snapshot):
+			break
+		if not _collision_impact_snapshot_is_current(body, enemy_snapshot):
+			continue
 		_resolve_pair(player, body, pairs)
 	_prune_pairs(pairs, overlapping, preserve_ids)
 
 ## A charge usa esta varredura em cada subpasso para nao atravessar inimigos.
 static func resolve_segment(player: Node2D, origin: Vector2, destination: Vector2, pairs: Dictionary) -> void:
-	if not _finite_vector(origin) or not _finite_vector(destination):
+	var player_snapshot := _collision_impact_snapshot(player)
+	if player_snapshot.is_empty() or not _finite_vector(origin) or not _finite_vector(destination):
 		return
 	var segment := destination - origin
 	var length_squared := segment.length_squared()
@@ -31,6 +43,7 @@ static func resolve_segment(player: Node2D, origin: Vector2, destination: Vector
 		return
 	var player_radius := _radius_for(player)
 	var intersected: Dictionary = {}
+	var candidates: Array[Dictionary] = []
 	for body in player.get_tree().get_nodes_in_group(&"enemies"):
 		if not _is_damageable_enemy(body):
 			continue
@@ -41,11 +54,49 @@ static func resolve_segment(player: Node2D, origin: Vector2, destination: Vector
 		var closest := origin + segment * projection
 		if enemy.global_position.distance_to(closest) <= player_radius + _radius_for(enemy):
 			intersected[enemy.get_instance_id()] = enemy
-			var impact_normal := (enemy.global_position - origin).normalized()
-			if impact_normal == Vector2.ZERO:
-				impact_normal = segment.normalized()
-			_resolve_pair(player, enemy, pairs, impact_normal)
-	resolve_overlaps(player, pairs, intersected)
+			candidates.append({
+				&"enemy": enemy,
+				&"snapshot": _collision_impact_snapshot(enemy),
+				&"normal": (enemy.global_position - origin).normalized(),
+			})
+	for candidate in candidates:
+		var enemy: Node2D = candidate[&"enemy"]
+		var enemy_snapshot: Dictionary = candidate[&"snapshot"]
+		if not _collision_impact_snapshot_is_current(player, player_snapshot):
+			break
+		if not _collision_impact_snapshot_is_current(enemy, enemy_snapshot):
+			continue
+		var impact_normal: Vector2 = candidate[&"normal"]
+		if impact_normal == Vector2.ZERO:
+			impact_normal = segment.normalized()
+		_resolve_pair(player, enemy, pairs, impact_normal)
+	# Nao inicie a varredura de overlap do mesmo subpasso apos uma transicao
+	# reentrante: ela pertence ao proximo ciclo de simulacao, nao ao snapshot.
+	if _collision_impact_snapshot_is_current(player, player_snapshot):
+		resolve_overlaps(player, pairs, intersected)
+
+## Protocolo opcional de ciclo de vida para impactos. Entidades legadas sem os
+## metodos continuam elegiveis; invalidas ou em queue_free nunca participam.
+static func _collision_impact_snapshot(body: Variant) -> Dictionary:
+	if not body is Node2D or not is_instance_valid(body) or body.is_queued_for_deletion():
+		return {}
+	var active := true
+	if body.has_method(&"is_collision_impact_active"):
+		active = body.call(&"is_collision_impact_active") == true
+	if not active:
+		return {}
+	var snapshot := {&"has_generation": false}
+	if body.has_method(&"get_collision_impact_generation"):
+		snapshot[&"has_generation"] = true
+		snapshot[&"generation"] = body.call(&"get_collision_impact_generation")
+	return snapshot
+
+static func _collision_impact_snapshot_is_current(body: Variant, snapshot: Dictionary) -> bool:
+	if snapshot.is_empty() or not body is Node2D or not is_instance_valid(body) or body.is_queued_for_deletion():
+		return false
+	if body.has_method(&"is_collision_impact_active") and body.call(&"is_collision_impact_active") != true:
+		return false
+	return not bool(snapshot.get(&"has_generation", false)) or (body.has_method(&"get_collision_impact_generation") and body.call(&"get_collision_impact_generation") == snapshot.get(&"generation"))
 
 static func _resolve_pair(player: Node2D, enemy: Node2D, pairs: Dictionary, normal_override := Vector2.ZERO) -> void:
 	if player == enemy or not _finite_vector(player.global_position) or not _finite_vector(enemy.global_position):

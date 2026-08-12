@@ -22,8 +22,8 @@ const BRUTA_CHARGE_MIN_SPEED := 180.0
 const BRUTA_CHARGE_MAX_SPEED := 620.0
 const BRUTA_CHARGE_TURN_RATE := 4.1887902047863905
 const BRUTA_CHARGE_STEERING_STEP := 1.0 / 240.0
-const BRUTA_CHARGE_DAMAGE_REDUCTION := 0.40
 const BRUTA_CHARGE_STUN_DURATION := 0.75
+const COLLISION_KNOCKBACK_DECELERATION := 900.0
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
 const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
 
@@ -91,6 +91,14 @@ var _bruta_charge_windup_remaining := 0.0
 var _bruta_charge_remaining := 0.0
 var _bruta_charge_hit_targets: Dictionary = {}
 var _bruta_charge_aim_source: AimSource = AimSource.NONE
+## Cada inicio/cancelamento invalida imediatamente qualquer subpasso reentrante.
+var _bruta_charge_generation := 0
+var _collision_impact_pairs: Dictionary = {}
+var _collision_knockback_velocity := Vector2.ZERO
+## Um respawn sincrono reativa a nave para o proximo ciclo, nunca para o
+## snapshot de impacto que estava em andamento.
+var _collision_impact_generation := 0
+var _collision_impact_active := true
 
 func _ready() -> void:
 	if ship == null:
@@ -478,6 +486,29 @@ func sandbox_set_invulnerable(enabled: bool) -> void:
 func get_luck() -> float:
 	return _stats.get_stat(&"luck") if _stats != null else 0.0
 
+func get_collision_mass() -> float:
+	return maxf(get_projectile_stat(&"collision_mass", 1.0), 0.01)
+
+func get_collision_damage_resistance() -> float:
+	return clampf(get_projectile_stat(&"collision_damage_resistance", 0.0), 0.0, 1.0)
+
+func get_knockback_force() -> float:
+	return maxf(get_projectile_stat(&"knockback_force", 1.0), 0.0)
+
+func get_knockback_resistance() -> float:
+	return clampf(get_projectile_stat(&"knockback_resistance", 0.0), 0.0, 1.0)
+
+## Mantem o impulso de colisao separado da velocidade controlada para que
+## mudancas de movimento (inclusive os subpassos da charge) nao o sobrescrevam.
+func apply_collision_knockback(impulse: Vector2) -> void:
+	_collision_knockback_velocity += impulse
+
+func _decay_collision_knockback(delta: float) -> void:
+	_collision_knockback_velocity = _collision_knockback_velocity.move_toward(
+		Vector2.ZERO,
+		COLLISION_KNOCKBACK_DECELERATION * maxf(delta, 0.0),
+	)
+
 func _physics_process(delta: float) -> void:
 	_stats.tick(delta)
 	_dispatcher.tick(delta)
@@ -493,25 +524,33 @@ func _physics_process(delta: float) -> void:
 	var blink_consumed := _handle_blink_input()
 	_handle_ability_input()
 
-	if _is_bruta_charging():
+	var was_bruta_charging := _is_bruta_charging()
+	if was_bruta_charging:
+		var charge_collision_generation := get_collision_impact_generation()
 		_update_bruta_charge(delta)
-	elif not blink_consumed:
-		velocity = AsteroidsMotion.calculate_velocity(
-			velocity,
+		if not _is_collision_impact_generation_current(charge_collision_generation):
+			return
+	else:
+		if not blink_consumed:
+			var controlled_velocity := AsteroidsMotion.calculate_velocity(
+				velocity - _collision_knockback_velocity,
 			movement_direction,
 			is_thrusting,
 			_stats.get_stat(&"acceleration") * 0.60,
 			_stats.get_stat(&"friction") * 0.35,
 			_stats.get_stat(&"max_speed"),
 			delta,
-		)
-
-		move_and_slide()
-		_clamp_to_bounds()
+			)
+			velocity = controlled_velocity + _collision_knockback_velocity
+			move_and_slide()
+			_clamp_to_bounds()
+		else:
+			velocity = _collision_knockback_velocity
 	_refresh_mouse_aim()
 	if not omni:
 		rotation = _aim_vector.angle() + PI / 2.0
-	_check_contact()
+	if not _check_contact(0.0 if was_bruta_charging else delta):
+		return
 	_update_omni_stop_spin(delta, movement_direction if omni else Vector2.ZERO)
 	_update_visual_aim(delta)
 	_update_bank(movement_direction if omni else Vector2.ZERO)
@@ -723,7 +762,7 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	_clear_engine_trail_segments()
 	_resolve_blink_trail_damage(origin, dest)
 	global_position = dest      # teleporte instantâneo
-	velocity = Vector2.ZERO     # é um blink, não um empurrão
+	velocity = _collision_knockback_velocity # O blink remove a propulsao, nao o impulso externo.
 	_reset_omni_stop_spin()
 	_dispatcher.dispatch(&"on_blink", null, 0)
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))
@@ -748,10 +787,11 @@ func start_bruta_charge() -> bool:
 		return false
 	_bruta_charge_direction = direction.normalized()
 	_bruta_charge_aim_source = _last_aim_source
+	_bruta_charge_generation += 1
 	_bruta_charge_windup_remaining = BRUTA_CHARGE_WINDUP
 	_bruta_charge_remaining = BRUTA_CHARGE_DURATION
 	_bruta_charge_hit_targets.clear()
-	velocity = Vector2.ZERO
+	velocity = _collision_knockback_velocity
 	_reset_omni_stop_spin()
 	return true
 
@@ -763,6 +803,7 @@ func _is_bruta_charge_active() -> bool:
 
 ## Integra a velocidade analiticamente, preservando a mesma distancia em frames grandes ou pequenos.
 func _update_bruta_charge(delta: float) -> void:
+	var processing_generation := _bruta_charge_generation
 	var remaining_delta := maxf(delta, 0.0)
 	if _bruta_charge_windup_remaining > 0.0:
 		# A preparacao permite corrigir a mira ate o inicio do deslocamento.
@@ -772,16 +813,21 @@ func _update_bruta_charge(delta: float) -> void:
 		var windup_delta := minf(remaining_delta, _bruta_charge_windup_remaining)
 		_bruta_charge_windup_remaining = maxf(0.0, _bruta_charge_windup_remaining - windup_delta)
 		remaining_delta -= windup_delta
-		velocity = Vector2.ZERO
+		_decay_collision_knockback(windup_delta)
+		velocity = _collision_knockback_velocity
 		if remaining_delta <= 0.0:
 			return
 	if _bruta_charge_remaining <= 0.0:
 		_cancel_bruta_charge()
 		return
-	var active_delta := minf(remaining_delta, _bruta_charge_remaining)
+	var starting_remaining := _bruta_charge_remaining
+	var scheduling_tolerance := 1e-9
+	var scheduled_active_delta := remaining_delta if remaining_delta <= starting_remaining + scheduling_tolerance else starting_remaining
+	var starting_elapsed := BRUTA_CHARGE_DURATION - starting_remaining
+	var consumed_active_delta := 0.0
 	var acceleration_range := BRUTA_CHARGE_MAX_SPEED - BRUTA_CHARGE_MIN_SPEED
-	while active_delta > 0.0:
-		var step_delta := minf(BRUTA_CHARGE_STEERING_STEP, active_delta)
+	while consumed_active_delta < scheduled_active_delta:
+		var step_delta := minf(BRUTA_CHARGE_STEERING_STEP, scheduled_active_delta - consumed_active_delta)
 		var desired_direction := _bruta_charge_desired_direction()
 		if desired_direction != Vector2.ZERO:
 			var turn := clampf(
@@ -790,24 +836,34 @@ func _update_bruta_charge(delta: float) -> void:
 				BRUTA_CHARGE_TURN_RATE * step_delta,
 			)
 			_bruta_charge_direction = _bruta_charge_direction.rotated(turn)
-		var elapsed := BRUTA_CHARGE_DURATION - _bruta_charge_remaining
+		var elapsed := starting_elapsed + consumed_active_delta
 		var next_elapsed := elapsed + step_delta
 		var distance := BRUTA_CHARGE_MIN_SPEED * step_delta + acceleration_range * (pow(next_elapsed / BRUTA_CHARGE_DURATION, 3.0) - pow(elapsed / BRUTA_CHARGE_DURATION, 3.0)) * BRUTA_CHARGE_DURATION / 3.0
+		var effective_subpass_velocity := _bruta_charge_direction * (distance / step_delta)
 		var start := global_position
-		var intended_end := start + _bruta_charge_direction * distance
+		var intended_end := start + (effective_subpass_velocity + _collision_knockback_velocity) * step_delta
 		var bounded_end := _clamped_charge_position(intended_end)
 		var hit_wall := bounded_end != intended_end
 		var collision := move_and_collide(bounded_end - start)
 		if collision != null:
 			hit_wall = true
-		_resolve_bruta_charge_hits(start, global_position)
-		_bruta_charge_remaining = maxf(0.0, _bruta_charge_remaining - step_delta)
+		_decay_collision_knockback(step_delta)
+		velocity = effective_subpass_velocity + _collision_knockback_velocity
+		var collision_generation := get_collision_impact_generation()
+		CollisionImpactResolver.resolve_segment(self, start, global_position, _collision_impact_pairs)
+		if not _is_collision_impact_generation_current(collision_generation) or not _is_bruta_charge_processing_valid(processing_generation):
+			return
+		if not _resolve_bruta_charge_hits(start, global_position, processing_generation):
+			return
 		var progress := clampf(next_elapsed / BRUTA_CHARGE_DURATION, 0.0, 1.0)
-		velocity = _bruta_charge_direction * (BRUTA_CHARGE_MIN_SPEED + acceleration_range * progress * progress)
-		if hit_wall or _bruta_charge_remaining <= 0.0:
+		velocity = _bruta_charge_direction * (BRUTA_CHARGE_MIN_SPEED + acceleration_range * progress * progress) + _collision_knockback_velocity
+		if hit_wall:
 			_cancel_bruta_charge()
 			return
-		active_delta -= step_delta
+		consumed_active_delta += step_delta
+	_bruta_charge_remaining = maxf(0.0, starting_remaining - scheduled_active_delta)
+	if _bruta_charge_remaining <= 0.0:
+		_cancel_bruta_charge()
 
 func _bruta_charge_desired_direction() -> Vector2:
 	if _bruta_charge_aim_source == AimSource.JOYPAD:
@@ -826,18 +882,26 @@ func _clamped_charge_position(position: Vector2) -> Vector2:
 	return position
 
 func _cancel_bruta_charge() -> void:
+	_bruta_charge_generation += 1
 	_bruta_charge_direction = Vector2.ZERO
 	_bruta_charge_windup_remaining = 0.0
 	_bruta_charge_remaining = 0.0
 	_bruta_charge_hit_targets.clear()
 	_bruta_charge_aim_source = AimSource.NONE
-	velocity = Vector2.ZERO
+	velocity = _collision_knockback_velocity
 
-func _resolve_bruta_charge_hits(origin: Vector2, destination: Vector2) -> void:
+func _is_player_alive() -> bool:
+	return health != null and health.health > 0.0
+
+func _is_bruta_charge_processing_valid(generation: int) -> bool:
+	return generation == _bruta_charge_generation and _is_player_alive() and _is_bruta_charging()
+
+func _resolve_bruta_charge_hits(origin: Vector2, destination: Vector2, processing_generation: int = -1) -> bool:
+	var expected_generation := _bruta_charge_generation if processing_generation < 0 else processing_generation
 	var segment := destination - origin
 	var length_squared := segment.length_squared()
 	if length_squared <= 0.001:
-		return
+		return _is_bruta_charge_processing_valid(expected_generation)
 	var player_radius := (body_collision.shape as CircleShape2D).radius if body_collision.shape is CircleShape2D else 10.0
 	for node in get_tree().get_nodes_in_group(&"enemies"):
 		if not is_instance_valid(node) or node.is_queued_for_deletion() or not node.has_method(&"take_damage"):
@@ -850,14 +914,11 @@ func _resolve_bruta_charge_hits(origin: Vector2, destination: Vector2) -> void:
 		if target.global_position.distance_to(closest) > player_radius + _bruta_charge_target_radius(target):
 			continue
 		_bruta_charge_hit_targets[target.get_instance_id()] = true
-		var info := DamageInfo.new()
-		info.amount = _stats.get_stat(&"damage")
-		info.source = self
-		info.position = target.global_position
-		info.tags = [&"bruta_charge"]
-		target.call(&"take_damage", info)
 		if target.has_method(&"apply_stun"):
 			target.call(&"apply_stun", BRUTA_CHARGE_STUN_DURATION)
+			if not _is_bruta_charge_processing_valid(expected_generation):
+				return false
+	return _is_bruta_charge_processing_valid(expected_generation)
 
 func _bruta_charge_target_radius(target: Node2D) -> float:
 	for child in target.get_children():
@@ -909,18 +970,20 @@ func on_room_clear() -> void:
 		_dispatcher.dispatch(&"on_room_clear", null, 0)
 
 ## Leva dano por contato enquanto um inimigo estiver sobreposto e não houver i-frames.
-func _check_contact() -> void:
-	if is_invulnerable():
-		return
-	for body in hurtbox.get_overlapping_bodies():
-		if body.is_in_group("enemies"):
-			var info := DamageInfo.new()
-			info.amount = body.contact_damage
-			info.source = body
-			info.tags = [&"contact"]
-			info.position = global_position
-			take_damage(info)
-			return
+func _check_contact(decay_delta: float) -> bool:
+	_decay_collision_knockback(decay_delta)
+	var collision_generation := get_collision_impact_generation()
+	CollisionImpactResolver.resolve_overlaps(self, _collision_impact_pairs)
+	return _is_collision_impact_generation_current(collision_generation)
+
+func is_collision_impact_active() -> bool:
+	return _collision_impact_active and _is_player_alive()
+
+func get_collision_impact_generation() -> int:
+	return _collision_impact_generation
+
+func _is_collision_impact_generation_current(generation: int) -> bool:
+	return is_collision_impact_active() and generation == _collision_impact_generation
 
 ## Recebe dano respeitando a profundidade maxima de efeitos e os i-frames.
 func take_damage(info: DamageInfo) -> void:
@@ -931,16 +994,6 @@ func take_damage(info: DamageInfo) -> void:
 	if _consume_shield_charge():
 		return
 	_invuln_timer = _stats.get_stat(&"hit_invuln")
-	if _is_bruta_charge_active():
-		var mitigated := DamageInfo.new()
-		mitigated.amount = info.amount * (1.0 - BRUTA_CHARGE_DAMAGE_REDUCTION)
-		mitigated.source = info.source
-		mitigated.tags = info.tags.duplicate()
-		mitigated.is_crit = info.is_crit
-		mitigated.position = info.position
-		mitigated.trigger_depth = info.trigger_depth
-		health.apply_damage(mitigated)
-		return
 	health.apply_damage(info)
 
 func _on_health_damaged(info: DamageInfo, _actual_drop: float) -> void:
@@ -952,7 +1005,11 @@ func _on_enemy_died(_enemy: Node, fatal_info: DamageInfo) -> void:
 		_dispatcher.dispatch(&"on_kill", fatal_info, fatal_info.trigger_depth)
 
 func _on_died(_fatal_info: DamageInfo) -> void:
+	_collision_impact_active = false
+	_collision_impact_generation += 1
 	_cancel_bruta_charge()
+	_collision_knockback_velocity = Vector2.ZERO
+	_collision_impact_pairs.clear()
 	_clear_engineer_deployables()
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
 	_reset_omni_stop_spin()
@@ -969,6 +1026,7 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 	_reset_visual_aim()
 	_reset_omni_stop_spin()
 	health.reset()
+	_collision_impact_active = true
 	_blink_cd = 0.0
 	_blink_cd_duration = 0.0
 	_ability_q_cd = 0.0
