@@ -29,4 +29,6 @@ visual_scale = 0.5
 muzzle_offset = Vector2(0, -10)
 base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_pierce")])
 ability_q = &"engenheira_deploy"
+shift_command_id = &"engenheira_drone_command"
+shift_command_icon_id = &"engenheira_deploy"
 can_blink = false

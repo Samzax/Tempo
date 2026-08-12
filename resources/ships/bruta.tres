@@ -36,6 +36,7 @@ display_name = "Bruta"
 hull_texture = ExtResource("2_texture")
 base_stats = Array[ExtResource("3_base_stat")]([SubResource("BaseStatValue_health"), SubResource("BaseStatValue_speed"), SubResource("BaseStatValue_acceleration"), SubResource("BaseStatValue_damage"), SubResource("BaseStatValue_collision_resistance")])
 ability_q = &""
+q_slot_passive = true
 ability_shift = &"bruta_investida"
 can_blink = false
 movement_style = "omni"

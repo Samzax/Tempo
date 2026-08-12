@@ -91,6 +91,19 @@ func command_engineer_drone(player: Node2D) -> bool:
 			return true
 	return false
 
+## Consulta sem efeito usada pela UI para nao anunciar o comando antes de haver Drone.
+func can_command_engineer_drone(player: Node2D) -> bool:
+	if not _room_active or not is_instance_valid(_active_room) or player == null:
+		return false
+	var container := _active_room.get_node_or_null("Deployables") as Node2D
+	if container == null:
+		return false
+	for child in container.get_children():
+		var deployable := child as EngineerDeployable
+		if deployable != null and deployable.deploying_player == player and deployable.kind == EngineerDeployable.Kind.DRONE:
+			return true
+	return false
+
 ## Remove os deployables do jogador na sala atual e esquece a sequencia de implantacao.
 func clear_engineer_deployables_for(player: Node) -> void:
 	if player == null or not is_instance_valid(player):

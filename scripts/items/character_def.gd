@@ -9,6 +9,10 @@ extends ProviderDef
 @export var splash_art: Texture2D
 @export var ability_e: StringName
 @export var thrust_color: Color = Color.WHITE
+## Cor de apresentacao dos glifos de habilidade. Pertence ao personagem, nunca ao casco.
+const NEUTRAL_ABILITY_ICON_TINT := Color(0.933333, 0.945098, 0.964706, 1.0) # #EEF1F6
+
+@export var ability_icon_tint: Color = NEUTRAL_ABILITY_ICON_TINT
 
 const ROSTER_IDS: Array[StringName] = [&"hacker", &"guardian", &"chronomancer"]
 const BASE_CHARACTER_PATH := "res://resources/characters/base.tres"
@@ -51,16 +55,19 @@ static func _make_builtin(character_id: StringName) -> CharacterDef:
 			definition.display_name = "Hacker"
 			definition.description = "Precisao adaptativa e sobrecarga de tiro."
 			definition.ability_e = &"hacker_overdrive"
+			definition.ability_icon_tint = Color(0.129412, 0.835294, 0.87451, 1.0) # #21D5DF
 			definition.modifiers = [_modifier(&"aim_tier", 1.0)]
 		&"guardian":
 			definition.display_name = "Guardian"
 			definition.description = "Resistencia reforcada e escudo de emergencia."
 			definition.ability_e = &"guardian_shield"
+			definition.ability_icon_tint = Color(0.72549, 0.521569, 0.839216, 1.0) # #B985D6
 			definition.modifiers = [_modifier(&"max_health", 1.0)]
 		&"chronomancer":
 			definition.display_name = "Chronomancer"
 			definition.description = "Manipula o tempo ao redor do blink."
 			definition.ability_e = &"time_warp"
+			definition.ability_icon_tint = Color(0.843137, 0.654902, 1.0, 1.0) # #D7A7FF
 			definition.modifiers = [_modifier(&"blink_haste", 0.25)]
 		_:
 			return _base_fallback()

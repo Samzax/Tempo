@@ -6,8 +6,14 @@ extends ProviderDef
 @export var hull_texture: Texture2D
 @export var base_stats: Array[BaseStatValue] = []
 @export var ability_q: StringName
+## Um Q sem habilidade ativa pode ser apresentado como passivo, sem sugerir input.
+@export var q_slot_passive: bool = false
 ## Habilidade exclusiva do Shift. Vazia preserva blink ou o fallback legado.
 @export var ability_shift: StringName
+## Acao sem habilidade do Shift (por exemplo, reposicionar um drone ja implantado).
+@export var shift_command_id: StringName
+## Glifo aprovado para a acao de comando; pode reutilizar a arte de outra acao da mesma familia.
+@export var shift_command_icon_id: StringName
 ## Desliga o blink sem acoplar o controle a uma identidade de nave especifica.
 @export var can_blink: bool = true
 ## Defaults preserve the original aim-driven 16x24 ship presentation.
@@ -113,4 +119,6 @@ func validate_content() -> Array[String]:
 		errors.append("Habilidade da nave desconhecida: %s." % ability_q)
 	if not ability_shift.is_empty() and not AbilityCatalog.is_valid(ability_shift):
 		errors.append("Habilidade de Shift da nave desconhecida: %s." % ability_shift)
+	if shift_command_id.is_empty() != shift_command_icon_id.is_empty():
+		errors.append("Comando de Shift precisa de ID funcional e ID de glifo.")
 	return errors

@@ -26,6 +26,7 @@ const BRUTA_CHARGE_STUN_DURATION := 0.75
 const COLLISION_KNOCKBACK_DECELERATION := 900.0
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
 const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
+const NEUTRAL_ABILITY_ICON_TINT := Color(0.933333, 0.945098, 0.964706, 1.0) # #EEF1F6
 
 @onready var visual_root: Node2D = $VisualRoot
 @onready var sprite: AnimatedSprite2D = $VisualRoot/AnimatedSprite2D
@@ -742,6 +743,46 @@ func ability_e_cooldown_ratio() -> float:
 		return 0.0
 	return clampf(_ability_e_cd / _ability_e_cd_duration, 0.0, 1.0)
 
+## Snapshot de apresentacao do loadout. A UI le estado real sem conhecer naves ou personagens.
+func get_ability_hud_slots() -> Array[Dictionary]:
+	var tint := character.ability_icon_tint if character != null else NEUTRAL_ABILITY_ICON_TINT
+	var slots: Array[Dictionary] = []
+	slots.append(_ability_hud_slot(&"Q", _ability_q, ability_q_cooldown_ratio(), ship != null and ship.q_slot_passive, tint))
+	slots.append(_ability_hud_slot(&"E", _ability_e, ability_e_cooldown_ratio(), false, tint))
+	var shift_ability := _ability_shift
+	var has_blink := ship != null and ship.can_blink
+	var can_command_shift := ship != null and not ship.shift_command_id.is_empty() and _can_command_engineer_drone()
+	var shift_id := shift_ability.id if shift_ability != null else (&"interceptadora_blink" if has_blink else (ship.shift_command_id if ship != null else &""))
+	var shift_icon_id := shift_ability.id if shift_ability != null else (&"interceptadora_blink" if has_blink else (ship.shift_command_icon_id if ship != null else &""))
+	var shift_enabled := shift_ability != null or has_blink or can_command_shift
+	var shift_ratio := shift_cooldown_ratio()
+	slots.append({
+		"key": &"Shift",
+		"ability_id": shift_id,
+		"icon_id": shift_icon_id,
+		"cooldown_ratio": shift_ratio,
+		"state": (&"cooldown" if shift_ratio > 0.0 else &"ready") if shift_enabled else &"disabled",
+		"tint": tint,
+	})
+	return slots
+
+func _ability_hud_slot(key: StringName, ability: AbilityDef, cooldown_ratio: float, passive: bool, tint: Color) -> Dictionary:
+	if passive:
+		return {"key": key, "ability_id": &"", "cooldown_ratio": 0.0, "state": &"passive", "tint": tint}
+	if ability == null:
+		return {"key": key, "ability_id": &"", "cooldown_ratio": 0.0, "state": &"disabled", "tint": tint}
+	return {
+		"key": key,
+		"ability_id": ability.id,
+		"cooldown_ratio": cooldown_ratio,
+		"state": &"cooldown" if cooldown_ratio > 0.0 else &"ready",
+		"tint": tint,
+	}
+
+func _can_command_engineer_drone() -> bool:
+	var session := get_tree().get_first_node_in_group(&"session")
+	return session != null and session.has_method(&"can_command_engineer_drone") and bool(session.call(&"can_command_engineer_drone", self))
+
 func _tick_timers(delta: float) -> void:
 	_fire_cooldown -= delta
 	_blink_cd = maxf(0.0, _blink_cd - delta)
@@ -951,7 +992,7 @@ func _handle_blink_input() -> bool:
 			EventBus.ability_used.emit(&"ability_shift")
 			return true
 		return false
-	if ship != null and not ship.can_blink and ship.id == &"nave_engenheira":
+	if ship != null and not ship.can_blink and not ship.shift_command_id.is_empty():
 		command_engineer_drone()
 		return false
 	if ship != null and not ship.can_blink:

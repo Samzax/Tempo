@@ -14,6 +14,7 @@ value = 1.0
 [resource]
 script = ExtResource("1_character_def")
 thrust_color = Color(0.945098, 0.784314, 0.356863, 1)
+ability_icon_tint = Color(0.72549, 0.521569, 0.839216, 1)
 id = &"guardian"
 display_name = "Guardião"
 description = "Defensor resistente que segura a linha quando a pressão aumenta."

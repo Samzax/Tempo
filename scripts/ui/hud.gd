@@ -1,95 +1,122 @@
 extends Control
 
-class ShiftCooldownIcon:
+class AbilitySlotIcon:
 	extends Control
 
-	const CORE_TEXTURE := preload("res://assets/ui/blink_core.png")
-	const ICON_SIZE := 32
-	var cooldown_ratio: float = 0.0
+	const SLOT_SIZE := 38.0
+	const ICON_SIZE := 32.0
+	const ICON_MARGIN := 3.0
+	const SLOT_CENTER := Vector2(19, 20)
+	const NEUTRAL_TINT := Color(0.933333, 0.945098, 0.964706, 1.0) # #EEF1F6
+	const SLOT_BACKGROUND := Color(0.019608, 0.039216, 0.07451, 0.588235) # ARGB 150,5,10,19
+	const INACTIVE_BORDER := Color(0.45098, 0.478431, 0.52549, 0.431373) # ARGB 110,115,122,134
+	const KEY_TEXT := Color(0.894118, 0.917647, 0.94902, 0.933333) # ARGB 238,228,234,242
+	const KEY_BADGE := Color(0.007843, 0.019608, 0.043137, 0.854902) # ARGB 218,2,5,11
+	const COOLDOWN_WIPE := Color(0.007843, 0.019608, 0.043137, 0.72549) # ARGB 185,2,5,11
+	const DISABLED_DIM := Color(0, 0, 0, 0.352941) # ARGB 90,0,0,0
+	const DISABLED_ICON_TINT := Color(0.478431, 0.501961, 0.545098, 1.0)
+	const KEY_FONT := preload("res://addons/gut/fonts/CourierPrime-Regular.ttf")
+	const ICONS := {
+		&"sobrecarga": preload("res://assets/ui/abilities/sobrecarga.png"),
+		&"escudo": preload("res://assets/ui/abilities/escudo.png"),
+		&"bruta_investida": preload("res://assets/ui/abilities/bruta_investida.png"),
+		&"engenheira_deploy": preload("res://assets/ui/abilities/engenheira_deploy.png"),
+		&"interceptadora_blink": preload("res://assets/ui/abilities/interceptadora_blink.png"),
+		&"time_warp": preload("res://assets/ui/abilities/time_warp.png"),
+		&"guardian_shield": preload("res://assets/ui/abilities/guardian_shield.png"),
+		&"hacker_overdrive": preload("res://assets/ui/abilities/hacker_overdrive.png"),
+	}
+
+	var ability_id: StringName = &""
+	var icon_id: StringName = &""
+	var slot_state: StringName = &"disabled"
+	var cooldown_ratio := 0.0
+	var tint := NEUTRAL_TINT
+	# Compatibilidade de leitura para o teste do HUD anterior; a Bruta usa a arte aprovada.
 	var use_charge_indicator := false
-	var _pulse_step: int = -1
+	var _key_label: Label
 
 	func _ready() -> void:
-		set_process(cooldown_ratio <= 0.0)
-		if cooldown_ratio <= 0.0:
-			_update_pulse_step()
+		custom_minimum_size = Vector2.ONE * SLOT_SIZE
+		size = Vector2.ONE * SLOT_SIZE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_key_label = Label.new()
+		_key_label.position = Vector2(4, 1)
+		_key_label.add_theme_font_override("font", KEY_FONT)
+		_key_label.add_theme_font_size_override("font_size", 9)
+		_key_label.add_theme_color_override("font_color", KEY_TEXT)
+		_key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_key_label)
 
-	func set_cooldown_ratio(value: float) -> void:
-		var next_ratio := clampf(value, 0.0, 1.0)
-		var was_ready := cooldown_ratio <= 0.0
-		var is_ready := next_ratio <= 0.0
-		var ratio_changed := not is_equal_approx(next_ratio, cooldown_ratio)
-		cooldown_ratio = next_ratio
-		if is_ready:
-			set_process(true)
-			if not was_ready:
-				_pulse_step = -1
-			_update_pulse_step()
-		else:
-			set_process(false)
-			if was_ready:
-				_pulse_step = -1
-			if was_ready or ratio_changed:
-				queue_redraw()
-
-	func set_charge_indicator(value: bool) -> void:
-		if use_charge_indicator == value:
-			return
-		use_charge_indicator = value
+	func configure(slot: Dictionary) -> void:
+		ability_id = slot.get("ability_id", &"")
+		icon_id = slot.get("icon_id", ability_id)
+		slot_state = slot.get("state", &"disabled")
+		cooldown_ratio = clampf(float(slot.get("cooldown_ratio", 0.0)), 0.0, 1.0)
+		tint = slot.get("tint", NEUTRAL_TINT)
+		use_charge_indicator = ability_id == &"bruta_investida"
+		if _key_label != null:
+			_key_label.text = str(slot.get("key", ""))
 		queue_redraw()
 
-	func _process(_delta: float) -> void:
-		if cooldown_ratio <= 0.0:
-			_update_pulse_step()
-
-	func _update_pulse_step() -> void:
-		var next_step := int(Time.get_ticks_msec() / 180) % 4
-		if next_step != _pulse_step:
-			_pulse_step = next_step
-			queue_redraw()
-
 	func _draw() -> void:
-		if use_charge_indicator:
-			_draw_charge_indicator()
+		var rect := Rect2(Vector2.ZERO, Vector2.ONE * SLOT_SIZE)
+		var active := slot_state == &"ready" or slot_state == &"cooldown"
+		var border_tint := Color(tint.r, tint.g, tint.b, 0.745098) if active else INACTIVE_BORDER
+		draw_rect(rect, SLOT_BACKGROUND)
+		draw_rect(rect, border_tint, false, 1.0)
+		var icon_rect := Rect2(Vector2.ONE * ICON_MARGIN, Vector2.ONE * ICON_SIZE)
+		if slot_state == &"passive":
+			_draw_passive()
+		else:
+			var icon := ICONS.get(icon_id) as Texture2D
+			if icon != null:
+				var icon_tint := DISABLED_ICON_TINT if slot_state == &"disabled" else tint
+				draw_texture_rect(icon, icon_rect, false, icon_tint)
+			elif slot_state == &"disabled":
+				_draw_disabled(icon_rect)
+		if slot_state == &"cooldown":
+			var covered := ceili(ICON_SIZE * cooldown_ratio)
+			if covered > 0.0:
+				# O wipe do preview V3 ocupa o final do glifo e cresce de baixo para cima.
+				draw_rect(Rect2(Vector2(icon_rect.position.x, icon_rect.end.y - covered), Vector2(ICON_SIZE, covered)), COOLDOWN_WIPE)
+		elif slot_state == &"disabled":
+			draw_rect(icon_rect, DISABLED_DIM)
+		_draw_key_badge()
+
+	func _draw_key_badge() -> void:
+		if _key_label == null or _key_label.text.is_empty():
 			return
-		var full_rect := Rect2(Vector2.ZERO, Vector2.ONE * ICON_SIZE)
-		if cooldown_ratio <= 0.0:
-			# Alterna apenas a cor: o pulso mantém pixels inteiros e sem blur.
-			var ready_tint := Color(0.76, 1.0, 1.0) if _pulse_step < 2 else Color(0.96, 1.0, 1.0)
-			draw_texture_rect(CORE_TEXTURE, full_rect, false, ready_tint)
-			return
+		var badge_width := clampf(ceilf(_key_label.get_minimum_size().x) + 5.0, 12.0, SLOT_SIZE - 4.0)
+		# O badge fica dentro do slot/glifo; o Label e desenhado depois deste Control.
+		draw_rect(Rect2(Vector2(2, 2), Vector2(badge_width, 11)), KEY_BADGE)
 
-		var covered_height := ceili(ICON_SIZE * cooldown_ratio)
-		var covered_rect := Rect2(0, 0, ICON_SIZE, covered_height)
-		# A própria alpha da textura recorta a máscara e conserva o fundo transparente.
-		draw_texture_rect_region(CORE_TEXTURE, covered_rect, covered_rect, Color(0.04, 0.18, 0.22, 0.92))
-		if covered_height < ICON_SIZE:
-			var revealed_rect := Rect2(0, covered_height, ICON_SIZE, ICON_SIZE - covered_height)
-			draw_texture_rect_region(CORE_TEXTURE, revealed_rect, revealed_rect, Color.WHITE)
+	func _draw_passive() -> void:
+		_draw_diamond(SLOT_CENTER + Vector2(-13, 0), SLOT_CENTER + Vector2(-8, -4), SLOT_CENTER + Vector2(-3, 0), SLOT_CENTER + Vector2(-8, 4))
+		_draw_diamond(SLOT_CENTER + Vector2(3, 0), SLOT_CENTER + Vector2(8, -4), SLOT_CENTER + Vector2(13, 0), SLOT_CENTER + Vector2(8, 4))
 
-	## Três células de energia: um sinal neutro de carga, sem sugerir teleporte.
-	func _draw_charge_indicator() -> void:
-		var ready_ratio := 1.0 - cooldown_ratio
-		var ready_tint := Color(1.0, 0.78, 0.35) if _pulse_step < 2 else Color(1.0, 0.9, 0.52)
-		var frame_tint := Color(0.46, 0.29, 0.12, 0.95)
-		for index in 3:
-			var cell := Rect2(5.0, 5.0 + index * 8.0, 22.0, 5.0)
-			draw_rect(cell, frame_tint, false, 1.0)
-			var fill_width := clampf(ready_ratio * 22.0 - index * 3.0, 0.0, 22.0)
-			if fill_width > 0.0:
-				draw_rect(Rect2(cell.position, Vector2(fill_width, cell.size.y)), ready_tint)
-## HUD: pontuação, vidas, vida (pips) e estado do blink, com tela de fim de jogo.
-## Lê os valores por polling a cada quadro — simples e suficiente para esta UI.
+	func _draw_diamond(a: Vector2, b: Vector2, c: Vector2, d: Vector2) -> void:
+		draw_line(a, b, INACTIVE_BORDER, 1.0)
+		draw_line(b, c, INACTIVE_BORDER, 1.0)
+		draw_line(c, d, INACTIVE_BORDER, 1.0)
+		draw_line(d, a, INACTIVE_BORDER, 1.0)
 
+	func _draw_disabled(icon_rect: Rect2) -> void:
+		draw_line(icon_rect.position + Vector2(8, 8), icon_rect.end - Vector2(8, 8), INACTIVE_BORDER, 2.0)
+		draw_line(Vector2(icon_rect.end.x - 8, icon_rect.position.y + 8), Vector2(icon_rect.position.x + 8, icon_rect.end.y - 8), INACTIVE_BORDER, 2.0)
+
+## HUD: pontuacao, vidas, vida (pips), habilidades e tela de fim de jogo.
 var _score: Label
 var _lives: Label
-var _blink_icon: ShiftCooldownIcon
+var _blink_icon: AbilitySlotIcon
+var _ability_slots: Array[AbilitySlotIcon] = []
 var _game_over: Label
 var _pips_row: HBoxContainer
 var _pips: Array[ColorRect] = []
 var _player: Node = null
 var _gs: Node = null
-var _over: bool = false
+var _over := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -104,24 +131,30 @@ func _build() -> void:
 	box.position = Vector2(6, 5)
 	box.add_theme_constant_override("separation", 3)
 	add_child(box)
-
-	_score = _make_label(14, Color(1, 1, 1))
+	_score = _make_label(14, Color.WHITE)
 	box.add_child(_score)
 	_lives = _make_label(12, Color(0.85, 0.9, 1.0))
 	box.add_child(_lives)
-
 	_pips_row = HBoxContainer.new()
 	_pips_row.add_theme_constant_override("separation", 2)
 	box.add_child(_pips_row)
 
-	_blink_icon = ShiftCooldownIcon.new()
-	_blink_icon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_blink_icon.offset_left = -44
-	_blink_icon.offset_top = -44
-	_blink_icon.offset_right = -12
-	_blink_icon.offset_bottom = -12
-	_blink_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_blink_icon)
+	var abilities := HBoxContainer.new()
+	abilities.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	# Três slots de 38 px e dois vãos de 4 px: 122 x 38, a 8 px do canto.
+	abilities.custom_minimum_size = Vector2(122, 38)
+	abilities.offset_left = -130
+	abilities.offset_top = -46
+	abilities.offset_right = -8
+	abilities.offset_bottom = -8
+	abilities.add_theme_constant_override("separation", 4)
+	abilities.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(abilities)
+	for _index in 3:
+		var slot := AbilitySlotIcon.new()
+		abilities.add_child(slot)
+		_ability_slots.append(slot)
+	_blink_icon = _ability_slots[2]
 
 	_game_over = _make_label(22, Color(1, 0.85, 0.4))
 	_game_over.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -131,12 +164,12 @@ func _build() -> void:
 	add_child(_game_over)
 
 func _make_label(size: int, col: Color) -> Label:
-	var l := Label.new()
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", col)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
-	l.add_theme_constant_override("outline_size", 4)
-	return l
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", col)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	label.add_theme_constant_override("outline_size", 4)
+	return label
 
 func _process(_dt: float) -> void:
 	if not is_visible_in_tree():
@@ -146,18 +179,20 @@ func _process(_dt: float) -> void:
 	if _gs != null:
 		_score.text = "PONTOS  %d" % _gs.score
 		_lives.text = "VIDAS  %d" % _gs.player_lives
-	var blink_ratio := 0.0
-	var use_charge_indicator := false
 	if _player != null and is_instance_valid(_player) and _player.health != null and is_instance_valid(_player.health):
-		var hp: int = floori(_player.health.health)
+		var hp := floori(_player.health.health)
 		for i in _pips.size():
 			_pips[i].color = Color(1.0, 0.3, 0.35) if i < hp else Color(0.25, 0.25, 0.3)
-		blink_ratio = clampf(_player.shift_cooldown_ratio(), 0.0, 1.0)
-		use_charge_indicator = _player.has_method(&"uses_bruta_charge_shift") and bool(_player.call(&"uses_bruta_charge_shift"))
-	_blink_icon.set_charge_indicator(use_charge_indicator)
-	_blink_icon.set_cooldown_ratio(blink_ratio)
+		_refresh_ability_slots()
 	if not _over and _gs != null and _gs.player_lives <= 0:
 		_trigger_over()
+
+func _refresh_ability_slots() -> void:
+	if _player == null or not _player.has_method(&"get_ability_hud_slots"):
+		return
+	var slots: Array = _player.call(&"get_ability_hud_slots")
+	for index in mini(slots.size(), _ability_slots.size()):
+		_ability_slots[index].configure(slots[index])
 
 func _bind_player(next_player: Node) -> void:
 	if next_player == _player and is_instance_valid(_player):
