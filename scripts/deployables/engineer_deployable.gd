@@ -20,6 +20,16 @@ const STATION_BUFF_REFRESH := 0.2
 const VISUAL_AIM_TURN_SPEED := 16.0
 
 const BULLET := preload("res://scenes/projectiles/bullet.tscn")
+const TRAP_DETONATE_FX := preload("res://assets/sprites/deployables/engineer_trap_detonate_fx.png")
+const STATION_GRANT_FX := preload("res://assets/sprites/deployables/engineer_station_grant_fx.png")
+const STATION_HIT_FX := preload("res://assets/sprites/deployables/engineer_station_hit_fx.png")
+const STATION_DEATH_FX := preload("res://assets/sprites/deployables/engineer_station_death_fx.png")
+
+const TRAP_DETONATE_FRAME_TIME := 0.040
+const STATION_AURA_FRAME_TIME := 0.083
+const STATION_GRANT_FRAME_TIME := 0.040
+const STATION_HIT_FRAME_TIME := 0.050
+const STATION_DEATH_FRAME_TIME := 0.040
 
 @export var kind: Kind = Kind.TRAP
 @export var deploying_player: Node2D
@@ -28,6 +38,9 @@ const BULLET := preload("res://scenes/projectiles/bullet.tscn")
 @onready var hurtbox: Area2D = $Hurtbox
 @onready var health: HealthComponent = $HealthComponent
 @onready var drone_sprite: Sprite2D = $DroneSprite
+@onready var trap_sprite: Sprite2D = $TrapSprite
+@onready var station_sprite: Sprite2D = $StationSprite
+@onready var station_aura: Sprite2D = $StationAura
 @onready var muzzle: Marker2D = $Muzzle
 
 var _next_effect_at: Dictionary = {}
@@ -36,6 +49,7 @@ var _station_shield_recipients: Dictionary = {}
 var _station_buff_source := StringName()
 var _drone_fire_cooldown := 0.0
 var _drone_visual_angle := 0.0
+var _station_aura_tween: Tween
 
 func _ready() -> void:
 	influence.body_entered.connect(_on_influence_body_entered)
@@ -164,13 +178,30 @@ func _apply_kind() -> void:
 	# Camada 3 (inimigos) para contato e camada 5 (projeteis inimigos) para dano a distancia.
 	hurtbox.collision_mask = 20
 	drone_sprite.visible = kind == Kind.DRONE
+	trap_sprite.visible = kind == Kind.TRAP
+	station_sprite.visible = kind == Kind.OVERCLOCK_STATION
+	_set_station_aura_active(kind == Kind.OVERCLOCK_STATION)
 	_reset_drone_visual_aim()
 	if kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
 		health.max_health = STATION_MAX_HEALTH
 		health.reset()
 	if kind != Kind.DRONE:
 		_drone_fire_cooldown = 0.0
-	queue_redraw()
+
+func _set_station_aura_active(active: bool) -> void:
+	station_aura.visible = active
+	if _station_aura_tween != null and _station_aura_tween.is_valid():
+		_station_aura_tween.kill()
+		_station_aura_tween = null
+	if not active:
+		return
+	station_aura.frame = 0
+	_station_aura_tween = station_aura.create_tween().set_loops()
+	for frame_index in range(1, 6):
+		_station_aura_tween.tween_interval(STATION_AURA_FRAME_TIME)
+		_station_aura_tween.tween_callback(_set_fx_frame.bind(station_aura, frame_index))
+	_station_aura_tween.tween_interval(STATION_AURA_FRAME_TIME)
+	_station_aura_tween.tween_callback(_set_fx_frame.bind(station_aura, 0))
 
 func _on_influence_body_entered(body: Node2D) -> void:
 	match kind:
@@ -244,6 +275,8 @@ func take_damage(info: DamageInfo) -> float:
 	if kind == Kind.TRAP and (info.tags.has(&"burst") or info.tags.has(&"aoe")):
 		_detonate()
 	elif kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
+		if kind == Kind.OVERCLOCK_STATION and info.amount < health.health:
+			_spawn_one_shot(STATION_HIT_FX, 2, STATION_HIT_FRAME_TIME, global_position)
 		return health.apply_damage(info)
 	return 0.0
 
@@ -256,17 +289,45 @@ func _buff_ally(body: Node2D) -> void:
 		# Keep the recipient, not only its id: teardown must revoke the aura
 		# even when the Station is removed by damage, FIFO, or a room change.
 		_station_shield_recipients[player_id] = body
+		_spawn_one_shot(STATION_GRANT_FX, 3, STATION_GRANT_FRAME_TIME, body.global_position)
 	if body.has_method(&"apply_temporary_modifier"):
 		body.call(&"apply_temporary_modifier", _station_buff_source, &"fire_rate", StatDef.Op.ADD_PCT, STATION_FIRE_RATE_BONUS, STATION_BUFF_REFRESH)
 
 func _detonate() -> void:
+	if is_queued_for_deletion():
+		return
+	_spawn_one_shot(TRAP_DETONATE_FX, 4, TRAP_DETONATE_FRAME_TIME, global_position)
 	for body in influence.get_overlapping_bodies():
 		_damage_enemy(body as Node2D, TRAP_DAMAGE)
 	queue_free()
 
 func _on_died(_fatal_info: DamageInfo) -> void:
 	_reset_drone_visual_aim()
+	if kind == Kind.OVERCLOCK_STATION:
+		_spawn_one_shot(STATION_DEATH_FX, 5, STATION_DEATH_FRAME_TIME, global_position)
 	queue_free()
+
+func _spawn_one_shot(texture: Texture2D, frame_count: int, frame_time: float, world_position: Vector2) -> void:
+	var world_parent := get_parent()
+	if world_parent == null or world_parent.is_queued_for_deletion():
+		return
+	var effect := Sprite2D.new()
+	effect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	effect.texture = texture
+	effect.hframes = frame_count
+	effect.frame = 0
+	world_parent.add_child(effect)
+	effect.global_position = world_position
+	var tween := effect.create_tween()
+	for frame_index in range(1, frame_count):
+		tween.tween_interval(frame_time)
+		tween.tween_callback(effect.set_frame.bind(frame_index))
+	tween.tween_interval(frame_time)
+	tween.tween_callback(effect.queue_free)
+
+func _set_fx_frame(effect: Sprite2D, frame_index: int) -> void:
+	if is_instance_valid(effect):
+		effect.frame = frame_index
 
 func _exit_tree() -> void:
 	for recipient in _station_shield_recipients.values():
@@ -292,15 +353,3 @@ func _has_active_deploying_player() -> bool:
 
 func _is_player_source(source: Node) -> bool:
 	return source != null and source.is_in_group(&"player")
-
-func _draw() -> void:
-	match kind:
-		Kind.TRAP:
-			draw_circle(Vector2.ZERO, 6.0, Color("56d8ff"))
-			for index in 4:
-				draw_line(Vector2.ZERO, Vector2.UP.rotated(index * PI * 0.5) * 10.0, Color("b6f3ff"), 1.0)
-		Kind.DRONE:
-			pass
-		Kind.OVERCLOCK_STATION:
-			draw_rect(Rect2(-6, -6, 12, 12), Color("ffd166"), true)
-			draw_line(Vector2(-9, 0), Vector2(9, 0), Color.WHITE, 1.0)

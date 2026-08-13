@@ -1,8 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/deployables/engineer_deployable.gd" id="1_deployable"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
 [ext_resource type="Texture2D" path="res://assets/sprites/engenheira_drone.png" id="3_drone_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/deployables/engineer_trap_a_body.png" id="4_trap_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/deployables/engineer_overclock_station_c_body.png" id="5_station_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/deployables/engineer_station_aura_fx.png" id="6_aura_sprite"]
 
 [sub_resource type="CircleShape2D" id="Circle_influence"]
 radius = 18.0
@@ -17,6 +20,24 @@ script = ExtResource("1_deployable")
 texture_filter = 1
 texture = ExtResource("3_drone_sprite")
 scale = Vector2(0.333333, 0.333333)
+visible = false
+
+[node name="StationAura" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("6_aura_sprite")
+hframes = 6
+visible = false
+
+[node name="TrapSprite" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("4_trap_sprite")
+scale = Vector2(0.5, 0.5)
+visible = false
+
+[node name="StationSprite" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("5_station_sprite")
+scale = Vector2(0.5, 0.5)
 visible = false
 
 [node name="Muzzle" type="Marker2D" parent="."]
