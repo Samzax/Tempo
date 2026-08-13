@@ -43,6 +43,10 @@ func get_phase_one_waves() -> Array[WaveSpec]:
 
 @export var id: StringName
 @export var room_type: RoomType = RoomType.OPENING
+## Os perfis sao dados independentes. "default" preserva a sala legada.
+@export var encounter_profile: StringName = &"default"
+@export var environment_profile: StringName = &"default"
+@export var transition_profile: StringName = &"default"
 @export var scene: PackedScene
 @export var size: Vector2 = Vector2(720, 405)
 @export var camera_policy: CameraPolicy = CameraPolicy.FIXED
@@ -67,6 +71,7 @@ func configure_phase_one_waves() -> void:
 	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
 
 func configure_upper_waves() -> void:
+	encounter_profile = &"upper"
 	wave_specs = get_upper_waves()
 	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
 	initial_debris = [

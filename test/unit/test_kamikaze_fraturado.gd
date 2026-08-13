@@ -27,7 +27,7 @@ func test_telegraph_is_point_four_five_seconds() -> void:
 
 func test_dash_duration_and_visual_cycle_are_aligned() -> void:
 	var enemy := await _enemy()
-	var frames := enemy.animation_sprite.sprite_frames
+	var frames: SpriteFrames = enemy.animation_sprite.sprite_frames
 	assert_almost_eq(enemy.dash_duration, 0.55, 0.001)
 	assert_eq(frames.get_frame_count(&"dash"), 6)
 	assert_almost_eq(frames.get_animation_speed(&"dash"), 11.0, 0.001)
@@ -71,7 +71,7 @@ func test_kamikaze_collision_scale_and_regions_are_preserved() -> void:
 	assert_eq(enemy.collision_mask, 0)
 	assert_almost_eq(shape.radius, 10.0, 0.001)
 	assert_eq(enemy.animation_sprite.scale, Vector2(0.25, 0.25))
-	var frames := enemy.animation_sprite.sprite_frames
+	var frames: SpriteFrames = enemy.animation_sprite.sprite_frames
 	for index in range(6):
 		var atlas := frames.get_frame_texture(&"dash", index) as AtlasTexture
 		assert_not_null(atlas)

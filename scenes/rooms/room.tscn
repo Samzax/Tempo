@@ -8,6 +8,9 @@
 
 [node name="Enemies" type="Node2D" parent="." groups=["enemies_container"]]
 
+[node name="Environment" type="Node2D" parent="."]
+z_index = -99
+
 [node name="Deployables" type="Node2D" parent="."]
 
 [node name="Directors" type="Node" parent="."]

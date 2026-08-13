@@ -2,6 +2,8 @@ class_name RoomController
 extends Node
 
 signal room_cleared
+signal combat_cleared
+signal room_completed
 signal exit_unlocked
 signal spawn_warning_observed(wave_index: int, spawn_index: int, point: Vector2)
 
@@ -27,6 +29,7 @@ var last_spawn_warning_fx: Node2D
 const PROJECTILE_RUNTIME_META := &"room_runtime"
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 const DEBRIS_SCENE := preload("res://scenes/world/debris.tscn")
+const ENVIRONMENT_PRESENTATION := preload("res://scripts/rooms/environment_presentation.gd")
 
 func _ready() -> void:
 	add_to_group(&"room_controller")
@@ -42,7 +45,11 @@ func _ready() -> void:
 		push_error("RoomController requires a room root.")
 		return
 	runtime = RoomRuntime.new()
-	runtime.room_cleared.connect(_on_room_cleared)
+	runtime.room_cleared.connect(_on_combat_cleared)
+	var enemies := _find_local_group_member(&"enemies_container")
+	if enemies != null and _director.has_method(&"set_enemy_container"):
+		_director.call(&"set_enemy_container", enemies)
+	_apply_environment_presentation()
 	_start_room_observation()
 	_director.connect(&"enemy_spawned", _on_enemy_spawned)
 	_director.connect(&"spawns_finished", _on_spawns_finished)
@@ -75,6 +82,19 @@ func _spawn_initial_debris() -> void:
 		debris.set_room_bounds(room_def.get_bounds())
 		container.add_child(debris)
 
+func _apply_environment_presentation() -> void:
+	if room_def.environment_profile == &"default" or _room_root == null:
+		return
+	var host := _room_root.get_node_or_null("Environment")
+	if host == null:
+		host = _room_root
+	if host.get_node_or_null("EnvironmentPresentation") != null:
+		return
+	var presentation := ENVIRONMENT_PRESENTATION.new()
+	presentation.name = &"EnvironmentPresentation"
+	presentation.environment_profile = room_def.environment_profile
+	host.add_child(presentation)
+
 func _on_enemy_spawned(enemy: Enemy) -> void:
 	if _is_tearing_down or runtime == null or enemy == null:
 		return
@@ -97,15 +117,20 @@ func _on_spawns_finished() -> void:
 ## de 0,45 s observavel mesmo em salas sem um conteiner global de efeitos.
 func _on_spawn_warning_started(wave_index: int, spawn_index: int) -> void:
 	var point := _spawn_point_for_warning(wave_index, spawn_index)
-	spawn_warning_observed.emit(wave_index, spawn_index, point)
-	var effects := get_tree().get_first_node_in_group(&"effects")
+	# Prefira o host da propria sala. O fallback mantem cenas legadas cujos FX
+	# vivem no container global do mundo.
+	var effects := _find_local_group_member(&"effects")
 	if effects == null:
-		return
-	var teleport_fx := TELEPORT_FX.instantiate() as Node2D
-	teleport_fx.set(&"duration", SPAWN_WARNING_DURATION)
-	teleport_fx.global_position = point
-	effects.add_child(teleport_fx)
-	last_spawn_warning_fx = teleport_fx
+		effects = get_tree().get_first_node_in_group(&"effects")
+	if effects != null:
+		var teleport_fx := TELEPORT_FX.instantiate() as Node2D
+		teleport_fx.set(&"duration", SPAWN_WARNING_DURATION)
+		teleport_fx.global_position = point
+		effects.add_child(teleport_fx)
+		last_spawn_warning_fx = teleport_fx
+	# Quem observa o aviso pode inspecionar o FX ja anexado, como no contrato
+	# legado de telegraph.
+	spawn_warning_observed.emit(wave_index, spawn_index, point)
 
 func _spawn_point_for_warning(wave_index: int, spawn_index: int) -> Vector2:
 	if _director != null and _director.has_method(&"get_spawn_agenda"):
@@ -181,8 +206,8 @@ func _stop_room_observation() -> void:
 	_is_observing_room = false
 
 func _disconnect_runtime_callbacks() -> void:
-	if runtime != null and runtime.room_cleared.is_connected(_on_room_cleared):
-		runtime.room_cleared.disconnect(_on_room_cleared)
+	if runtime != null and runtime.room_cleared.is_connected(_on_combat_cleared):
+		runtime.room_cleared.disconnect(_on_combat_cleared)
 	if is_instance_valid(_director):
 		if _director.is_connected(&"enemy_spawned", _on_enemy_spawned):
 			_director.disconnect(&"enemy_spawned", _on_enemy_spawned)
@@ -224,7 +249,32 @@ func _register_local_enemy_projectile(projectile: Node) -> void:
 	if projectile.is_in_group(&"enemy_projectiles"):
 		register_enemy_projectile(projectile)
 
-func _on_room_cleared() -> void:
+## Busca somente na subarvore da sala; grupos globais de outra sala nao podem
+## receber inimigos ou FX desta execucao.
+func _find_local_group_member(group_name: StringName) -> Node:
+	if _room_root == null:
+		return null
+	return _find_group_member_in_subtree(_room_root, group_name)
+
+func _find_group_member_in_subtree(node: Node, group_name: StringName) -> Node:
+	if node.is_in_group(group_name):
+		return node
+	for child in node.get_children():
+		var found := _find_group_member_in_subtree(child, group_name)
+		if found != null:
+			return found
+	return null
+
+func _on_combat_cleared() -> void:
+	if _is_tearing_down or exit_is_unlocked or not is_inside_tree():
+		return
+	combat_cleared.emit()
+	# Track A preserva a conclusao e recompensa legadas; Track B podera reter
+	# room_completed para um profile de transicao proprio.
+	if room_def.transition_profile == &"default":
+		_complete_room()
+
+func _complete_room() -> void:
 	if _is_tearing_down or exit_is_unlocked or not is_inside_tree():
 		return
 	for projectile in get_tree().get_nodes_in_group(&"enemy_projectiles"):
@@ -232,4 +282,5 @@ func _on_room_cleared() -> void:
 			projectile.queue_free()
 	exit_is_unlocked = true
 	exit_unlocked.emit()
+	room_completed.emit()
 	room_cleared.emit()

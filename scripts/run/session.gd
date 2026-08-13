@@ -232,8 +232,6 @@ func _on_room_cleared(node_def: SectorNode, room_generation: int) -> void:
 		_player.call(&"on_room_clear")
 	run_state.mark_completed(run_state.sector_index, node_def.id)
 	_room_active = false
-	# RewardChest is another listener of room_cleared. Finish this transition on
-	# the next idle turn so its offer is persisted before the map is populated.
 	call_deferred(&"_finish_room_clear", node_def, room_generation)
 
 func _finish_room_clear(node_def: SectorNode, room_generation: int) -> void:
@@ -409,6 +407,8 @@ func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 		def.configure_upper_waves()
 	elif _is_phase_one_wave_node(node_def):
 		def.configure_phase_one_waves()
+	if run_state != null and run_state.sector_index == 1 and node_def.room_profile == &"upper":
+		def.environment_profile = &"upper_background_human_s2"
 	return def
 
 func _is_phase_one_wave_node(node_def: SectorNode) -> bool:

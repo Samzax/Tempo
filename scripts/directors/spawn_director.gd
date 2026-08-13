@@ -26,6 +26,7 @@ enum EntryEdge { TOP, BOTTOM, LEFT, RIGHT }
 
 var _t := 0.0
 var _container: Node
+var _local_container: Node
 var _spawn_index := 0
 var _regular_spawn_index := 0
 var _spawn_limit := 0
@@ -50,8 +51,15 @@ var _waiting_for_wave_clear := false
 var _breather_remaining := -1.0
 
 func _ready() -> void:
+	# Mantem a superficie legada para chamadas diretas de _spawn_configured em
+	# cenas/testes antigos. Salas novas substituem isso pelo container injetado.
 	_container = get_tree().get_first_node_in_group("enemies_container")
 	set_physics_process(false)
+
+## A sala moderna injeta seu container. O fallback por grupo permanece para
+## cenas e testes legados que ainda criam o diretor isoladamente.
+func set_enemy_container(container: Node) -> void:
+	_local_container = container
 
 ## Compatibilidade para salas e testes legados.
 func start(spawn_limit: int) -> bool:
@@ -449,4 +457,6 @@ func _on_container_lost() -> void:
 		_fail_spawns("SpawnDirector lost its enemies_container.")
 
 func _get_enemies_container() -> Node:
+	if is_instance_valid(_local_container) and not _local_container.is_queued_for_deletion():
+		return _local_container
 	return get_tree().get_first_node_in_group("enemies_container")

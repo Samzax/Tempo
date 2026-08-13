@@ -87,6 +87,28 @@ func test_resolving_last_enemy_after_finish_clears_once() -> void:
 	assert_true(runtime.is_cleared())
 	assert_signal_emit_count(runtime, &"room_cleared", 1)
 
+func test_debris_does_not_block_clear_and_controller_emits_each_completion_signal_once() -> void:
+	var room_root := Node.new()
+	add_child_autofree(room_root)
+	var director := FakeDirector.new()
+	director.name = "Director"
+	room_root.add_child(director)
+	var controller := RoomController.new()
+	controller.room_def = RoomDef.new()
+	controller.director_path = ^"../Director"
+	room_root.add_child(controller)
+	watch_signals(controller)
+	await get_tree().process_frame
+	var debris := preload("res://scenes/world/debris.tscn").instantiate()
+	room_root.add_child(debris)
+	director.spawns_finished.emit()
+	assert_eq(controller.runtime.state, RoomRuntime.State.CLEARED)
+	assert_signal_emit_count(controller, &"combat_cleared", 1)
+	assert_signal_emit_count(controller, &"room_completed", 1)
+	controller.runtime.room_cleared.emit()
+	assert_signal_emit_count(controller, &"combat_cleared", 1)
+	assert_signal_emit_count(controller, &"room_completed", 1)
+
 func test_duplicate_and_unknown_resolutions_do_not_reemit_clear() -> void:
 	var runtime := _runtime()
 	var enemy := _enemy()
