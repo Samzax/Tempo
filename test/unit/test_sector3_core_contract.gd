@@ -61,6 +61,10 @@ func _track_node(node: Node) -> Node:
 	_owned_nodes.append(node)
 	return node
 
+func _track_core(core: Node) -> Node:
+	add_child(core)
+	return _track_node(core)
+
 func after_each() -> void:
 	for node in _owned_nodes:
 		if is_instance_valid(node):
@@ -75,7 +79,7 @@ func test_core_counts_only_confirmed_deaths_and_caps_at_eight() -> void:
 	var chest: RewardChest = _track_node(CHEST.new()) as RewardChest
 	var player: Node2D = _track_node(Node2D.new()) as Node2D
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	for index in 20:
 		core.record_enemy_resolved(Enemy.ResolveReason.CULLED)
@@ -90,7 +94,7 @@ func test_core_activation_is_unique_and_does_not_move_room_actors() -> void:
 	var player: Node2D = _track_node(Node2D.new()) as Node2D
 	player.position = Vector2(120, 300)
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	var before := player.position
 	core.activate()
@@ -106,7 +110,7 @@ func test_prompt_requires_activatable_state_and_nearby_player() -> void:
 	var chest: RewardChest = _track_node(CHEST.new()) as RewardChest
 	var player: Node2D = _track_node(Node2D.new()) as Node2D
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 
 	core._state = CORE.State.ACTIVATABLE
@@ -123,54 +127,77 @@ func test_prompt_requires_activatable_state_and_nearby_player() -> void:
 		core._refresh_prompt()
 		assert_false(core._prompt.visible)
 
-func test_afterimages_are_capped_and_copy_source_visual_transform() -> void:
+func test_afterimages_are_discrete_during_approved_mid_lifetime_window_and_clean_up() -> void:
 	var core := CORE.new()
 	var chest: RewardChest = _track_node(CHEST.new()) as RewardChest
 	var player := _make_visual_player()
 	_track_node(player)
 	add_child(player)
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	var visual := player.get_node("VisualRoot/AnimatedSprite2D") as AnimatedSprite2D
-	for _step in 3:
-		core._spawn_afterimage()
-		await get_tree().process_frame
+	core._spawn_afterimage()
 	assert_eq(core._afterimages.size(), 1)
 	var ghost := core._afterimages.back() as AnimatedSprite2D
+	var ghost_instance_id := ghost.get_instance_id()
+	var tween := core._afterimage_tweens[ghost_instance_id] as Tween
+	assert_true(is_instance_valid(tween))
+	tween.pause()
 	assert_true(is_instance_valid(ghost))
 	_assert_transform_almost_eq(ghost.global_transform, visual.global_transform)
 	assert_eq(ghost.offset, visual.offset)
 	assert_eq(ghost.flip_h, visual.flip_h)
 	assert_eq(ghost.flip_v, visual.flip_v)
 	assert_eq(ghost.sprite_frames, visual.sprite_frames)
-	assert_true(ghost.modulate.a > 0.10)
-	assert_true(ghost.modulate.a < 0.21)
-	await wait_seconds(0.12 + 0.08)
+	assert_true(ghost.visible)
+	assert_true(tween.custom_step(0.115))
+	assert_eq(core._afterimages.size(), 1)
+	assert_true(is_instance_valid(ghost))
+	assert_eq(core._afterimages.back().get_instance_id(), ghost_instance_id)
+	assert_true(ghost.visible)
+	var effective_alpha := ghost.modulate.a * ghost.self_modulate.a
+	assert_true(effective_alpha >= 0.02, "ghost remains visible in the approved 110–115ms window")
+	assert_true(effective_alpha < 0.10, "ghost is visually discrete in the approved window")
+	# Completion may discard the tween synchronously from its callback; do not
+	# assert its return value as an ordering contract.
+	tween.custom_step(0.05)
+	for _callback_step in 3:
+		if is_instance_valid(tween):
+			tween.custom_step(0.001)
+	assert_false(ghost.visible, "expired ghost is hidden before queue_free")
 	assert_eq(core._afterimages.size(), 0)
 	assert_eq(core._afterimage_tweens.size(), 0)
+	await get_tree().process_frame
+	assert_false(is_instance_valid(ghost))
 
-func test_afterimage_burst_replaces_oldest_without_errors_and_keeps_one() -> void:
+func test_afterimage_burst_replaces_oldest_safely_without_exceeding_one() -> void:
 	var core := CORE.new()
 	var chest: RewardChest = _track_node(CHEST.new()) as RewardChest
 	var player := _make_visual_player()
 	_track_node(player)
 	add_child(player)
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	core._spawn_afterimage()
 	var first: Node2D = core._afterimages.back()
 	core._spawn_afterimage()
+	assert_false(first.visible, "old ghost is hidden before the replacement is added")
 	assert_eq(core._afterimages.size(), 1)
-	await get_tree().process_frame
-	assert_false(is_instance_valid(first))
 	var second: Node2D = core._afterimages.back()
 	core._spawn_afterimage()
+	assert_false(second.visible, "old ghost is hidden before the replacement is added")
 	assert_eq(core._afterimages.size(), 1)
+	assert_true(is_instance_valid(core._afterimages.back()))
+	var current_tween := core._afterimage_tweens[core._afterimages.back().get_instance_id()] as Tween
+	var current_ghost: Node2D = core._afterimages.back()
+	current_tween.pause()
+	current_tween.custom_step(0.17)
+	assert_false(current_ghost.visible, "expired ghost is hidden before queue_free")
 	await get_tree().process_frame
+	assert_false(is_instance_valid(first))
 	assert_false(is_instance_valid(second))
-	await wait_seconds(0.12 + 0.04)
 	assert_eq(core._afterimages.size(), 0)
 	assert_eq(core._afterimage_tweens.size(), 0)
 
@@ -181,12 +208,11 @@ func test_real_ejection_spawns_at_steps_two_four_six_and_cleans_up() -> void:
 	_track_node(player)
 	add_child(player)
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	core._state = CORE.State.RELEASING
 	core._generation = 1
 	var observed_origins: Array[Vector2] = []
-	var had_gap := false
 	var had_ghost := false
 	var last_ghost_origin := Vector2.INF
 	var source := player.get_node("VisualRoot/AnimatedSprite2D") as AnimatedSprite2D
@@ -195,17 +221,15 @@ func test_real_ejection_spawns_at_steps_two_four_six_and_cleans_up() -> void:
 	for _sample in 15:
 		await wait_seconds(0.04)
 		var current := core._afterimages.size()
-		if current == 0 and had_ghost:
-			had_gap = true
 		if current > 0 and core._afterimages.back().global_position != last_ghost_origin:
 			had_ghost = true
 			observed_origins.append(core._afterimages.back().global_position)
 			var ghost := core._afterimages.back() as AnimatedSprite2D
 			_assert_basis_almost_eq(ghost.global_transform, source.global_transform)
+			assert_true(ghost.visible)
 			last_ghost_origin = ghost.global_position
 		assert_true(current <= 1)
 	assert_eq(observed_origins.size(), 3)
-	assert_true(had_gap, "the 120ms lifetime must leave a real gap before the next 160ms spawn")
 	assert_true(player.global_position.x > initial_x)
 	assert_almost_eq(player.global_position.x, initial_x + 190.0, 1.0)
 	assert_true(absf(player.global_position.y - 108.0) <= 2.0)
@@ -237,7 +261,7 @@ func test_core_channels_twelve_ticks_then_opens_one_offer() -> void:
 	var player: Node2D = _track_node(Node2D.new()) as Node2D
 	player.position = Vector2(360, 108)
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	for index in 8:
 		core.record_enemy_resolved(Enemy.ResolveReason.DIED)
@@ -259,7 +283,7 @@ func test_release_ejection_restores_player_and_persists_plane_offsets() -> void:
 	player.collision_mask = 8
 	player.set_physics_process(false)
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	core._state = CORE.State.RELEASING
 	core._generation = 1
@@ -281,7 +305,7 @@ func test_teardown_during_ejection_restores_once_and_late_coroutine_cannot_overw
 	player.collision_mask = 8
 	player.set_physics_process(true)
 	core.configure(chest, player)
-	add_child_autofree(core)
+	_track_core(core)
 	await get_tree().process_frame
 	core._state = CORE.State.RELEASING
 	core._generation = 1

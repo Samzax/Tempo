@@ -22,9 +22,9 @@ const EJECTION_STEPS := 6
 const EJECTION_STEP_DURATION := 0.08
 const EJECTION_DISTANCE := 190.0
 const AFTERIMAGE_STEP_INTERVAL := 2
-const AFTERIMAGE_LIFETIME := 0.12
-# Os spawns dos passos 2/4/6 ficam separados por 160 ms; cada rastro dura 120
-# ms. Portanto, em fluxo normal nao ha sobreposicao visual nem "beam".
+const AFTERIMAGE_LIFETIME := 0.16
+# Os spawns dos passos 2/4/6 ficam separados por 160 ms; cada rastro dura 160
+# ms como eco legivel, ainda discreto (max. 1), sem sobreposicao visual nem "beam".
 const MAX_AFTERIMAGES := 1
 
 enum State { PROTECTED, ACTIVATABLE, CHANNELING, OFFER_PENDING, RELEASING, FINISHED }
@@ -358,11 +358,7 @@ func _fade_afterimage(afterimage_id: int) -> void:
 	tween.tween_callback(_expire_afterimage.bind(afterimage_id))
 
 func _expire_afterimage(afterimage_id: int) -> void:
-	_afterimage_tweens.erase(afterimage_id)
-	_remove_afterimage_reference(afterimage_id)
-	var afterimage := instance_from_id(afterimage_id) as Node2D
-	if is_instance_valid(afterimage):
-		afterimage.queue_free()
+	_discard_afterimage(afterimage_id)
 
 func _discard_afterimage(afterimage_id: int) -> void:
 	if _afterimage_tweens.has(afterimage_id):
@@ -373,6 +369,7 @@ func _discard_afterimage(afterimage_id: int) -> void:
 	_remove_afterimage_reference(afterimage_id)
 	var afterimage := instance_from_id(afterimage_id) as Node2D
 	if is_instance_valid(afterimage):
+		afterimage.hide()
 		afterimage.queue_free()
 
 func _on_afterimage_tree_exiting(afterimage_id: int) -> void:
