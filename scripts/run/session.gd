@@ -29,8 +29,10 @@ var _active_room: Node
 var _room_active := false
 var _awaiting_boss_advance := false
 var _room_generation := 0
+var _auto_transition_generation := -1
 var _has_started := false
 var _engineer_deploy_sequence_by_player: Dictionary = {}
+var _sector3_offer_callback: Callable
 
 func _ready() -> void:
 	add_to_group(&"session")
@@ -203,12 +205,19 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	var room_def := _room_def_for(node_def, is_revisit)
 	var room_bounds := room_def.get_bounds()
 	controller.room_def = room_def
+	if room_def.transition_profile == &"sector3_upper_transition":
+		controller.configure_sector3_completed_on_entry(run_state.is_completed(run_state.sector_index, node_id))
+		chest.configure_core_managed()
 	_configure_room_geometry(room, room_bounds)
 	chest.configure(_player, run_state.sector_index, node_id, 0, 0, _pool_for(node_def), run_state.get_offer(run_state.sector_index, node_id, 0, 0), node_def.node_type == SectorNode.NodeType.TREASURE, node_def.node_type == SectorNode.NodeType.RISK)
 	chest.position = Vector2(room_def.size.x * 0.5, room_def.size.y - 52.0)
 	controller.room_cleared.connect(_on_room_cleared.bind(node_def, room_generation))
 	chest.offer_created.connect(run_state.save_offer)
 	chest.offer_requested.connect(_open_offer)
+	var choice := get_node("../UI/ItemChoice") as ItemChoice
+	if room_def.transition_profile == &"sector3_upper_transition" and choice != null:
+		_sector3_offer_callback = _on_sector3_offer_resolved.bind(controller, room_generation)
+		choice.offer_resolved.connect(_sector3_offer_callback)
 	_room_host.add_child(room)
 	_active_room = room
 	_player.global_position = room_bounds.get_center()
@@ -247,7 +256,28 @@ func _finish_room_clear(node_def: SectorNode, room_generation: int) -> void:
 		_awaiting_boss_advance = true
 		_hyperspace.present_sector_advance(sector, run_state.completed_nodes, run_state.sector_index >= 2)
 	else:
+		if _should_auto_advance_transition(room_generation):
+			var children := sector.get_children(node_def.id)
+			if children.size() == 1:
+				_auto_transition_generation = room_generation
+				_on_node_selected(children[0])
+				return
 		_show_next_nodes(node_def.id)
+
+## A politica pertence ao perfil da sala ativa, nao ao id de um no. O guard da
+## geracao torna o sinal duplicado inofensivo e limita a transicao a um filho.
+func _should_auto_advance_transition(room_generation: int) -> bool:
+	if room_generation != _room_generation or _auto_transition_generation == room_generation:
+		return false
+	if not is_instance_valid(_active_room):
+		return false
+	var controller := _active_room.get_node_or_null("RoomController") as RoomController
+	return controller != null and controller.room_def != null and controller.room_def.transition_profile == &"sector3_upper_transition"
+
+func _on_sector3_offer_resolved(offer: RewardOffer, _refused: bool, controller: RoomController, room_generation: int) -> void:
+	if room_generation != _room_generation or not _room_active or not is_instance_valid(controller):
+		return
+	controller.resolve_sector3_offer(offer)
 
 func _show_next_nodes(node_id: int) -> void:
 	_hyperspace.present(sector, run_state.completed_nodes, _selectable_nodes(node_id), true)
@@ -303,6 +333,10 @@ func _on_sector_advance_requested() -> void:
 
 func _dispose_active_room() -> void:
 	_room_generation += 1
+	var choice := get_node_or_null("../UI/ItemChoice") as ItemChoice
+	if choice != null and not _sector3_offer_callback.is_null() and choice.offer_resolved.is_connected(_sector3_offer_callback):
+		choice.offer_resolved.disconnect(_sector3_offer_callback)
+	_sector3_offer_callback = Callable()
 	_persist_active_offer()
 	if is_instance_valid(_active_room):
 		# Os deployables pertencem a sala; nao sobrevivem a troca de no nem ao fim da execucao.
@@ -393,7 +427,9 @@ func _persist_active_offer() -> void:
 
 func _open_offer(offer: RewardOffer, player: Node) -> void:
 	run_state.save_offer(offer)
-	get_node("../UI/ItemChoice").open_offer(offer, player)
+	var controller := _active_room.get_node_or_null("RoomController") as RoomController if is_instance_valid(_active_room) else null
+	var allow_refuse := controller != null and controller.room_def.transition_profile == &"sector3_upper_transition"
+	get_node("../UI/ItemChoice").open_offer(offer, player, allow_refuse)
 
 func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 	var def := RoomDef.new()
@@ -403,12 +439,17 @@ func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 		def.finite_spawn_count = 0
 	elif node_def.node_type == SectorNode.NodeType.RISK:
 		def.finite_spawn_count = 0
+	elif node_def.room_profile == &"upper" and run_state != null and run_state.sector_index == 2:
+		def.configure_sector3_upper_waves()
 	elif node_def.room_profile == &"upper":
 		def.configure_upper_waves()
 	elif _is_phase_one_wave_node(node_def):
 		def.configure_phase_one_waves()
 	if run_state != null and run_state.sector_index == 1 and node_def.room_profile == &"upper":
 		def.environment_profile = &"upper_background_human_s2"
+	if run_state != null and run_state.sector_index == 2 and node_def.room_profile == &"upper":
+		def.environment_profile = &"sector3_upper_core"
+		def.transition_profile = &"sector3_upper_transition"
 	return def
 
 func _is_phase_one_wave_node(node_def: SectorNode) -> bool:

@@ -30,6 +30,10 @@ const PROJECTILE_RUNTIME_META := &"room_runtime"
 const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 const DEBRIS_SCENE := preload("res://scenes/world/debris.tscn")
 const ENVIRONMENT_PRESENTATION := preload("res://scripts/rooms/environment_presentation.gd")
+const SECTOR3_CORE_PRESENTATION := preload("res://scripts/rooms/sector3_core_presentation.gd")
+
+var _sector3_core: Sector3CorePresentation
+var _sector3_completed_on_entry := false
 
 func _ready() -> void:
 	add_to_group(&"room_controller")
@@ -50,6 +54,7 @@ func _ready() -> void:
 	if enemies != null and _director.has_method(&"set_enemy_container"):
 		_director.call(&"set_enemy_container", enemies)
 	_apply_environment_presentation()
+	_apply_sector3_core()
 	_start_room_observation()
 	_director.connect(&"enemy_spawned", _on_enemy_spawned)
 	_director.connect(&"spawns_finished", _on_spawns_finished)
@@ -94,6 +99,28 @@ func _apply_environment_presentation() -> void:
 	presentation.name = &"EnvironmentPresentation"
 	presentation.environment_profile = room_def.environment_profile
 	host.add_child(presentation)
+
+func _apply_sector3_core() -> void:
+	if room_def.transition_profile != &"sector3_upper_transition" or _room_root == null:
+		return
+	if _sector3_core != null:
+		return
+	var chest := _room_root.get_node_or_null("RewardChest") as RewardChest
+	var player := chest.player_node() if chest != null else null
+	if chest == null or player == null:
+		push_error("Sector3 core requires RewardChest and Player.")
+		return
+	chest.configure_core_managed()
+	_sector3_core = SECTOR3_CORE_PRESENTATION.new()
+	_sector3_core.name = &"Sector3CorePresentation"
+	_sector3_core.configure(chest, player, _sector3_completed_on_entry)
+	_sector3_core.sequence_completed.connect(_complete_room)
+	_room_root.call_deferred(&"add_child", _sector3_core)
+
+## A Session conhece a conclusao persistida antes de esta Room entrar na arvore.
+## O nucleo usa somente esse fato para restaurar a apresentacao na revisita.
+func configure_sector3_completed_on_entry(completed: bool) -> void:
+	_sector3_completed_on_entry = completed
 
 func _on_enemy_spawned(enemy: Enemy) -> void:
 	if _is_tearing_down or runtime == null or enemy == null:
@@ -142,7 +169,13 @@ func _spawn_point_for_warning(wave_index: int, spawn_index: int) -> Vector2:
 func _on_enemy_resolved(enemy: Enemy, reason: int) -> void:
 	if _is_tearing_down or runtime == null:
 		return
+	if _sector3_core != null:
+		_sector3_core.record_enemy_resolved(reason)
 	runtime.resolve_enemy(enemy, reason)
+
+func resolve_sector3_offer(offer: RewardOffer) -> void:
+	if _sector3_core != null:
+		_sector3_core.offer_resolved(offer)
 
 func _on_enemy_tree_exited(instance_id: int) -> void:
 	_enemy_tree_exit_callbacks.erase(instance_id)
@@ -268,19 +301,42 @@ func _find_group_member_in_subtree(node: Node, group_name: StringName) -> Node:
 func _on_combat_cleared() -> void:
 	if _is_tearing_down or exit_is_unlocked or not is_inside_tree():
 		return
+	# O perfil do nucleo retira a ameaca antes de tornar a interacao visivel.
+	# Isto reaproveita a mesma associacao por RoomRuntime usada no teardown,
+	# sem antecipar room_completed nem a recompensa.
+	if room_def.transition_profile == &"sector3_upper_transition":
+		_clear_runtime_enemy_projectiles()
 	combat_cleared.emit()
 	# Track A preserva a conclusao e recompensa legadas; Track B podera reter
 	# room_completed para um profile de transicao proprio.
 	if room_def.transition_profile == &"default":
 		_complete_room()
+	elif _sector3_core != null:
+		_sector3_core.activate()
 
 func _complete_room() -> void:
 	if _is_tearing_down or exit_is_unlocked or not is_inside_tree():
 		return
-	for projectile in get_tree().get_nodes_in_group(&"enemy_projectiles"):
-		if projectile is Node and projectile.get_meta(PROJECTILE_RUNTIME_META, null) == runtime:
-			projectile.queue_free()
+	_clear_runtime_enemy_projectiles()
 	exit_is_unlocked = true
 	exit_unlocked.emit()
 	room_completed.emit()
 	room_cleared.emit()
+
+## Desativa colisao e processamento antes de enfileirar a liberacao. Assim um
+## projetil que ja existia nao pode acertar durante ativacao, canal ou oferta.
+func _clear_runtime_enemy_projectiles() -> void:
+	for projectile in get_tree().get_nodes_in_group(&"enemy_projectiles"):
+		if projectile is Node and projectile.get_meta(PROJECTILE_RUNTIME_META, null) == runtime:
+			if projectile is CollisionObject2D:
+				projectile.collision_layer = 0
+				projectile.collision_mask = 0
+				projectile.set_deferred(&"monitoring", false)
+				projectile.set_deferred(&"monitorable", false)
+			projectile.set_physics_process(false)
+			# Sair da arvore remove o membro do grupo neste mesmo frame; o prompt
+			# subsequente portanto nunca observa um hostil ainda ativo/localizavel.
+			var parent := projectile.get_parent()
+			if parent != null:
+				parent.remove_child(projectile)
+			projectile.queue_free()

@@ -2,6 +2,8 @@ class_name ItemChoice
 extends Control
 ## Painel compacto de uma escolha; nao pausa a arvore para preservar o combate.
 
+signal offer_resolved(offer: RewardOffer, refused: bool)
+
 var _offer: RewardOffer
 var _player: Node
 var _buttons: Array[Button] = []
@@ -15,6 +17,7 @@ var _rebuild_deferred_queued := false
 var _rebuild_offer: RewardOffer
 var _rebuild_generation := -1
 var _terminal_invalidated_generation := -1
+var _can_refuse := false
 
 func _enter_tree() -> void:
 	_ensure_echoes_connection()
@@ -28,11 +31,12 @@ func _exit_tree() -> void:
 	if GameState.temporal_echoes_changed.is_connected(_on_temporal_echoes_changed):
 		GameState.temporal_echoes_changed.disconnect(_on_temporal_echoes_changed)
 
-func open_offer(offer: RewardOffer, player: Node) -> void:
+func open_offer(offer: RewardOffer, player: Node, allow_refuse: bool = false) -> void:
 	if _choosing or _refreshing:
 		return
 	_offer = offer
 	_player = player
+	_can_refuse = allow_refuse
 	_terminal_invalidated_generation = -1
 	_ensure_echoes_connection()
 	show()
@@ -71,6 +75,11 @@ func _build(allow_rebuild: bool = true, fail_closed: bool = false) -> void:
 	close.text = "Fechar  [Esc]"
 	close.pressed.connect(hide)
 	panel.add_child(close)
+	if _can_refuse:
+		var refuse := Button.new()
+		refuse.text = "RECUSAR"
+		refuse.pressed.connect(_refuse)
+		panel.add_child(refuse)
 	if fail_closed:
 		_terminal_invalidated_generation = _ui_generation
 		for button in _buttons:
@@ -309,6 +318,7 @@ func _choose(index: int) -> void:
 		offer.claimed = true
 		offer.claimed_item_id = captured_item_id
 		hide()
+		offer_resolved.emit(offer, false)
 	elif _terminal_invalidated_generation != choice_generation:
 		_refresh()
 	_choosing = false
@@ -345,6 +355,17 @@ func _has_valid_paid_metadata(offer: Variant) -> bool:
 		if cost <= 0:
 			return false
 	return true
+
+func _refuse() -> void:
+	if not _can_refuse or _choosing or _refreshing or not _is_live_object(_offer) or _offer.claimed:
+		return
+	_choosing = true
+	var offer := _offer
+	offer.claimed = true
+	offer.claimed_item_id = &""
+	hide()
+	_choosing = false
+	offer_resolved.emit(offer, true)
 
 func _ensure_echoes_connection() -> void:
 	if not GameState.temporal_echoes_changed.is_connected(_on_temporal_echoes_changed):

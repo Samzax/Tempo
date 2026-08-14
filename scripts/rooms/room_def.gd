@@ -32,6 +32,14 @@ func get_upper_waves() -> Array[WaveSpec]:
 		&"common", &"common", &"atirador", &"common", &"common", &"kamikaze", &"atirador", &"kamikaze",
 	])]
 
+func get_sector3_upper_waves() -> Array[WaveSpec]:
+	return [
+		WaveSpec.new(0, 0, 2, 1.1).with_threat_types([&"common", &"common"]),
+		WaveSpec.new(0, 0, 1, 1.1).with_threat_types([&"atirador"]),
+		WaveSpec.new(0, 0, 3, 1.1).with_threat_types([&"common", &"common", &"kamikaze"]),
+		WaveSpec.new(0, 0, 2, 1.1).with_threat_types([&"atirador", &"kamikaze"]),
+	]
+
 func get_phase_one_waves() -> Array[WaveSpec]:
 	return [
 		WaveSpec.new(6, 0, 2, 2.4, true),
@@ -79,3 +87,9 @@ func configure_upper_waves() -> void:
 		{"position": Vector2(390.0, 246.0), "size_class": 1, "drift_velocity": Vector2(-10.0, 8.0)},
 		{"position": Vector2(590.0, 154.0), "size_class": 0, "drift_velocity": Vector2(-7.0, -6.0)},
 	]
+
+func configure_sector3_upper_waves() -> void:
+	encounter_profile = &"sector3_upper"
+	wave_specs = get_sector3_upper_waves()
+	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
+	initial_debris.clear()

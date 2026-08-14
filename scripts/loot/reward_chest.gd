@@ -24,6 +24,7 @@ var _risk_mode := false
 var _activating := false
 var _activation_serial := 0
 var _active_activation_token := 0
+var _core_managed := false
 
 const INTERACTION_RADIUS := 42.0
 const CLICK_RADIUS := 16.0
@@ -36,9 +37,10 @@ func _ready() -> void:
 		push_error("RewardChest requires a RoomController.")
 		return
 	_restore_pending_offer_if_possible()
-	_room_controller.room_cleared.connect(_unlock)
+	if not _core_managed:
+		_room_controller.room_cleared.connect(_unlock)
 	# Uma sala sem spawns pode ser limpa durante o _ready do controlador.
-	if _room_controller.runtime != null and _room_controller.runtime.is_cleared():
+	if not _core_managed and _room_controller.runtime != null and _room_controller.runtime.is_cleared():
 		_unlock.call_deferred()
 	queue_redraw()
 
@@ -48,7 +50,26 @@ func _unlock() -> void:
 	_available = true
 	queue_redraw()
 
+## O nucleo usa exatamente a mesma RewardOffer, mas controla quando ela fica visivel.
+func configure_core_managed() -> void:
+	_core_managed = true
+
+func unlock_for_core() -> void:
+	if not _core_managed:
+		return
+	_ensure_offer()
+	_available = true
+	queue_redraw()
+
+func current_offer() -> RewardOffer:
+	return _room_controller.runtime.reward_offer if _has_live_runtime() else null
+
+func player_node() -> Node2D:
+	return _player as Node2D
+
 func _input(event: InputEvent) -> void:
+	if _core_managed:
+		return
 	if not _available or not _is_player_nearby():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and _is_chest_click(event.position):
@@ -252,7 +273,7 @@ func _is_live(value: Variant) -> bool:
 	return true
 
 func _draw() -> void:
-	if not _available:
+	if not _available or _core_managed:
 		return
 	var claimed := _room_controller != null and _room_controller.runtime != null and _room_controller.runtime.reward_offer != null and _room_controller.runtime.reward_offer.claimed
 	var color := Color(0.32, 0.72, 0.42) if not claimed else Color(0.28, 0.32, 0.38)

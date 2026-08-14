@@ -8,8 +8,9 @@ extends Node2D
 const UPPER_EXTENSION := preload("res://assets/backgrounds/phase_1_upper_space.png")
 
 func _ready() -> void:
-	if environment_profile != &"upper_background_human_s2":
-		return
+	if environment_profile == &"sector3_upper_core":
+		return # O nucleo cria os tres planos locais, mantendo este fallback neutro.
+	if environment_profile != &"upper_background_human_s2": return
 	var extension := Sprite2D.new()
 	extension.name = &"UpperSpaceExtension"
 	extension.texture = UPPER_EXTENSION
