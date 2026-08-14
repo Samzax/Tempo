@@ -75,6 +75,7 @@ func has_waves() -> bool:
 	return not wave_specs.is_empty()
 
 func configure_phase_one_waves() -> void:
+	encounter_profile = &"phase_one"
 	wave_specs = get_phase_one_waves()
 	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
 
@@ -93,3 +94,12 @@ func configure_sector3_upper_waves() -> void:
 	wave_specs = get_sector3_upper_waves()
 	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
 	initial_debris.clear()
+
+func configure_encounter_profile(profile: StringName) -> void:
+	match profile:
+		&"phase_one":
+			configure_phase_one_waves()
+		&"upper":
+			configure_upper_waves()
+		&"sector3_upper":
+			configure_sector3_upper_waves()

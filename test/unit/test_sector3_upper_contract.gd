@@ -21,23 +21,23 @@ func after_each() -> void:
 func test_sector3_treasure_has_private_profiles_and_preserves_dag() -> void:
 	var session: Session = _track_node(SESSION.new()) as Session
 	session.run_state = RunState.new()
-	session.run_state.sector_index = 2
-	var sector := GENERATOR.generate(4242, 2)
-	var node23 := sector.get_node(23) as SectorNode
+	session.run_state.sector_index = 0
+	var sector := GENERATOR.generate(4242, 0)
+	var node23 := sector.get_node(3) as SectorNode
 	var def := session._room_def_for(node23)
 	assert_eq(node23.node_type, SectorNode.NodeType.TREASURE)
 	assert_eq(def.encounter_profile, &"sector3_upper")
 	assert_eq(def.environment_profile, &"sector3_upper_core")
 	assert_eq(def.transition_profile, &"sector3_upper_transition")
-	assert_eq(sector.get_children(23), [25])
-	assert_eq(sector.get_children(25), [26])
+	assert_eq(sector.get_children(3), [6])
+	assert_eq(sector.get_children(6), [])
 
 func test_sector2_upper_keeps_legacy_profiles_and_single_wave() -> void:
 	var session: Session = _track_node(SESSION.new()) as Session
 	session.run_state = RunState.new()
-	session.run_state.sector_index = 1
-	var sector := GENERATOR.generate(4242, 1)
-	var node13 := sector.get_node(13) as SectorNode
+	session.run_state.sector_index = 0
+	var sector := GENERATOR.generate(4242, 0)
+	var node13 := sector.get_node(1) as SectorNode
 	var def := session._room_def_for(node13)
 	assert_eq(def.encounter_profile, &"upper")
 	assert_eq(def.environment_profile, &"upper_background_human_s2")

@@ -82,18 +82,12 @@ func test_room_and_node_ordinals_append_risk_at_four() -> void:
 	assert_eq(RoomDef.RoomType.BOSS, 2); assert_eq(RoomDef.RoomType.TREASURE, 3)
 	assert_eq(RoomDef.RoomType.RISK, 4)
 
-func test_sector_two_risk_is_id_24_and_preserves_profile_and_dag() -> void:
-	for sector_index in [0, 1, 2]:
-		var sector := SectorGenerator.generate(77, sector_index)
-		var lower: SectorNode = sector.get_node(sector_index * 10 + 4)
-		var upper: SectorNode = sector.get_node(sector_index * 10 + 3)
-		if sector_index == 2:
-			assert_eq(lower.id, 24); assert_eq(lower.node_type, SectorNode.NodeType.RISK)
-			assert_eq(lower.room_profile, &"default"); assert_eq(sector.get_children(24), [25])
-			assert_eq(sector.get_children(25), [26]); assert_eq(upper.node_type, SectorNode.NodeType.TREASURE)
-		else:
-			assert_eq(lower.node_type, SectorNode.NodeType.COMBAT)
-			assert_eq(upper.node_type, SectorNode.NodeType.COMBAT)
+func test_disconnected_risk_path_is_removed_from_single_sector_topology() -> void:
+	var sector := SectorGenerator.generate(77, 0)
+	assert_eq(sector.get_node(4).node_type, SectorNode.NodeType.COMBAT)
+	assert_eq(sector.get_node(5).node_type, SectorNode.NodeType.COMBAT)
+	assert_eq(sector.get_children(4), [])
+	assert_eq(sector.get_children(5), [])
 
 func test_session_maps_risk_to_empty_room_and_risk_pool() -> void:
 	var session := Session.new(); autofree(session)

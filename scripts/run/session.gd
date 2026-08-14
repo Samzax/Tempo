@@ -247,14 +247,9 @@ func _finish_room_clear(node_def: SectorNode, room_generation: int) -> void:
 	if room_generation != _room_generation:
 		return
 	_persist_active_offer()
-	if _is_phase_one_wave_node(node_def):
-		# A Fase 1 aprovada nao possui chefe: a limpeza apos W5 avanca de
-		# setor diretamente, sem armar o fluxo de chefe.
-		_advance_after_boss()
-		return
 	if node_def.node_type == SectorNode.NodeType.BOSS:
 		_awaiting_boss_advance = true
-		_hyperspace.present_sector_advance(sector, run_state.completed_nodes, run_state.sector_index >= 2)
+		_present_boss_advance(node_def)
 	else:
 		if _should_auto_advance_transition(room_generation):
 			var children := sector.get_children(node_def.id)
@@ -297,10 +292,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M:
 		if _awaiting_boss_advance:
-			_hyperspace.present_sector_advance(sector, run_state.completed_nodes, run_state.sector_index >= 2)
+			_present_boss_advance(sector.get_node(run_state.current_node_id))
 		else:
 			_hyperspace.present(sector, run_state.completed_nodes, _selectable_nodes(run_state.current_node_id), true)
 		get_viewport().set_input_as_handled()
+
+func _present_boss_advance(node_def: SectorNode) -> void:
+	var completes_run := node_def != null and sector.get_children(node_def.id).is_empty()
+	_hyperspace.present_sector_advance(sector, run_state.completed_nodes, completes_run)
 
 func _selectable_nodes(node_id: int) -> Array[int]:
 	var selectable := sector.get_children(node_id)
@@ -313,14 +312,8 @@ func _can_revisit_current() -> bool:
 
 func _advance_after_boss() -> void:
 	_dispose_active_room()
-	if run_state.sector_index >= 2:
-		_hyperspace.present(sector, run_state.completed_nodes, [], false)
-		run_completed.emit()
-		return
-	run_state.sector_index += 1
-	sector = SectorGenerator.generate(run_state.run_seed, run_state.sector_index)
-	run_state.current_node_id = sector.start_node_id
-	_enter_node(sector.start_node_id)
+	_hyperspace.present(sector, run_state.completed_nodes, [], false)
+	run_completed.emit()
 
 func _on_sector_advance_requested() -> void:
 	if not _awaiting_boss_advance or _room_active or sector == null:
@@ -365,7 +358,7 @@ func _dispose_active_room() -> void:
 
 ## Entrada validada para o overlay de sandbox. A sala anterior e descartada antes da nova Runtime existir.
 func sandbox_warp(seed_value: int, sector_index: int, node_id: int, node_type: int) -> bool:
-	if sector_index < 0 or sector_index > 2:
+	if sector_index != 0:
 		return false
 	var target_sector := SectorGenerator.generate(seed_value, sector_index)
 	var target_node := target_sector.get_node(node_id)
@@ -435,25 +428,16 @@ func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 	var def := RoomDef.new()
 	def.id = StringName(str(node_def.id))
 	def.room_type = RoomDef.RoomType.BOSS if node_def.node_type == SectorNode.NodeType.BOSS else (RoomDef.RoomType.OPENING if node_def.node_type == SectorNode.NodeType.OPENING else (RoomDef.RoomType.TREASURE if node_def.node_type == SectorNode.NodeType.TREASURE else (RoomDef.RoomType.RISK if node_def.node_type == SectorNode.NodeType.RISK else RoomDef.RoomType.COMBAT)))
+	def.encounter_profile = node_def.encounter_profile
+	def.environment_profile = node_def.environment_profile
+	def.transition_profile = node_def.transition_profile
 	if is_revisit:
 		def.finite_spawn_count = 0
 	elif node_def.node_type == SectorNode.NodeType.RISK:
 		def.finite_spawn_count = 0
-	elif node_def.room_profile == &"upper" and run_state != null and run_state.sector_index == 2:
-		def.configure_sector3_upper_waves()
-	elif node_def.room_profile == &"upper":
-		def.configure_upper_waves()
-	elif _is_phase_one_wave_node(node_def):
-		def.configure_phase_one_waves()
-	if run_state != null and run_state.sector_index == 1 and node_def.room_profile == &"upper":
-		def.environment_profile = &"upper_background_human_s2"
-	if run_state != null and run_state.sector_index == 2 and node_def.room_profile == &"upper":
-		def.environment_profile = &"sector3_upper_core"
-		def.transition_profile = &"sector3_upper_transition"
+	else:
+		def.configure_encounter_profile(node_def.encounter_profile)
 	return def
-
-func _is_phase_one_wave_node(node_def: SectorNode) -> bool:
-	return run_state != null and run_state.sector_index == 0 and node_def.node_type == SectorNode.NodeType.OPENING
 
 func _pool_for(node_def: SectorNode) -> ItemPoolDef:
 	if node_def.node_type == SectorNode.NodeType.TREASURE:

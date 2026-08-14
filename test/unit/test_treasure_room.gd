@@ -4,6 +4,7 @@ const TREASURE := preload("res://resources/loot/treasure_pool.tres")
 const CHEST_SCRIPT := preload("res://scripts/loot/reward_chest.gd")
 const CHOICE_SCRIPT := preload("res://scripts/ui/item_choice.gd")
 const PRICING := preload("res://scripts/loot/treasure_pricing.gd")
+const SECTOR_GENERATOR := preload("res://scripts/run/sector_generator.gd")
 
 class ChoicePlayer extends Node:
 	var can_take := true
@@ -275,21 +276,13 @@ func _chest(existing: RewardOffer = null, paid := false) -> Dictionary:
 	root.add_child(chest)
 	return {"root": root, "controller": controller, "chest": chest, "player": player}
 
-func test_sector_two_upper_is_only_treasure_and_keeps_dag_and_profile() -> void:
-	for sector_index in [0, 1, 2, 3]:
-		var sector := SectorGenerator.generate(77, sector_index)
-		var upper: SectorNode = sector.nodes.values().filter(func(n): return n.column == 2 and n.row == 0)[0]
-		if sector_index == 2:
-			assert_eq(upper.id, 23)
-			assert_eq(upper.node_type, SectorNode.NodeType.TREASURE)
-			assert_eq(upper.room_profile, &"upper")
-			var upper_children: Array[int] = sector.get_children(23)
-			assert_eq(upper_children, [25])
-			var treasure_children: Array[int] = sector.get_children(25)
-			assert_eq(treasure_children, [26])
-			assert_eq(sector.get_node(upper_children[0]).column, 3)
-		else:
-			assert_eq(upper.node_type, SectorNode.NodeType.COMBAT)
+func test_single_sector_upper_is_only_treasure_and_keeps_dag_and_profile() -> void:
+	var sector := SectorGenerator.generate(77, 0)
+	var upper: SectorNode = sector.get_node(3)
+	assert_eq(upper.node_type, SectorNode.NodeType.TREASURE)
+	assert_eq(upper.encounter_profile, &"sector3_upper")
+	assert_eq(sector.get_children(3), [6])
+	assert_eq(sector.get_children(6), [])
 
 func test_treasure_pool_is_exactly_ten_positive_treasure_items() -> void:
 	assert_eq(TREASURE.id, &"treasure")
@@ -323,22 +316,19 @@ func test_room_and_sector_ordinals_are_stable() -> void:
 func test_session_maps_treasure_and_upper_contracts() -> void:
 	var session := Session.new()
 	autofree(session)
-	var node := SectorNode.new()
-	node.id = 23
-	node.node_type = SectorNode.NodeType.TREASURE
-	node.room_profile = &"upper"
+	session.run_state = RunState.new()
+	session.run_state.sector_index = 0
+	var node: SectorNode = SectorGenerator.generate(77, 0).get_node(3)
 	var def := session._room_def_for(node)
 	assert_eq(def.room_type, RoomDef.RoomType.TREASURE)
 	assert_true(def.has_waves())
-	assert_eq(def.wave_specs[0].threat_types.size(), 8)
-	assert_eq(def.initial_debris.size(), 3)
+	assert_eq(def.wave_specs[0].threat_types.size(), 2)
+	assert_eq(def.initial_debris.size(), 0)
 	assert_same(session._pool_for(node), TREASURE)
-	for kind in [SectorNode.NodeType.COMBAT]:
-		var upper := SectorNode.new()
-		upper.node_type = kind
-		upper.room_profile = &"upper"
-		assert_eq(session._room_def_for(upper).room_type, RoomDef.RoomType.COMBAT)
-		assert_same(session._pool_for(upper), session.COMBAT_POOL)
+	var upper: SectorNode = SectorGenerator.generate(77, 0).get_node(1)
+	assert_eq(session._room_def_for(upper).room_type, RoomDef.RoomType.COMBAT)
+	assert_eq(session._room_def_for(upper).encounter_profile, &"upper")
+	assert_same(session._pool_for(upper), session.COMBAT_POOL)
 
 func test_treasure_pricing_is_runtime_deterministic_and_balance_independent() -> void:
 	assert_eq(PRICING.cost_for(_item(&"nucleo_superaquecido")), PRICING.cost_for_rarity(_item(&"nucleo_superaquecido").rarity))

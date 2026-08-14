@@ -55,25 +55,23 @@ func test_upper_profile_is_eight_entries_in_approved_order() -> void:
 func test_room_profiles_select_upper_environment_by_topology_and_keep_defaults() -> void:
 	var session := Session.new()
 	session.run_state = RunState.new()
-	session.run_state.sector_index = 1
-	var sector := SECTOR_GENERATOR.generate(1234, 1)
-	var upper := sector.get_node(13)
+	session.run_state.sector_index = 0
+	var sector := SECTOR_GENERATOR.generate(1234, 0)
+	var upper := sector.get_node(1)
 	var upper_def: RoomDef = session._room_def_for(upper)
-	assert_eq(upper.room_profile, &"upper")
 	assert_eq(upper_def.encounter_profile, &"upper")
 	assert_eq(upper_def.environment_profile, &"upper_background_human_s2")
 	assert_eq(upper_def.transition_profile, &"default")
-	var treasure := SECTOR_GENERATOR.generate(1234, 2).get_node(23)
-	session.run_state.sector_index = 2
+	var treasure := sector.get_node(3)
 	var treasure_def: RoomDef = session._room_def_for(treasure)
 	assert_eq(treasure.node_type, SectorNode.NodeType.TREASURE)
-	assert_eq(treasure.room_profile, &"upper")
 	assert_eq(treasure_def.environment_profile, &"sector3_upper_core")
 	assert_eq(treasure_def.transition_profile, &"sector3_upper_transition")
 	var ordinary := RoomDef.new()
 	assert_eq(ordinary.encounter_profile, &"default")
 	assert_eq(ordinary.environment_profile, &"default")
 	assert_eq(ordinary.transition_profile, &"default")
+	session.free()
 
 func test_upper_profile_uses_one_point_one_second_cadence() -> void:
 	var waves: Array[RoomDef.WaveSpec] = ROOM_DEF.new().get_upper_waves()

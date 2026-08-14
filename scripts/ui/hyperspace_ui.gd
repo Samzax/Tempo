@@ -103,11 +103,17 @@ func _draw() -> void:
 		var label := _label_for_node_type(node.node_type)
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-25, 25), label, HORIZONTAL_ALIGNMENT_CENTER, 50, 8, Color.WHITE)
 	var footer := "Clique ou Enter para viajar · Esc fecha · M reabre"
-	if _selectable.is_empty() and _sector.get_node(_sector.start_node_id) != null and _completed.has("%d:%s" % [_sector.sector_index, _sector.start_node_id + 6]):
+	if _selectable.is_empty() and _has_completed_boss():
 		footer = "EXECUÇÃO CONCLUÍDA"
 	if _sector_advance_available:
 		footer = "Enter: %s | Esc fecha | M reabre" % ("CONCLUIR EXECUCAO" if _completes_run else "AVANCAR SETOR")
 	draw_string(ThemeDB.fallback_font, Vector2(18, 252), footer, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.72, 0.84))
+
+func _has_completed_boss() -> bool:
+	for node in _sector.nodes.values():
+		if node.node_type == SectorNode.NodeType.BOSS and _completed.has("%d:%s" % [_sector.sector_index, node.id]):
+			return true
+	return false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_visible_in_tree():

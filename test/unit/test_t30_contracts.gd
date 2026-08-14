@@ -109,15 +109,17 @@ func _clear_active_room(session: Session) -> void:
 	var room := room_host.get_child(0)
 	var controller := room.get_node("RoomController") as RoomController
 	var runtime := controller.runtime
-	if not assert_not_null(runtime):
+	assert_not_null(runtime)
+	if runtime == null:
 		return
-	var is_phase_one_opening := session.run_state.sector_index == 0 and session.sector.get_node(session.run_state.current_node_id).node_type == SectorNode.NodeType.OPENING
 	var map := session.get_node_or_null("HyperspaceUI/Map") as HyperspaceUI
-	if not assert_not_null(map, "map absent"):
+	assert_not_null(map, "map absent")
+	if map == null:
 		return
 
 	var director := room.get_node_or_null("Directors/SpawnDirector")
-	if not assert_not_null(director, "room spawn director absent"):
+	assert_not_null(director, "room spawn director absent")
+	if director == null:
 		return
 	director.stop()
 	if runtime.state == RoomRuntime.State.CREATED:
@@ -151,10 +153,37 @@ func _clear_active_room(session: Session) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	if is_phase_one_opening:
-		assert_true(await _wait_for(func() -> bool: return session.run_state != null and session.run_state.sector_index == 1, 20, "phase one clear did not start sector 1"))
-	else:
-		assert_true(await _wait_for(func() -> bool: return map.visible, 20, "room clear did not present the map"))
+	assert_true(await _wait_for(func() -> bool: return map.visible, 20, "room clear did not present the map"))
+
+
+func _resolve_sector3_core_room(session: Session) -> void:
+	var room := session.get_node("RoomHost").get_child(0)
+	var controller := room.get_node("RoomController") as RoomController
+	var runtime := controller.runtime
+	var director := room.get_node("Directors/SpawnDirector")
+	director.stop()
+	if runtime.state == RoomRuntime.State.CREATED:
+		runtime.start()
+	runtime.mark_spawns_finished()
+	for enemy in controller._observed_enemies.duplicate():
+		if is_instance_valid(enemy):
+			runtime.resolve_enemy(enemy, 0)
+			enemy.queue_free()
+	for active_id in runtime._active_enemies.keys().duplicate():
+		runtime.resolve_enemy_id(active_id)
+	assert_eq(runtime.active_enemy_count(), 0)
+	assert_eq(controller._sector3_core._state, Sector3CorePresentation.State.ACTIVATABLE)
+	controller._sector3_core._begin_channel()
+	var chest := room.get_node("RewardChest") as RewardChest
+	assert_true(await _wait_for(func() -> bool: return controller._sector3_core._state == Sector3CorePresentation.State.OFFER_PENDING and chest.current_offer() != null, 120, "core offer did not open"))
+	var offer := chest.current_offer()
+	assert_not_null(offer)
+	var choice := session.get_node("../UI/ItemChoice") as ItemChoice
+	assert_not_null(choice)
+	assert_true(choice.visible)
+	assert_eq(choice._offer, offer)
+	choice._refuse()
+	assert_true(await _wait_for(func() -> bool: return session.run_state.current_node_id == 6 and session.get_node("RoomHost").get_child_count() == 1, 120, "core sequence did not enter N6"))
 
 
 func _select_next(session: Session, map: HyperspaceUI) -> void:
@@ -175,7 +204,7 @@ func _finish_sector(session: Session, map: HyperspaceUI) -> void:
 
 func test_sector_dag_reaches_every_node_from_start_and_boss_from_every_node() -> void:
 	var sector := SectorGenerator.generate(314159, 0)
-	var boss_id := -1
+	var boss_id := 6
 	assert_eq(sector.nodes.size(), 7)
 	var columns: Dictionary = {}
 	var edge_count := 0
@@ -187,25 +216,25 @@ func test_sector_dag_reaches_every_node_from_start_and_boss_from_every_node() ->
 		for child_id in node.children:
 			var child := sector.get_node(child_id)
 			assert_not_null(child)
-			assert_eq(child.column, node.column + 1)
+			assert_gt(child.column, node.column)
 			edge_count += 1
 	assert_eq(columns.size(), 5)
-	assert_gt(edge_count, 0)
+	assert_eq(edge_count, 3)
 	assert_eq(sector.get_node(sector.start_node_id).column, 0)
 	assert_eq(sector.get_node(boss_id).column, 4)
 	assert_eq(sector.nodes.values().filter(func(node: SectorNode) -> bool: return node.node_type == SectorNode.NodeType.BOSS).size(), 1)
 	assert_ne(boss_id, -1)
-	for node in sector.nodes.values():
-		assert_true(_reaches(sector, sector.start_node_id, node.id), "start must reach node %s" % node.id)
-		assert_true(_reaches(sector, node.id, boss_id), "node %s must reach boss" % node.id)
+	for node_id in [0, 1, 3, 6]:
+		assert_true(_reaches(sector, sector.start_node_id, node_id), "route must reach node %s" % node_id)
+	for node_id in [2, 4, 5]:
+		assert_false(_reaches(sector, sector.start_node_id, node_id), "disconnected node %s must not be reachable" % node_id)
 
 
-func test_fixed_seed_sector_set_has_two_real_normalized_topologies() -> void:
+func test_fixed_seed_sector_set_has_one_stable_normalized_topology() -> void:
 	var signatures: Dictionary = {}
 	for seed in range(10101, 10131):
-		var sector := SectorGenerator.generate(seed, 0)
-		signatures[str(_topology_signature(sector))] = true
-	assert_gte(signatures.size(), 2, "fixed seed set must produce two real normalized topologies")
+		signatures[str(_topology_signature(SectorGenerator.generate(seed, 0)))] = true
+	assert_eq(signatures.size(), 1)
 
 
 func test_session_starts_explicitly_transitions_once_and_preserves_player() -> void:
@@ -231,15 +260,17 @@ func test_session_starts_explicitly_transitions_once_and_preserves_player() -> v
 	var first_room := room_host.get_child(0)
 
 	await _clear_active_room(session)
-	assert_eq(session.run_state.sector_index, 1)
+	assert_eq(session.run_state.sector_index, 0)
 	assert_eq(session.run_state.current_node_id, session.sector.start_node_id)
 	assert_false(session._awaiting_boss_advance)
-	assert_false(map.visible)
+	assert_true(map.visible)
 	assert_eq(room_host.get_child_count(), 1)
-	assert_ne(room_host.get_child(0), first_room)
-	assert_false(is_instance_valid(first_room), "phase one room must be released before sector 1 begins")
-	assert_ne(session.sector.get_node(session.run_state.current_node_id).node_type, SectorNode.NodeType.BOSS)
-	assert_ne((room_host.get_child(0).get_node("RoomController") as RoomController).room_def.room_type, RoomDef.RoomType.BOSS)
+	assert_same(room_host.get_child(0), first_room, "N0 remains available until N1 is selected")
+	assert_true(is_instance_valid(first_room))
+	assert_eq(session.sector.get_node(session.run_state.current_node_id).node_type, SectorNode.NodeType.OPENING)
+	assert_eq(session.sector.get_children(session.run_state.current_node_id), [1])
+	assert_eq(session.run_state.sector_index, 0)
+	assert_eq((room_host.get_child(0).get_node("RoomController") as RoomController).room_def.room_type, RoomDef.RoomType.OPENING)
 	assert_same(main.get_node("World/Player"), player)
 	assert_eq(player.health.health, hp - 1.0)
 	assert_eq(player.get_luck(), luck)
@@ -257,9 +288,8 @@ func test_hyperspace_uses_input_pipeline_without_pausing_and_only_selects_presen
 	var selectable := sector.get_children(sector.start_node_id)
 	ui.present(sector, {}, selectable, true)
 	assert_true(ui.visible)
-	assert_eq(get_viewport().get_visible_rect().size, Vector2(480, 270))
+	assert_eq(get_viewport().get_visible_rect().size, Vector2(720, 405))
 	assert_false(get_tree().paused)
-	watch_signals(ui)
 	watch_signals(ui)
 	await _mouse_left(Vector2.ZERO)
 	for _i in 2:
@@ -287,10 +317,13 @@ func test_hyperspace_uses_input_pipeline_without_pausing_and_only_selects_presen
 		await get_tree().process_frame
 	assert_false(ui.visible)
 	assert_false(get_tree().paused)
-	await _key(KEY_M)
+	ui.present_sector_advance(sector, {}, false)
+	assert_true(ui.visible)
+	await _key(KEY_ESCAPE)
 	for _i in 2:
 		await get_tree().process_frame
-	assert_true(ui.visible)
+	assert_false(ui.visible)
+	ui.present_sector_advance(sector, {}, false)
 	await _key(KEY_ENTER)
 	await _key(KEY_ENTER)
 	for _i in 2:
@@ -328,7 +361,8 @@ func test_invisible_hud_does_not_poll_or_trigger_game_over() -> void:
 
 	var hud := main.get_node("UI/HUD") as Control
 	var game_state := get_node_or_null("/root/GameState")
-	if not assert_not_null(game_state, "GameState autoload absent"):
+	assert_not_null(game_state, "GameState autoload absent")
+	if game_state == null:
 		return
 	var score_text: String = hud._score.text
 	var lives_text: String = hud._lives.text
@@ -347,70 +381,59 @@ func test_invisible_hud_does_not_poll_or_trigger_game_over() -> void:
 	game_state.player_lives = prior_lives
 
 
-func test_phase_one_advances_without_boss_then_bosses_advance_sectors_and_complete_once() -> void:
+func test_single_sector_flow_reaches_core_and_final_boss_then_completes_once() -> void:
 	var main := await _main()
 	var session := main.get_node("Session") as Session
 	var map := main.get_node("Session/HyperspaceUI/Map") as HyperspaceUI
+	var player := main.get_node("World/Player") as Node
 	watch_signals(session)
-	# A Fase 1 concentra W1..W5 na sala de abertura e nao possui chefe.
-	# A limpeza descarta essa sala no callback deferred e entra direto no setor 1.
+	var n0_room := session.get_node("RoomHost").get_child(0)
 	await _clear_active_room(session)
-	assert_eq(session.run_state.sector_index, 1)
+	assert_eq(session.run_state.sector_index, 0)
 	assert_false(session._awaiting_boss_advance)
 	assert_eq(session.get_node("RoomHost").get_child_count(), 1)
-	assert_false(map.visible)
-	assert_true(session.run_state.is_completed(0, 0))
-
-	# Os setores posteriores preservam o fluxo BOSS, inclusive recompensa e
-	# confirmacao explicita no mapa antes de avancar.
-	await _finish_sector(session, map)
-	assert_true(session._awaiting_boss_advance)
-	assert_eq(session.run_state.sector_index, 1)
-	var boss_room := session.get_node("RoomHost").get_child(0)
-	var boss_controller := boss_room.get_node("RoomController") as RoomController
-	var boss_chest := boss_room.get_node("RewardChest") as RewardChest
-	if not assert_not_null(boss_controller.runtime.reward_offer):
-		return
-	if not assert_not_null(boss_chest):
-		return
-	assert_true(boss_chest._available)
-	assert_same(session.run_state.get_offer(1, session.run_state.current_node_id, 0, 0), boss_controller.runtime.reward_offer)
-	await _key(KEY_ESCAPE)
-	await get_tree().process_frame
-	assert_false(map.visible)
-	assert_false(get_tree().paused)
-	var opened := false
-	boss_chest.offer_requested.connect(func(_offer: RewardOffer, _player: Node) -> void: opened = true)
-	var player := main.get_node("World/Player") as Node2D
-	player.global_position = boss_chest.global_position
-	await _mouse_left(boss_chest.get_global_transform_with_canvas().origin)
-	await get_tree().process_frame
-	assert_true(opened, "cleared boss chest must open through real interaction")
-	await _key(KEY_M)
-	await get_tree().process_frame
 	assert_true(map.visible)
-	await _key(KEY_ENTER)
-	await _key(KEY_ENTER)
-	assert_true(await _wait_for(func() -> bool: return session.run_state.sector_index == 2, 20, "boss advance did not start sector 2"))
-	assert_eq(session.run_state.sector_index, 2)
-	assert_false(session._awaiting_boss_advance)
-	assert_eq(session.get_node("RoomHost").get_child_count(), 1)
-	await _finish_sector(session, map)
+	assert_same(session.get_node("RoomHost").get_child(0), n0_room)
+	assert_eq(session.sector.get_children(0), [1])
+	await _mouse_left(_map_position(session.sector, 1), map)
+	assert_eq(session.run_state.sector_index, 0)
+	assert_eq(session.run_state.current_node_id, 1)
+	assert_false(map.visible)
+	assert_ne(session.get_node("RoomHost").get_child(0), n0_room)
+	assert_false(is_instance_valid(n0_room))
+	assert_same(main.get_node("World/Player"), player)
+
+	await _clear_active_room(session)
+	assert_eq(session.run_state.sector_index, 0)
+	assert_eq(session.run_state.current_node_id, 1)
+	assert_true(map.visible)
+	assert_eq(session.sector.get_children(1), [3])
+	await _mouse_left(_map_position(session.sector, 3), map)
+	assert_eq(session.run_state.sector_index, 0)
+	assert_eq(session.run_state.current_node_id, 3)
+	assert_false(map.visible)
+	await _resolve_sector3_core_room(session)
+	assert_eq(session.run_state.sector_index, 0)
+	assert_eq(session.run_state.current_node_id, 6)
+	assert_false(map.visible)
+
+	await _clear_active_room(session)
 	assert_true(session._awaiting_boss_advance)
-	assert_eq(session.run_state.sector_index, 2)
-	assert_signal_not_emitted(session, &"run_completed")
-	assert_signal_emit_count(session, &"run_completed", 0)
-	var boss2_hyperspace := session.get_node("HyperspaceUI/Map") as HyperspaceUI
-	assert_same(map, boss2_hyperspace)
-	watch_signals(boss2_hyperspace)
+	assert_true(map.visible)
+	assert_eq(session.run_state.sector_index, 0)
+	assert_eq(session.run_state.current_node_id, 6)
+	watch_signals(map)
+	await _key(KEY_ESCAPE)
+	assert_true(await _wait_for(func() -> bool: return not map.visible, 20, "final overlay map did not hide after Escape"))
+	await _key(KEY_M)
+	assert_true(await _wait_for(func() -> bool: return map.visible, 20, "map did not reopen after M"))
 	await _key(KEY_ENTER)
 	await _key(KEY_ENTER)
-	assert_true(await _wait_for(func() -> bool: return not session._awaiting_boss_advance, 20, "boss2 accept was not handled by HyperspaceUI"))
-	await get_tree().process_frame
-	assert_signal_emit_count(boss2_hyperspace, &"sector_advance_requested", 1)
+	assert_true(await _wait_for(func() -> bool: return not session._awaiting_boss_advance, 20, "final completion was not accepted"))
+	assert_eq(session.run_state.sector_index, 0)
 	assert_signal_emit_count(session, &"run_completed", 1)
 	await _key(KEY_ENTER)
-	await _key(KEY_ENTER)
+	await _key(KEY_M)
 	await get_tree().process_frame
 	assert_signal_emit_count(session, &"run_completed", 1)
 
@@ -428,7 +451,7 @@ func test_session_saves_chest_offer_immediately_and_room_reentry_reuses_identity
 	var first := controller.runtime.reward_offer
 	assert_not_null(first, "clear must unlock and create the offer immediately")
 	assert_same(session.run_state.get_offer(source_sector, source_node, 0, 0), first)
-	assert_true(await _wait_for(func() -> bool: return session.run_state.sector_index == 1, 20, "phase one clear did not start sector 1"))
+	assert_true(await _wait_for(func() -> bool: return session.run_state.sector_index == 0, 20, "phase one clear did not advance sector index"))
 
 	var reopened := ROOM_SCENE.instantiate()
 	var reopened_controller := reopened.get_node("RoomController") as RoomController
@@ -459,7 +482,7 @@ func test_reward_chest_only_creates_offer_on_unlock_signal() -> void:
 	var offer := controller.runtime.reward_offer
 	assert_not_null(offer)
 	assert_signal_emitted(chest, &"offer_created")
-	assert_true(await _wait_for(func() -> bool: return session.run_state.sector_index == 1, 20, "phase one clear did not start sector 1"))
+	assert_true(await _wait_for(func() -> bool: return session.run_state.sector_index == 0, 20, "phase one clear did not advance sector index"))
 
 
 func test_room_clear_releases_only_its_hostile_projectiles_and_preserves_ally() -> void:
@@ -510,10 +533,10 @@ func test_room_clear_persists_offer_before_deferred_map_and_allows_current_revis
 	var session := main.get_node("Session") as Session
 	var map := main.get_node("Session/HyperspaceUI/Map") as HyperspaceUI
 	await _clear_active_room(session)
-	assert_eq(session.run_state.sector_index, 1)
+	assert_eq(session.run_state.sector_index, 0)
 	var room := session.get_node("RoomHost").get_child(0)
 	var controller := room.get_node("RoomController") as RoomController
-	assert_null(controller.runtime.reward_offer)
+	assert_not_null(controller.runtime.reward_offer)
 	await _clear_active_room(session)
 	# The map transition is deferred, but the chest listener has already created
 	# and persisted the offer before _finish_room_clear populates choices.
@@ -535,13 +558,14 @@ func test_session_revisits_current_completed_node_only_for_unclaimed_offer() -> 
 	var map := main.get_node("Session/HyperspaceUI/Map") as HyperspaceUI
 	var room_host := session.get_node("RoomHost")
 	await _clear_active_room(session)
-	assert_eq(session.run_state.sector_index, 1)
+	assert_eq(session.run_state.sector_index, 0)
 	var room := room_host.get_child(0)
 	var original_room := room
 	var controller := room.get_node("RoomController") as RoomController
 	await _clear_active_room(session)
 	var offer := controller.runtime.reward_offer
-	if not assert_not_null(offer):
+	assert_not_null(offer)
+	if offer == null:
 		return
 	var current := session.run_state.current_node_id
 	assert_true(session._can_revisit_current())
