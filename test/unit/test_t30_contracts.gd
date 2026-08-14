@@ -90,6 +90,16 @@ func _wait_for(condition: Callable, limit: int, message: String) -> bool:
 	return condition.call()
 
 
+func _wait_for_seconds(condition: Callable, timeout_seconds: float, message: String) -> bool:
+	var deadline := Time.get_ticks_msec() + int(timeout_seconds * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		if condition.call():
+			return true
+		await get_tree().process_frame
+	assert_true(condition.call(), message)
+	return condition.call()
+
+
 func _main() -> Node:
 	var main := MAIN_SCENE.instantiate()
 	add_child_autofree(main)
@@ -175,7 +185,7 @@ func _resolve_sector3_core_room(session: Session) -> void:
 	assert_eq(controller._sector3_core._state, Sector3CorePresentation.State.ACTIVATABLE)
 	controller._sector3_core._begin_channel()
 	var chest := room.get_node("RewardChest") as RewardChest
-	assert_true(await _wait_for(func() -> bool: return controller._sector3_core._state == Sector3CorePresentation.State.OFFER_PENDING and chest.current_offer() != null, 120, "core offer did not open"))
+	assert_true(await _wait_for_seconds(func() -> bool: return controller._sector3_core._state == Sector3CorePresentation.State.OFFER_PENDING and chest.current_offer() != null, 2.0, "core offer did not open"))
 	var offer := chest.current_offer()
 	assert_not_null(offer)
 	var choice := session.get_node("../UI/ItemChoice") as ItemChoice
@@ -183,7 +193,7 @@ func _resolve_sector3_core_room(session: Session) -> void:
 	assert_true(choice.visible)
 	assert_eq(choice._offer, offer)
 	choice._refuse()
-	assert_true(await _wait_for(func() -> bool: return session.run_state.current_node_id == 6 and session.get_node("RoomHost").get_child_count() == 1, 120, "core sequence did not enter N6"))
+	assert_true(await _wait_for_seconds(func() -> bool: return session.run_state.current_node_id == 6 and session.get_node("RoomHost").get_child_count() == 1, 2.0, "core sequence did not enter N6"))
 
 
 func _select_next(session: Session, map: HyperspaceUI) -> void:
