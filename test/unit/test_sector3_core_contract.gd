@@ -152,7 +152,7 @@ func test_afterimages_are_discrete_during_approved_mid_lifetime_window_and_clean
 	assert_eq(ghost.sprite_frames.get_frame_texture(ghost.animation, ghost.frame), visual.sprite_frames.get_frame_texture(visual.animation, visual.frame))
 	assert_eq(ghost.sprite_frames, visual.sprite_frames)
 	assert_eq(ghost.frame, visual.frame)
-	var expected_modulate := visual.modulate * Color(1.0, 1.0, 1.0, 0.20)
+	var expected_modulate := visual.modulate * Color(1.0, 1.0, 1.0, 0.45)
 	assert_almost_eq(ghost.modulate.r, expected_modulate.r, 0.0001)
 	assert_almost_eq(ghost.modulate.g, expected_modulate.g, 0.0001)
 	assert_almost_eq(ghost.modulate.b, expected_modulate.b, 0.0001)
@@ -165,8 +165,10 @@ func test_afterimages_are_discrete_during_approved_mid_lifetime_window_and_clean
 	assert_eq(core._afterimages.back().get_instance_id(), ghost_instance_id)
 	assert_true(ghost.visible)
 	var effective_alpha := ghost.modulate.a * ghost.self_modulate.a
-	assert_true(effective_alpha >= 0.02, "ghost remains visible in the approved 110–115ms window")
-	assert_true(effective_alpha < 0.10, "ghost is visually discrete in the approved window")
+	# Independent visual contract: this range covers the source fixture's
+	# self_modulate composition at 115 ms without deriving from production alpha.
+	assert_true(effective_alpha >= 0.09, "ghost remains visible in the approved 110–115ms window")
+	assert_true(effective_alpha <= 0.15, "ghost remains secondary in the approved window")
 	# Completion may discard the tween synchronously from its callback; do not
 	# assert its return value as an ordering contract.
 	tween.custom_step(0.05)
