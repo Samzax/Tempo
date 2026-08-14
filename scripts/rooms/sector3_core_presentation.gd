@@ -21,6 +21,11 @@ const RELEASE_FRAME_DURATION := 0.05
 const EJECTION_STEPS := 6
 const EJECTION_STEP_DURATION := 0.08
 const EJECTION_DISTANCE := 190.0
+const AFTERIMAGE_STEP_INTERVAL := 2
+const AFTERIMAGE_LIFETIME := 0.12
+# Os spawns dos passos 2/4/6 ficam separados por 160 ms; cada rastro dura 120
+# ms. Portanto, em fluxo normal nao ha sobreposicao visual nem "beam".
+const MAX_AFTERIMAGES := 1
 
 enum State { PROTECTED, ACTIVATABLE, CHANNELING, OFFER_PENDING, RELEASING, FINISHED }
 
@@ -37,6 +42,10 @@ var _prompt: Label
 var _planes: Array[Sprite2D] = []
 var _plane_ejection_offsets := [0.0, 0.0, 0.0]
 var _afterimages: Array[Node2D] = []
+var _afterimage_tweens: Dictionary = {}
+var _ejection_player: Node2D
+var _ejection_hurtbox: CollisionObject2D
+var _ejection_restore_pending := false
 var _player_physics_was_active := false
 var _player_collision_layer := 0
 var _player_collision_mask := 0
@@ -115,12 +124,43 @@ func _process(delta: float) -> void:
 		var plane := _planes[index]
 		plane.position.x = 360.0 + sin(phase * float(plane.get_meta(&"drift"))) * 3.0 + _plane_ejection_offsets[index]
 		plane.position.y = 202.5 + cos(phase * float(plane.get_meta(&"drift")) * 0.7) * 2.0
+	_refresh_prompt()
+
+func _refresh_prompt() -> void:
+	if not is_instance_valid(_prompt):
+		return
 	if _state == State.ACTIVATABLE:
 		_prompt.text = "ATIVAR  [Enter]"
 		_prompt.visible = _is_player_nearby()
-	elif _state == State.OFFER_PENDING:
-		_prompt.text = "ATIVAR  [Enter]"
-		_prompt.visible = _is_player_nearby()
+	elif _state == State.OFFER_PENDING and _is_player_nearby() and not _is_offer_ui_visible():
+		_prompt.text = "OFERTA  [Enter]"
+		_prompt.show()
+	else:
+		_prompt.hide()
+
+func _is_offer_ui_visible() -> bool:
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return false
+	return _has_visible_offer_ui(tree.root)
+
+func _has_visible_offer_ui(node: Node) -> bool:
+	if not is_instance_valid(node) or not node.is_inside_tree():
+		return false
+	if node is ItemChoice:
+		var choice := node as Control
+		if choice == null or not choice.is_visible_in_tree():
+			return false
+		var ancestor: Node = choice
+		while ancestor != null:
+			if ancestor is CanvasLayer and not (ancestor as CanvasLayer).visible:
+				return false
+			ancestor = ancestor.get_parent()
+		return true
+	for child in node.get_children():
+		if _has_visible_offer_ui(child):
+			return true
+	return false
 
 func record_enemy_resolved(reason: int) -> void:
 	if _state != State.PROTECTED or reason != Enemy.ResolveReason.DIED:
@@ -132,7 +172,7 @@ func activate() -> void:
 	if _state != State.PROTECTED:
 		return
 	_state = State.ACTIVATABLE
-	_prompt.show()
+	_refresh_prompt()
 	_refresh_core()
 
 func _input(event: InputEvent) -> void:
@@ -152,10 +192,9 @@ func _begin_channel() -> void:
 	if _state != State.ACTIVATABLE:
 		return
 	_state = State.CHANNELING
+	_refresh_prompt()
 	_generation += 1
 	var token := _generation
-	_prompt.text = "CANAL"
-	_prompt.show()
 	for step in range(1, CHANNEL_STEPS + 1):
 		# Os nove frames aprovados progridem de forma monotona ao longo dos 12
 		# ticks; escala/modulacao mantem cada tick perceptivel sem asset novo.
@@ -163,7 +202,6 @@ func _begin_channel() -> void:
 		_progress_sprite.frame = mini(8, int(float(step) * 9.0 / CHANNEL_STEPS))
 		_state_sprite.frame = 2 if step < CHANNEL_STEPS else 3
 		_state_sprite.scale = Vector2.ONE * (1.0 + 0.012 * float(step % 3))
-		_prompt.text = "CANAL  %02d/12" % step
 		await get_tree().create_timer(CHANNEL_STEP_DURATION).timeout
 		if not is_inside_tree() or token != _generation or _state != State.CHANNELING:
 			return
@@ -180,6 +218,7 @@ func offer_resolved(offer: RewardOffer) -> void:
 	if _state != State.OFFER_PENDING or not is_instance_valid(_chest) or _chest.current_offer() != offer:
 		return
 	_state = State.RELEASING
+	_refresh_prompt()
 	_generation += 1
 	var token := _generation
 	_state_sprite.hide()
@@ -197,77 +236,170 @@ func offer_resolved(offer: RewardOffer) -> void:
 
 func _run_ejection(token: int) -> void:
 	_lock_player_for_ejection()
-	var start := _player.global_position if is_instance_valid(_player) else Vector2.ZERO
+	var ejection_player := _ejection_player
+	var start := ejection_player.global_position if is_instance_valid(ejection_player) else Vector2.ZERO
 	for step in range(1, EJECTION_STEPS + 1):
 		if not is_inside_tree() or token != _generation or _state != State.RELEASING:
-			_restore_player_after_ejection()
+			_restore_player_after_ejection(ejection_player)
 			return
 		var progress := float(step) / EJECTION_STEPS
-		if is_instance_valid(_player):
-			_player.global_position = start + Vector2(EJECTION_DISTANCE * progress, sin(progress * PI) * 1.0)
-			_spawn_afterimage()
+		if is_instance_valid(ejection_player):
+			ejection_player.global_position = start + Vector2(EJECTION_DISTANCE * progress, sin(progress * PI) * 1.0)
+			if step % AFTERIMAGE_STEP_INTERVAL == 0:
+				_spawn_afterimage(ejection_player)
 		# P1/P2/P3 acumulam offsets diferenciais e _process os compoe ao drift.
 		_plane_ejection_offsets[0] = -2.0 * progress
 		_plane_ejection_offsets[1] = -8.0 * progress
 		_plane_ejection_offsets[2] = -18.0 * progress
 		await get_tree().create_timer(EJECTION_STEP_DURATION).timeout
-	_restore_player_after_ejection()
+		if not is_inside_tree() or token != _generation or _state != State.RELEASING:
+			_restore_player_after_ejection(ejection_player)
+			return
+	_restore_player_after_ejection(ejection_player)
 
 func _lock_player_for_ejection() -> void:
+	_restore_player_after_ejection()
 	if not is_instance_valid(_player):
 		return
-	_player_physics_was_active = _player.is_physics_processing()
-	_player.set_physics_process(false)
-	var collision_player := _player as CollisionObject2D
+	_ejection_player = _player
+	_ejection_restore_pending = true
+	_player_physics_was_active = _ejection_player.is_physics_processing()
+	_ejection_player.set_physics_process(false)
+	var collision_player := _ejection_player as CollisionObject2D
 	if collision_player != null:
 		_player_collision_layer = collision_player.collision_layer
 		_player_collision_mask = collision_player.collision_mask
 		collision_player.collision_layer = 0
 		collision_player.collision_mask = 0
-	var hurtbox := _player.get_node_or_null("Hurtbox") as CollisionObject2D
-	if hurtbox != null:
-		_player_hurtbox_layer = hurtbox.collision_layer
-		_player_hurtbox_mask = hurtbox.collision_mask
-		hurtbox.collision_layer = 0
-		hurtbox.collision_mask = 0
+	_ejection_hurtbox = _ejection_player.get_node_or_null("Hurtbox") as CollisionObject2D
+	if _ejection_hurtbox != null:
+		_player_hurtbox_layer = _ejection_hurtbox.collision_layer
+		_player_hurtbox_mask = _ejection_hurtbox.collision_mask
+		_ejection_hurtbox.collision_layer = 0
+		_ejection_hurtbox.collision_mask = 0
 
-func _restore_player_after_ejection() -> void:
-	if not is_instance_valid(_player):
+func _restore_player_after_ejection(expected_player: Node2D = null) -> void:
+	# A primeira restauracao consome os caches. Assim, um timer que acorde depois
+	# do teardown nao consegue alterar o player ja entregue a outra sala.
+	if not _ejection_restore_pending:
 		return
-	_player.set_physics_process(_player_physics_was_active)
-	var collision_player := _player as CollisionObject2D
+	var locked_player := _ejection_player
+	if expected_player != null and locked_player != expected_player:
+		return
+	_ejection_restore_pending = false
+	_ejection_player = null
+	var locked_hurtbox := _ejection_hurtbox
+	_ejection_hurtbox = null
+	var physics_was_active := _player_physics_was_active
+	var collision_layer := _player_collision_layer
+	var collision_mask := _player_collision_mask
+	var hurtbox_layer := _player_hurtbox_layer
+	var hurtbox_mask := _player_hurtbox_mask
+	_player_physics_was_active = false
+	_player_collision_layer = 0
+	_player_collision_mask = 0
+	_player_hurtbox_layer = 0
+	_player_hurtbox_mask = 0
+	if not is_instance_valid(locked_player) or locked_player.is_queued_for_deletion():
+		return
+	locked_player.set_physics_process(physics_was_active)
+	var collision_player := locked_player as CollisionObject2D
 	if collision_player != null:
-		collision_player.collision_layer = _player_collision_layer
-		collision_player.collision_mask = _player_collision_mask
-	var hurtbox := _player.get_node_or_null("Hurtbox") as CollisionObject2D
-	if hurtbox != null:
-		hurtbox.collision_layer = _player_hurtbox_layer
-		hurtbox.collision_mask = _player_hurtbox_mask
+		collision_player.collision_layer = collision_layer
+		collision_player.collision_mask = collision_mask
+	if is_instance_valid(locked_hurtbox) and not locked_hurtbox.is_queued_for_deletion():
+		locked_hurtbox.collision_layer = hurtbox_layer
+		locked_hurtbox.collision_mask = hurtbox_mask
 
-func _spawn_afterimage() -> void:
-	if not is_instance_valid(_player):
+func _spawn_afterimage(source_player: Node2D = null) -> void:
+	var player := source_player if source_player != null else _player
+	if not is_instance_valid(player):
 		return
-	var visual := _player.get_node_or_null("VisualRoot/AnimatedSprite2D") as AnimatedSprite2D
+	while _afterimages.size() >= MAX_AFTERIMAGES:
+		var oldest: Node2D = _afterimages.front()
+		if is_instance_valid(oldest):
+			_discard_afterimage(oldest.get_instance_id())
+		else:
+			_afterimages.pop_front()
+	var visual := player.get_node_or_null("VisualRoot/AnimatedSprite2D") as AnimatedSprite2D
 	if visual == null:
 		return
 	var afterimage := AnimatedSprite2D.new()
 	afterimage.sprite_frames = visual.sprite_frames
 	afterimage.animation = visual.animation
 	afterimage.frame = visual.frame
-	afterimage.global_position = _player.global_position - Vector2(16.0, 0.0)
-	afterimage.rotation = _player.rotation
-	afterimage.modulate = Color(1.0, 0.55, 0.45, 0.20)
-	afterimage.z_index = 1
+	afterimage.frame_progress = visual.frame_progress
+	afterimage.centered = visual.centered
+	afterimage.offset = visual.offset
+	afterimage.flip_h = visual.flip_h
+	afterimage.flip_v = visual.flip_v
+	afterimage.texture_filter = visual.texture_filter
+	afterimage.modulate = visual.modulate * Color(1.0, 0.55, 0.45, 0.20)
+	afterimage.self_modulate = visual.self_modulate
+	afterimage.z_index = visual.z_index
+	afterimage.z_as_relative = visual.z_as_relative
+	afterimage.show_behind_parent = visual.show_behind_parent
 	add_child(afterimage)
+	# O filho da sala nao pode herdar novamente o VisualRoot/player. Capturar a
+	# transformacao global do sprite preserva escala, rotacao, skew e alinhamento.
+	afterimage.global_transform = visual.global_transform
 	_afterimages.append(afterimage)
+	var afterimage_id := afterimage.get_instance_id()
+	afterimage.tree_exiting.connect(_on_afterimage_tree_exiting.bind(afterimage_id), CONNECT_ONE_SHOT)
+	_fade_afterimage(afterimage_id)
+
+func _fade_afterimage(afterimage_id: int) -> void:
+	var afterimage := instance_from_id(afterimage_id) as AnimatedSprite2D
+	if not is_instance_valid(afterimage):
+		return
+	var tween := create_tween()
+	_afterimage_tweens[afterimage_id] = tween
+	tween.tween_property(afterimage, "modulate:a", 0.0, AFTERIMAGE_LIFETIME)
+	tween.tween_callback(_expire_afterimage.bind(afterimage_id))
+
+func _expire_afterimage(afterimage_id: int) -> void:
+	_afterimage_tweens.erase(afterimage_id)
+	_remove_afterimage_reference(afterimage_id)
+	var afterimage := instance_from_id(afterimage_id) as Node2D
+	if is_instance_valid(afterimage):
+		afterimage.queue_free()
+
+func _discard_afterimage(afterimage_id: int) -> void:
+	if _afterimage_tweens.has(afterimage_id):
+		var tween := _afterimage_tweens[afterimage_id] as Tween
+		if is_instance_valid(tween):
+			tween.kill()
+		_afterimage_tweens.erase(afterimage_id)
+	_remove_afterimage_reference(afterimage_id)
+	var afterimage := instance_from_id(afterimage_id) as Node2D
+	if is_instance_valid(afterimage):
+		afterimage.queue_free()
+
+func _on_afterimage_tree_exiting(afterimage_id: int) -> void:
+	if _afterimage_tweens.has(afterimage_id):
+		var tween := _afterimage_tweens[afterimage_id] as Tween
+		if is_instance_valid(tween):
+			tween.kill()
+		_afterimage_tweens.erase(afterimage_id)
+	_remove_afterimage_reference(afterimage_id)
+
+func _remove_afterimage_reference(afterimage_id: int) -> void:
+	for index in range(_afterimages.size() - 1, -1, -1):
+		var afterimage: Node2D = _afterimages[index]
+		if not is_instance_valid(afterimage) or afterimage.get_instance_id() == afterimage_id:
+			_afterimages.remove_at(index)
 
 func _exit_tree() -> void:
 	_generation += 1
+	_refresh_prompt()
 	_restore_player_after_ejection()
-	for afterimage in _afterimages:
+	while not _afterimages.is_empty():
+		var afterimage: Node2D = _afterimages.front()
 		if is_instance_valid(afterimage):
-			afterimage.queue_free()
-	_afterimages.clear()
+			_discard_afterimage(afterimage.get_instance_id())
+		else:
+			_afterimages.pop_front()
+	_afterimage_tweens.clear()
 
 func _refresh_core() -> void:
 	if not is_instance_valid(_state_sprite) or not is_instance_valid(_progress_sprite):
