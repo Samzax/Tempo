@@ -683,7 +683,7 @@ func _refresh_mouse_aim() -> void:
 		if mouse_aim.length() >= 0.001:
 			_aim_vector = mouse_aim.normalized()
 
-## Verdadeiro enquanto a nave está em i-frames (blink, dano ou renascimento).
+## Verdadeiro enquanto a nave está em i-frames deliberados (blink ou renascimento).
 func is_invulnerable() -> bool:
 	return is_sandbox_invulnerable or _invuln_timer > 0.0
 
@@ -1034,7 +1034,7 @@ func get_collision_impact_generation() -> int:
 func _is_collision_impact_generation_current(generation: int) -> bool:
 	return is_collision_impact_active() and generation == _collision_impact_generation
 
-## Recebe dano respeitando a profundidade maxima de efeitos e os i-frames.
+## Recebe dano respeitando a profundidade maxima de efeitos e proteções deliberadas.
 func take_damage(info: DamageInfo) -> void:
 	if info.trigger_depth > 3:
 		return
@@ -1042,7 +1042,6 @@ func take_damage(info: DamageInfo) -> void:
 		return
 	if _consume_shield_charge():
 		return
-	_invuln_timer = _stats.get_stat(&"hit_invuln")
 	health.apply_damage(info)
 
 func _on_health_damaged(info: DamageInfo, _actual_drop: float) -> void:
