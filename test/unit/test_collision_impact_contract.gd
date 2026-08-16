@@ -6,6 +6,7 @@ const ENEMY_SCRIPT := preload("res://scripts/enemies/enemy.gd")
 const ATIRADOR_SCENE := preload("res://scenes/enemies/atirador_de_fresta.tscn")
 const HUNTER_SCENE := preload("res://scenes/enemies/hunter.tscn")
 const KAMIKAZE_SCENE := preload("res://scenes/enemies/kamikaze_fraturado.tscn")
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
 func _pair(speed: float = 100.0, player_mass: float = 1.0, enemy_mass: float = 1.0) -> Array:
 	var player := CollisionStub.new()
@@ -23,24 +24,24 @@ func _pair(speed: float = 100.0, player_mass: float = 1.0, enemy_mass: float = 1
 func test_small_positive_approach_has_positive_damage_without_gameplay_speed_floor() -> void:
 	var pair := _pair(0.2)
 	RESOLVER.resolve_overlaps(pair[0], {})
-	assert_gt(pair[0].damage_amounts[0], 0.0)
+	assert_eq(pair[0].damage_amounts[0], 0)
 
 func test_sub_epsilon_positive_approach_still_produces_impact_damage() -> void:
 	var pair := _pair(0.0005)
 	RESOLVER.resolve_overlaps(pair[0], {})
-	assert_gt(pair[0].damage_amounts[0], 0.0)
+	assert_eq(pair[0].damage_amounts[0], 0)
 
 func test_equal_masses_produce_symmetric_damage() -> void:
 	var pair := _pair(100.0)
 	RESOLVER.resolve_overlaps(pair[0], {})
-	assert_almost_eq(pair[0].damage_amounts[0], pair[1].damage_amounts[0], 0.00001)
+	assert_eq(pair[0].damage_amounts[0], pair[1].damage_amounts[0])
 
 func test_mass_changes_shared_linear_base_without_asymmetric_damage_split() -> void:
 	var baseline := _pair(100.0, 1.0, 1.0)
 	RESOLVER.resolve_overlaps(baseline[0], {})
 	var pair := _pair(100.0, 1.0, 4.0)
 	RESOLVER.resolve_overlaps(pair[0], {})
-	assert_almost_eq(pair[0].damage_amounts[0], pair[1].damage_amounts[0], 0.00001)
+	assert_eq(pair[0].damage_amounts[0], pair[1].damage_amounts[0])
 	assert_gt(pair[0].damage_amounts[0], baseline[0].damage_amounts[0])
 
 func test_separating_or_co_moving_bodies_do_not_impact() -> void:
@@ -65,7 +66,7 @@ func test_degenerate_contact_uses_deterministic_velocity_fallback_normal() -> vo
 	var pair := _pair(100.0)
 	pair[1].global_position = Vector2.ZERO
 	RESOLVER.resolve_overlaps(pair[0], {})
-	assert_gt(pair[0].damage_amounts[0], 0.0)
+	assert_gt(pair[0].damage_amounts[0], 0)
 	assert_lt(pair[0].velocity.x, 100.0)
 	assert_gt(pair[1].velocity.x, 0.0)
 
@@ -83,24 +84,24 @@ func test_reduced_mass_drives_a_linear_shared_base_without_radius_multiplier() -
 	pair[0].collision_radius = 20.0
 	RESOLVER.resolve_overlaps(pair[0], {})
 	# ma=2, mb=3, mu=6/5; base=mu*(100/100)=1.2 para ambos.
-	assert_almost_eq(pair[0].damage_amounts[0], 1.2, 0.00001)
-	assert_almost_eq(pair[1].damage_amounts[0], 1.2, 0.00001)
+	assert_eq(pair[0].damage_amounts[0], HEALTH_UNITS.from_hp(1.2))
+	assert_eq(pair[1].damage_amounts[0], HEALTH_UNITS.from_hp(1.2))
 
 func test_damage_is_bilateral_and_collision_resistance_only_reduces_receiver() -> void:
 	var pair := _pair(100.0)
 	pair[0].collision_damage_resistance = 0.5
 	RESOLVER.resolve_overlaps(pair[0], {})
-	assert_gt(pair[0].damage_amounts[0], 0.0)
-	assert_gt(pair[1].damage_amounts[0], 0.0)
+	assert_gt(pair[0].damage_amounts[0], 0)
+	assert_gt(pair[1].damage_amounts[0], 0)
 	var baseline := _pair(100.0)
 	RESOLVER.resolve_overlaps(baseline[0], {})
-	assert_almost_eq(pair[0].damage_amounts[0], baseline[0].damage_amounts[0] * 0.5, 0.00001)
-	assert_almost_eq(pair[1].damage_amounts[0], baseline[1].damage_amounts[0], 0.00001)
+	assert_eq(pair[0].damage_amounts[0], baseline[0].damage_amounts[0] / 2)
+	assert_eq(pair[1].damage_amounts[0], baseline[1].damage_amounts[0])
 	var immune := _pair(100.0)
 	immune[0].collision_damage_resistance = 1.0
 	RESOLVER.resolve_overlaps(immune[0], {})
-	assert_almost_eq(immune[0].damage_amounts[0], 0.0, 0.00001)
-	assert_gt(immune[1].damage_amounts[0], 0.0)
+	assert_eq(immune[0].damage_amounts[0], 0)
+	assert_gt(immune[1].damage_amounts[0], 0)
 
 func test_knockback_force_changes_impulse_but_not_damage_and_resistance_can_zero_it() -> void:
 	var baseline := _pair(100.0)
@@ -108,7 +109,7 @@ func test_knockback_force_changes_impulse_but_not_damage_and_resistance_can_zero
 	var forced := _pair(100.0)
 	forced[1].knockback_force = 3.0
 	RESOLVER.resolve_overlaps(forced[0], {})
-	assert_almost_eq(forced[0].damage_amounts[0], baseline[0].damage_amounts[0], 0.00001)
+	assert_eq(forced[0].damage_amounts[0], baseline[0].damage_amounts[0])
 	assert_gt(absf(forced[0].velocity.x - baseline[0].velocity.x), 0.00001)
 	var resisted := _pair(100.0)
 	resisted[0].knockback_resistance = 1.0
@@ -383,7 +384,7 @@ func test_real_enemy_subclasses_skip_collision_knockback_after_lethal_callback()
 			var effects_host := Node.new()
 			enemy.add_child(effects_host)
 			enemy._effects = effects_host
-		enemy.health.health = 0.25
+		enemy.health.health = HEALTH_UNITS.from_hp(0.25)
 		player.overlap.bodies = [enemy]
 		RESOLVER.resolve_overlaps(player, {})
 		assert_eq(enemy._collision_knockback_velocity, Vector2.ZERO)
@@ -396,8 +397,8 @@ func test_damage_snapshot_is_simultaneous_before_first_damage_callback() -> void
 	pair[0].mutation_target = pair[1]
 	pair[0].mutation_mass = 100.0
 	RESOLVER.resolve_overlaps(pair[0], {})
-	assert_almost_eq(pair[0].damage_amounts[0], 0.5, 0.00001)
-	assert_almost_eq(pair[1].damage_amounts[0], 0.5, 0.00001)
+	assert_eq(pair[0].damage_amounts[0], HEALTH_UNITS.from_hp(0.5))
+	assert_eq(pair[1].damage_amounts[0], HEALTH_UNITS.from_hp(0.5))
 
 	# O mesmo snapshot tambem delimita a operacao: a nova geracao do Player
 	# impede apenas os pares seguintes, sem desfazer a bilateralidade acima.
@@ -419,7 +420,7 @@ func test_damage_snapshot_is_simultaneous_before_first_damage_callback() -> void
 	assert_eq(first.damage_amounts.size(), 1)
 	assert_eq(second.damage_amounts.size(), 0)
 	assert_eq(third.damage_amounts.size(), 0)
-	assert_almost_eq(player.damage_amounts[0], first.damage_amounts[0], 0.00001)
+	assert_eq(player.damage_amounts[0], first.damage_amounts[0])
 
 func test_segment_lethal_real_player_respawn_aborts_later_targets_and_same_tick_overlap() -> void:
 	var player := PLAYER_SCENE.instantiate() as Player
@@ -437,7 +438,7 @@ func test_segment_lethal_real_player_respawn_aborts_later_targets_and_same_tick_
 	GameState.player_lives = 2
 	player.set_physics_process(false)
 	player.global_position = Vector2.ZERO
-	player.health.health = 0.01
+	player.health.health = HEALTH_UNITS.from_hp(0.01)
 	# Reproduz o chamador real: a charge entra no segmento por _physics_process.
 	# Depois do respawn, a guarda de geracao deve impedir o _check_contact deste
 	# mesmo tick; chamar resolve_overlaps aqui diretamente seria outra operacao.
@@ -497,7 +498,7 @@ class OverlapStub extends Node:
 class CollisionStub extends CharacterBody2D:
 	var overlap := OverlapStub.new()
 	var hurtbox: OverlapStub = overlap
-	var damage_amounts: Array[float] = []
+	var damage_amounts: Array[int] = []
 	var collision_mass := 1.0
 	var collision_damage_resistance := 0.0
 	var knockback_force := 1.0
@@ -519,7 +520,7 @@ class CollisionStub extends CharacterBody2D:
 		shape.shape = circle
 		add_child(shape)
 
-	func take_damage(info: DamageInfo) -> float:
+	func take_damage(info: DamageInfo) -> int:
 		damage_amounts.append(info.amount)
 		if mutation_target != null: mutation_target.collision_mass = mutation_mass
 		return info.amount
@@ -533,7 +534,7 @@ class ReentrantCollisionPlayer extends CollisionStub:
 	var collision_generation := 0
 	var collision_active := true
 
-	func take_damage(info: DamageInfo) -> float:
+	func take_damage(info: DamageInfo) -> int:
 		damage_amounts.append(info.amount)
 		collision_active = false
 		collision_generation += 1
@@ -545,14 +546,14 @@ class ReentrantCollisionPlayer extends CollisionStub:
 	func get_collision_impact_generation() -> int: return collision_generation
 
 class DamageableNode2D extends Node2D:
-	var damage_amounts: Array[float] = []
+	var damage_amounts: Array[int] = []
 	var collision_mass := 1.0
 	var collision_damage_resistance := 0.0
 	var knockback_force := 1.0
 	var knockback_resistance := 0.0
 
 	func _ready() -> void: add_to_group(&"enemies")
-	func take_damage(info: DamageInfo) -> float:
+	func take_damage(info: DamageInfo) -> int:
 		damage_amounts.append(info.amount)
 		return info.amount
 	func get_collision_radius() -> float: return 10.0
@@ -560,7 +561,7 @@ class DamageableNode2D extends Node2D:
 class FatalCollisionStub extends CollisionStub:
 	var dead := false
 
-	func take_damage(info: DamageInfo) -> float:
+	func take_damage(info: DamageInfo) -> int:
 		damage_amounts.append(info.amount)
 		dead = true
 		return info.amount
@@ -571,7 +572,7 @@ class FatalCollisionStub extends CollisionStub:
 		received_knockback += impulse
 
 class QueueFreeCollisionStub extends CollisionStub:
-	func take_damage(info: DamageInfo) -> float:
+	func take_damage(info: DamageInfo) -> int:
 		damage_amounts.append(info.amount)
 		queue_free()
 		return info.amount

@@ -140,7 +140,9 @@ func _resolve_stat(id: StringName) -> float:
 					override_modifier = active
 
 	var final_value: float = override_modifier.def.value if override_modifier != null else (_base_values[id] + flat_sum) * maxf(0.0, 1.0 + add_pct_sum) * mult_product
-	final_value = clampf(final_value, definition.default_min, definition.default_max)
+	final_value = maxf(final_value, definition.default_min)
+	if definition.max_limit_enabled:
+		final_value = minf(final_value, definition.default_max)
 	if definition.is_integer:
 		final_value = float(roundi(final_value))
 	return final_value

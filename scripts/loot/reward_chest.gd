@@ -6,6 +6,7 @@ signal offer_requested(offer: RewardOffer, player: Node)
 signal offer_created(offer: RewardOffer)
 
 const TreasurePricing := preload("res://scripts/loot/treasure_pricing.gd")
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
 @export var room_controller_path: NodePath
 @export var player_path: NodePath
@@ -198,7 +199,7 @@ func _activate_risk_offer() -> void:
 		return
 	candidate.paid_with_temporal_echoes = false
 	candidate.option_costs.clear()
-	if not bool(snapshot_player.call(&"try_spend_health", 1.0, 1.0)):
+	if not bool(snapshot_player.call(&"try_spend_health", HEALTH_UNITS.HP_SCALE, HEALTH_UNITS.HP_SCALE)):
 		_release_activation(token)
 		return
 	if not _risk_snapshot_is_current(snapshot_controller, snapshot_runtime, snapshot_player, snapshot_pool, snapshot_sector_index, snapshot_node_id, snapshot_player_slot, snapshot_reward_index, snapshot_seed, null):

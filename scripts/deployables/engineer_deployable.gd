@@ -1,5 +1,6 @@
 class_name EngineerDeployable
 extends Node2D
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 ## Modulo da Engenheira. Cada instancia pertence a uma sala e a um jogador.
 
 enum Kind { TRAP, DRONE, OVERCLOCK_STATION, GADGET = OVERCLOCK_STATION }
@@ -50,6 +51,10 @@ var _station_buff_source := StringName()
 var _drone_fire_cooldown := 0.0
 var _drone_visual_angle := 0.0
 var _station_aura_tween: Tween
+var _contact_damage_units_by_source: Dictionary = {}
+var _drone_damage_units := 0
+var _trap_damage_units := 0
+var _station_contact_damage_units := 0
 
 func _ready() -> void:
 	influence.body_entered.connect(_on_influence_body_entered)
@@ -58,13 +63,16 @@ func _ready() -> void:
 	hurtbox.area_entered.connect(_on_hurtbox_area_entered)
 	health.died.connect(_on_died)
 	_station_buff_source = StringName("engineer_station_%d" % get_instance_id())
+	_cache_damage_units()
 	_apply_kind()
 
 func configure(next_kind: Kind, next_deploying_player: Node2D, target_position: Vector2) -> void:
 	kind = next_kind
 	deploying_player = next_deploying_player
 	_target_position = target_position
+	_contact_damage_units_by_source.clear()
 	if is_node_ready():
+		_cache_damage_units()
 		_apply_kind()
 
 func command_to(target_position: Vector2) -> void:
@@ -72,7 +80,7 @@ func command_to(target_position: Vector2) -> void:
 		_target_position = target_position
 
 func _physics_process(delta: float) -> void:
-	if is_queued_for_deletion() or (kind == Kind.DRONE and (health == null or health.health <= 0.0)):
+	if is_queued_for_deletion() or (kind == Kind.DRONE and (health == null or health.health <= 0)):
 		return
 	match kind:
 		Kind.DRONE:
@@ -82,7 +90,7 @@ func _physics_process(delta: float) -> void:
 			_update_drone_visual_aim(delta)
 			_fire_drone(delta)
 			for body in influence.get_overlapping_bodies():
-				_damage_enemy(body as Node2D, DRONE_DAMAGE, DRONE_HIT_INTERVAL)
+				_damage_enemy(body as Node2D, _drone_damage_units, DRONE_HIT_INTERVAL)
 		Kind.OVERCLOCK_STATION:
 			for body in influence.get_overlapping_bodies():
 				_buff_ally(body as Node2D)
@@ -97,7 +105,7 @@ func _move_drone(delta: float) -> void:
 	global_position += global_position.direction_to(_target_position) * minf(DRONE_SPEED * delta, remaining)
 
 func _fire_drone(delta: float) -> void:
-	if is_queued_for_deletion() or health == null or health.health <= 0.0:
+	if is_queued_for_deletion() or health == null or health.health <= 0:
 		return
 	_drone_fire_cooldown = maxf(0.0, _drone_fire_cooldown - delta)
 	if _drone_fire_cooldown > 0.0 or not _has_active_deploying_player():
@@ -183,7 +191,7 @@ func _apply_kind() -> void:
 	_set_station_aura_active(kind == Kind.OVERCLOCK_STATION)
 	_reset_drone_visual_aim()
 	if kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
-		health.max_health = STATION_MAX_HEALTH
+		health.max_health = HEALTH_UNITS.from_hp(STATION_MAX_HEALTH)
 		health.reset()
 	if kind != Kind.DRONE:
 		_drone_fire_cooldown = 0.0
@@ -210,7 +218,7 @@ func _on_influence_body_entered(body: Node2D) -> void:
 				_detonate()
 		Kind.DRONE:
 			if _has_active_deploying_player():
-				_damage_enemy(body, DRONE_DAMAGE, DRONE_HIT_INTERVAL)
+				_damage_enemy(body, _drone_damage_units, DRONE_HIT_INTERVAL)
 		Kind.OVERCLOCK_STATION:
 			_buff_ally(body)
 
@@ -226,15 +234,14 @@ func _on_hurtbox_area_entered(area: Area2D) -> void:
 	if (kind != Kind.DRONE and kind != Kind.OVERCLOCK_STATION) or area == null or not area.is_in_group(&"enemy_projectiles"):
 		return
 	var info := DamageInfo.new()
-	var projectile_damage: Variant = area.get(&"damage")
-	info.amount = float(projectile_damage) if projectile_damage != null else STATION_CONTACT_DAMAGE
+	info.amount = area.get_damage_units() if area.has_method(&"get_damage_units") else _station_contact_damage_units
 	info.source = area.get(&"_source") as Node
 	info.position = global_position
 	info.tags = [&"enemy_projectile", &"engineer_deployable"]
 	take_damage(info)
 	area.queue_free()
 
-func _damage_enemy(body: Node2D, amount: float, interval: float = 0.0) -> bool:
+func _damage_enemy(body: Node2D, amount: int, interval: float = 0.0) -> bool:
 	if not _is_enemy(body):
 		return false
 	if kind == Kind.DRONE and not _has_active_deploying_player():
@@ -261,24 +268,36 @@ func _damage_station_from_enemy(body: Node2D) -> void:
 		return
 	_next_effect_at[key] = now + STATION_CONTACT_INTERVAL
 	var info := DamageInfo.new()
-	var contact_damage: Variant = body.get(&"contact_damage")
-	info.amount = float(contact_damage) if contact_damage != null else STATION_CONTACT_DAMAGE
+	info.amount = _contact_damage_units(body)
 	info.source = body
 	info.position = global_position
-	info.tags = [&"contact", &"engineer_drone"] if kind == Kind.DRONE else [&"contact", &"engineer_station"]
+	var contact_tags: Array[StringName] = [&"contact", &"engineer_drone"] if kind == Kind.DRONE else [&"contact", &"engineer_station"]
+	info.tags = contact_tags
 	take_damage(info)
 
+func _contact_damage_units(body: Node2D) -> int:
+	var source_id := body.get_instance_id()
+	if not _contact_damage_units_by_source.has(source_id):
+		var contact_damage: Variant = body.get(&"contact_damage")
+		_contact_damage_units_by_source[source_id] = HEALTH_UNITS.from_hp(float(contact_damage)) if contact_damage != null else _station_contact_damage_units
+	return _contact_damage_units_by_source[source_id]
+
+func _cache_damage_units() -> void:
+	_drone_damage_units = HEALTH_UNITS.from_hp(DRONE_DAMAGE)
+	_trap_damage_units = HEALTH_UNITS.from_hp(TRAP_DAMAGE)
+	_station_contact_damage_units = HEALTH_UNITS.from_hp(STATION_CONTACT_DAMAGE)
+
 ## Consumido por projeteis/AoE inimigos e por contratos futuros de dano.
-func take_damage(info: DamageInfo) -> float:
+func take_damage(info: DamageInfo) -> int:
 	if info == null or _is_player_source(info.source):
-		return 0.0
+		return 0
 	if kind == Kind.TRAP and (info.tags.has(&"burst") or info.tags.has(&"aoe")):
 		_detonate()
 	elif kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION:
 		if kind == Kind.OVERCLOCK_STATION and info.amount < health.health:
 			_spawn_one_shot(STATION_HIT_FX, 2, STATION_HIT_FRAME_TIME, global_position)
 		return health.apply_damage(info)
-	return 0.0
+	return 0
 
 func _buff_ally(body: Node2D) -> void:
 	if body == null or not body.is_in_group(&"player"):
@@ -298,7 +317,7 @@ func _detonate() -> void:
 		return
 	_spawn_one_shot(TRAP_DETONATE_FX, 4, TRAP_DETONATE_FRAME_TIME, global_position)
 	for body in influence.get_overlapping_bodies():
-		_damage_enemy(body as Node2D, TRAP_DAMAGE)
+		_damage_enemy(body as Node2D, _trap_damage_units)
 	queue_free()
 
 func _on_died(_fatal_info: DamageInfo) -> void:

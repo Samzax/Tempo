@@ -3,6 +3,7 @@ extends GutTest
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const BRUTA := preload("res://resources/ships/bruta.tres")
 const BRUTA_SPRITE_PATH := "res://assets/sprites/bruta-hull.png"
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 const INPUT_ACTIONS: Array[StringName] = [
 	&"move_up",
 	&"move_left",
@@ -727,11 +728,11 @@ func test_bruta_charge_uses_active_joypad_direction_over_opposite_cursor() -> vo
 func test_bruta_charge_does_not_apply_generic_damage_mitigation() -> void:
 	var player: Player = await _bruta_player()
 	var info := DamageInfo.new()
-	info.amount = 1.0
+	info.amount = HEALTH_UNITS.from_hp(1.0)
 	player._bruta_charge_remaining = 0.75
 	var before := player.health.health
 	player.take_damage(info)
-	assert_almost_eq(player.health.health, before - 1.0, 0.001)
+	assert_eq(player.health.health, before - HEALTH_UNITS.from_hp(1.0))
 
 
 func test_bruta_collision_resistance_is_half_while_enemy_receives_full_impact() -> void:
@@ -753,8 +754,8 @@ func test_bruta_collision_resistance_is_half_while_enemy_receives_full_impact() 
 
 	var bruta_damage := bruta.health.max_health - bruta.health.health
 	var base_damage := base.health.max_health - base.health.health
-	assert_almost_eq(bruta_damage, base_damage * 0.5, 0.0001)
-	assert_almost_eq(bruta_enemy.damage_amounts[0], base_enemy.damage_amounts[0], 0.0001)
+	assert_eq(bruta_damage, base_damage / 2)
+	assert_eq(bruta_enemy.damage_amounts[0], base_enemy.damage_amounts[0])
 
 
 func test_bruta_collision_contact_is_spent_once_and_rearms_after_separation() -> void:
@@ -779,12 +780,12 @@ func test_bruta_projectile_enemy_projectile_and_generic_damage_are_not_mitigated
 	var player: Player = await _bruta_player()
 	for tag in [&"projectile", &"enemy_projectile", &"generic"]:
 		var info := DamageInfo.new()
-		info.amount = 1.0
+		info.amount = HEALTH_UNITS.from_hp(1.0)
 		info.tags = [tag]
 		player._invuln_timer = 0.0
 		var before := player.health.health
 		player.take_damage(info)
-		assert_almost_eq(player.health.health, before - 1.0, 0.001, String(tag))
+		assert_eq(player.health.health, before - HEALTH_UNITS.from_hp(1.0), String(tag))
 
 
 func test_bruta_lethal_first_charge_subpass_aborts_remaining_targets_and_state() -> void:
@@ -798,7 +799,7 @@ func test_bruta_lethal_first_charge_subpass_aborts_remaining_targets_and_state()
 	GameState.player_lives = 1
 	player.set_physics_process(false)
 	player.global_position = Vector2(100.0, 100.0)
-	player.health.health = 0.01
+	player.health.health = HEALTH_UNITS.from_hp(0.01)
 	player._bruta_charge_direction = Vector2.RIGHT
 	player._bruta_charge_windup_remaining = 0.0
 	player._bruta_charge_remaining = 0.75
@@ -882,21 +883,21 @@ func test_bruta_charge_stops_at_obstacle_before_bounded_endpoint() -> void:
 func test_bruta_charge_takes_full_damage_during_windup() -> void:
 	var player: Player = await _bruta_player()
 	var info := DamageInfo.new()
-	info.amount = 1.0
+	info.amount = HEALTH_UNITS.from_hp(1.0)
 	player._bruta_charge_windup_remaining = 0.12
 	player._bruta_charge_remaining = 0.75
 	var before := player.health.health
 	player.take_damage(info)
-	assert_almost_eq(player.health.health, before - 1.0, 0.001)
+	assert_eq(player.health.health, before - HEALTH_UNITS.from_hp(1.0))
 
 func test_bruta_charge_takes_full_damage_after_active_window() -> void:
 	var player: Player = await _bruta_player()
 	var info := DamageInfo.new()
-	info.amount = 1.0
+	info.amount = HEALTH_UNITS.from_hp(1.0)
 	player._bruta_charge_remaining = 0.0
 	var before := player.health.health
 	player.take_damage(info)
-	assert_almost_eq(player.health.health, before - 1.0, 0.001)
+	assert_eq(player.health.health, before - HEALTH_UNITS.from_hp(1.0))
 
 func test_bruta_charge_uses_large_target_collision_shape_when_tangential() -> void:
 	var player: Player = await _bruta_player()
@@ -941,9 +942,9 @@ class ChargeEnemyStub extends Node2D:
 	func _ready() -> void:
 		add_to_group(&"enemies")
 
-	func take_damage(_info: DamageInfo) -> float:
+	func take_damage(_info: DamageInfo) -> int:
 		damage_calls += 1
-		return 2.0
+		return HEALTH_UNITS.from_hp(2.0)
 
 	func apply_stun(duration: float) -> void:
 		stun_calls += 1
@@ -951,14 +952,14 @@ class ChargeEnemyStub extends Node2D:
 
 
 class CollisionEnemyStub extends Node2D:
-	var damage_amounts: Array[float] = []
+	var damage_amounts: Array[int] = []
 	var stun_calls := 0
 	var knockback := Vector2.ZERO
 
 	func _ready() -> void:
 		add_to_group(&"enemies")
 
-	func take_damage(info: DamageInfo) -> float:
+	func take_damage(info: DamageInfo) -> int:
 		damage_amounts.append(info.amount)
 		return info.amount
 

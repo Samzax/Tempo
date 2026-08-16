@@ -65,13 +65,15 @@ func _physics_process(delta: float) -> void:
 	if attack_state == AttackState.DRIFT:
 		_mark_room_entry()
 
-func take_damage(info: DamageInfo) -> float:
+func take_damage(info: DamageInfo) -> int:
 	# Mantem o mesmo limite de cadeias de Enemy antes de criar o dano derivado.
 	if info == null or info.trigger_depth > 3:
-		return 0.0
+		return 0
 	if attack_state == AttackState.VULNERABLE:
-		var actual_drop := health.apply_damage(info.create_chain_damage(info.amount * 3.0, [&"vulnerable"]))
-		return actual_drop / 3.0
+		var actual_drop := health.apply_damage(info.create_chain_damage(HEALTH_UNITS.saturating_multiply(info.amount, 3), [&"vulnerable"]))
+		# O multiplicador aumenta apenas o dano sofrido; o piercing consome o
+		# equivalente do payload original, arredondado para cima em HealthUnits.
+		return int((actual_drop + 2) / 3)
 	return super(info)
 
 func _process_drift() -> void:

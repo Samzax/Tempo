@@ -159,7 +159,7 @@ func test_station_nonfatal_hit_and_fatal_death_use_distinct_one_shots() -> void:
 	add_child_autofree(owner)
 	station.configure(EngineerDeployable.Kind.OVERCLOCK_STATION, owner, Vector2.ZERO)
 	var partial := DamageInfo.new()
-	partial.amount = 1.0
+	partial.amount = 100
 	station.take_damage(partial)
 	assert_eq(_effect_count(parent), 1)
 	var hit := _effect_with_frames(parent, 2)
@@ -171,7 +171,7 @@ func test_station_nonfatal_hit_and_fatal_death_use_distinct_one_shots() -> void:
 	await get_tree().process_frame
 	assert_eq(_effect_count(parent), 0)
 	var fatal := DamageInfo.new()
-	fatal.amount = 100.0
+	fatal.amount = 10000
 	station.take_damage(fatal)
 	assert_true(station.is_queued_for_deletion())
 	assert_eq(_effect_count(parent), 1)

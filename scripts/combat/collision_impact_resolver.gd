@@ -1,5 +1,7 @@
 class_name CollisionImpactResolver
 extends RefCounted
+
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 ## Resolve impactos player-enemy uma vez por sobreposicao.
 
 const EPSILON := 0.001
@@ -134,19 +136,19 @@ static func _resolve_pair(player: Node2D, enemy: Node2D, pairs: Dictionary, norm
 	var knockback_enemy: Vector2 = normal * impulse * _knockback_force(player) * (1.0 - _knockback_resistance(enemy))
 	# A etapa de dano acontece para os dois lados a partir do mesmo snapshot.
 	# Knockback e quaisquer efeitos derivados so acontecem para sobreviventes.
-	var player_health_before := _health_value(player)
-	var enemy_health_before := _health_value(enemy)
+	var player_health_before := _health_units(player)
+	var enemy_health_before := _health_units(enemy)
 	player.take_damage(player_info)
 	if is_instance_valid(enemy) and not enemy.is_queued_for_deletion():
 		enemy.take_damage(enemy_info)
-	if _survived_damage(player, player_health_before, damage_to_player):
+	if _survived_damage(player, player_health_before, player_info.amount):
 		_apply_knockback(player, knockback_player)
-	if _survived_damage(enemy, enemy_health_before, damage_to_enemy):
+	if _survived_damage(enemy, enemy_health_before, enemy_info.amount):
 		_apply_knockback(enemy, knockback_enemy)
 
 static func _damage_info(amount: float, source: Node, position: Vector2) -> DamageInfo:
 	var info := DamageInfo.new()
-	info.amount = amount
+	info.amount = HEALTH_UNITS.from_hp(amount)
 	info.source = source
 	info.position = position
 	info.tags = [&"collision"]
@@ -173,20 +175,20 @@ static func _apply_knockback(body: Node2D, impulse: Vector2) -> void:
 ## Algumas entidades morrem e se reposicionam sincronicamente dentro de
 ## take_damage(). O snapshot de HP preserva o fato de que o impacto foi letal
 ## mesmo quando o callback restaura a vida antes de retornar.
-static func _survived_damage(body: Node2D, health_before: float, damage: float) -> bool:
+static func _survived_damage(body: Node2D, health_before: int, damage: int) -> bool:
 	if not is_instance_valid(body) or body.is_queued_for_deletion():
 		return false
 	if body.has_method(&"is_dead") and body.call(&"is_dead") == true:
 		return false
 	if body.get(&"_resolved") == true or body.get(&"_dead") == true:
 		return false
-	return health_before < 0.0 or damage < health_before
+	return health_before < 0 or damage < health_before
 
-static func _health_value(body: Node2D) -> float:
+static func _health_units(body: Node2D) -> int:
 	var health: Variant = body.get(&"health")
 	if health is HealthComponent:
 		return health.health
-	return -1.0
+	return -1
 
 static func _radius_for(body: Node2D) -> float:
 	if body.has_method(&"get_collision_radius"):

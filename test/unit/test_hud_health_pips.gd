@@ -27,6 +27,13 @@ func _pip_count(hud: Control) -> int:
 	return hud._pips_row.get_child_count()
 
 
+func test_public_hud_has_no_gut_addon_dependency() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	assert_false(source.contains("res://addons/gut"))
+	var hud := await _hud()
+	assert_not_null(hud)
+
+
 func test_hud_with_bruta_shows_exactly_five_pips() -> void:
 	var hud := await _hud()
 	var player := await _player(BRUTA)
@@ -64,11 +71,11 @@ func test_health_capacity_changed_rebuilds_without_duplicate_pips() -> void:
 	var player := await _player(BRUTA)
 	hud._bind_player(player)
 
-	player.health_capacity_changed.emit(2.0)
+	player.health_capacity_changed.emit(200)
 	assert_eq(_pip_count(hud), 2)
 	assert_eq(hud._pips.size(), 2)
 
-	player.health_capacity_changed.emit(5.0)
+	player.health_capacity_changed.emit(500)
 	assert_eq(_pip_count(hud), 5)
 	assert_eq(hud._pips.size(), 5)
 
@@ -90,7 +97,7 @@ func test_pip_colors_reflect_current_health() -> void:
 	var hud := await _hud()
 	var player := await _player(BRUTA)
 	hud._bind_player(player)
-	player.health.health = 2.0
+	player.health.health = 200
 	hud._process(0.0)
 
 	assert_eq(hud._pips[0].color, FULL_COLOR)
@@ -107,7 +114,7 @@ func test_invisible_hud_does_not_poll_or_change_pips() -> void:
 	for pip: ColorRect in hud._pips:
 		initial_colors.append(pip.color)
 	hud.hide()
-	player.health.health = 1.0
+	player.health.health = 100
 
 	await get_tree().process_frame
 	hud._process(0.0)

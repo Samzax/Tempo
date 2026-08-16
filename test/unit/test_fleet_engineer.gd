@@ -1,5 +1,8 @@
 extends GutTest
 
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
+const ENEMY_PROJECTILE_SCENE := preload("res://scenes/projectiles/enemy_projectile.tscn")
+
 func test_ship_catalog_exposes_canonical_ship_and_lookup_contract() -> void:
 	var ships := ShipCatalog.all()
 	assert_gt(ships.size(), 0)
@@ -46,7 +49,7 @@ func test_configure_ship_reapplies_stats_ability_and_preserves_atlas_regions() -
 	assert_true(player.configure_ship(base_ship))
 	assert_eq(player._stats.get_stat(&"max_health"), 3.0)
 	assert_eq(player._ability_q.id, base_ship.ability_q)
-	assert_eq(player.health.max_health, 3.0)
+	assert_eq(player.health.max_health, HEALTH_UNITS.from_hp(3.0))
 	var regions_after: Array[Rect2] = []
 	for animation_name in player.sprite.sprite_frames.get_animation_names():
 		for frame_index in player.sprite.sprite_frames.get_frame_count(animation_name):
@@ -319,7 +322,7 @@ func test_trap_detonates_on_enemy_with_burst_and_does_not_slow() -> void:
 	assert_eq(second_enemy.received_damage.size(), 1)
 	for target in [enemy, second_enemy]:
 		var info: DamageInfo = target.received_damage[0]
-		assert_eq(info.amount, 3.0)
+		assert_eq(info.amount, HEALTH_UNITS.from_hp(3.0))
 		assert_true(info.tags.has(&"engineer_deployable"))
 		assert_false(info.tags.has(&"slow"))
 		assert_eq(target.slow_calls, 0)
@@ -341,7 +344,7 @@ func test_overclock_station_ignores_player_damage_and_accepts_enemy_damage() -> 
 	var player_source := Node2D.new()
 	player_source.add_to_group(&"player")
 	var info := DamageInfo.new()
-	info.amount = 2.0
+	info.amount = HEALTH_UNITS.from_hp(2.0)
 	info.source = player_source
 	station.take_damage(info)
 	assert_eq(station.health.health, station.health.max_health)
@@ -392,30 +395,31 @@ func test_overclock_station_cleanup_tolerates_invalid_player_reference() -> void
 	await get_tree().process_frame
 	assert_true(station.is_queued_for_deletion())
 
-func test_overclock_station_takes_enemy_contact_damage_and_enemy_projectile_damage() -> void:
+func test_overclock_station_applies_enemy_projectile_units_once_and_preserves_impact_info() -> void:
 	var station := preload("res://scenes/deployables/engineer_deployable.tscn").instantiate() as EngineerDeployable
 	add_child_autofree(station)
 	await get_tree().process_frame
 	station.configure(EngineerDeployable.Kind.OVERCLOCK_STATION, Node2D.new(), Vector2.ZERO)
-	var enemy := EnemyContactStub.new()
-	add_child_autofree(enemy)
-	enemy.contact_damage = 1.0
 	station.global_position = Vector2.ZERO
-	enemy.global_position = Vector2.ZERO
-	await get_tree().physics_frame
-	assert_almost_eq(station.health.health, 5.0, 0.001)
 
-	var projectile := Area2D.new()
-	projectile.add_to_group(&"enemy_projectiles")
-	projectile.collision_layer = 16
-	var projectile_shape := CollisionShape2D.new()
-	projectile_shape.shape = CircleShape2D.new()
-	(projectile_shape.shape as CircleShape2D).radius = 4.0
-	projectile.add_child(projectile_shape)
+	var projectile := ENEMY_PROJECTILE_SCENE.instantiate() as EnemyProjectile
+	var source := Node2D.new()
+	add_child_autofree(source)
+	var probe := DamageInfoProbe.new()
+	add_child_autofree(probe)
+	station.health.damaged.connect(probe.record)
+	projectile.launch(station.global_position, Vector2.RIGHT, source, 1.235)
 	add_child_autofree(projectile)
-	projectile.global_position = station.global_position
-	await get_tree().physics_frame
-	assert_almost_eq(station.health.health, 4.0, 0.001)
+	station._on_hurtbox_area_entered(projectile)
+	var expected_units := HEALTH_UNITS.from_hp(1.235)
+	assert_eq(projectile.damage, 1.235)
+	assert_eq(projectile.get_damage_units(), expected_units)
+	assert_eq(station.health.health, station.health.max_health - expected_units)
+	assert_not_null(probe.received_info)
+	assert_eq(probe.received_info.amount, expected_units)
+	assert_eq(probe.received_info.source, source)
+	assert_eq(probe.received_info.position, station.global_position)
+	assert_eq(probe.received_info.tags, [&"enemy_projectile", &"engineer_deployable"])
 	assert_true(projectile.is_queued_for_deletion())
 
 func test_room_disposal_removes_deployables_and_active_room() -> void:
@@ -594,7 +598,7 @@ func test_drone_keeps_contact_health_and_stops_firing_after_death() -> void:
 	damage.amount = drone.health.max_health
 	damage.source = EnemyContactStub.new()
 	drone.take_damage(damage)
-	assert_lte(drone.health.health, 0.0)
+	assert_lte(drone.health.health, 0)
 	assert_true(drone.is_queued_for_deletion())
 	drone._fire_drone(1.0)
 	assert_eq(projectiles.get_child_count(), before)
@@ -607,10 +611,13 @@ func test_drone_contact_damage_preserves_player_source_and_damage() -> void:
 	var owner: DroneOwnerStub = fixture[1]
 	var enemy := EnemyContactStub.new()
 	add_child_autofree(enemy)
-	assert_true(drone._damage_enemy(enemy, EngineerDeployable.DRONE_DAMAGE))
+	assert_eq(drone._drone_damage_units, HEALTH_UNITS.from_hp(EngineerDeployable.DRONE_DAMAGE))
+	assert_eq(drone._trap_damage_units, HEALTH_UNITS.from_hp(EngineerDeployable.TRAP_DAMAGE))
+	assert_eq(drone._station_contact_damage_units, HEALTH_UNITS.from_hp(EngineerDeployable.STATION_CONTACT_DAMAGE))
+	assert_true(drone._damage_enemy(enemy, drone._drone_damage_units))
 	assert_eq(enemy.received_damage.size(), 1)
 	assert_eq(enemy.received_damage[0].source, owner)
-	assert_eq(enemy.received_damage[0].amount, EngineerDeployable.DRONE_DAMAGE)
+	assert_eq(enemy.received_damage[0].amount, HEALTH_UNITS.from_hp(EngineerDeployable.DRONE_DAMAGE))
 
 func test_drone_contact_does_not_damage_when_deploying_player_is_queued() -> void:
 	var fixture := await _drone_fixture()
@@ -661,9 +668,15 @@ class EnemyContactStub extends CharacterBody2D:
 class DamageTargetStub extends Node:
 	var calls := 0
 
-	func take_damage(_info: DamageInfo) -> float:
+	func take_damage(_info: DamageInfo) -> int:
 		calls += 1
-		return 0.0
+		return 0
+
+class DamageInfoProbe extends Node:
+	var received_info: DamageInfo
+
+	func record(info: DamageInfo, _actual_drop: int) -> void:
+		received_info = info
 
 class DeployPlayerStub extends Node2D:
 	var should_deploy := true

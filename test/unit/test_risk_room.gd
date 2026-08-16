@@ -3,10 +3,11 @@ extends GutTest
 const RISK := preload("res://resources/loot/risk_pool.tres")
 const TREASURE := preload("res://resources/loot/treasure_pool.tres")
 const RISK_CHEST := preload("res://scripts/loot/reward_chest.gd")
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
 class RiskPlayer extends Node:
 	var can_take := true
-	var hp := 2.0
+	var hp: int = HEALTH_UNITS.from_hp(2.0)
 	var luck_calls := 0
 	var can_calls := 0
 	var spend_calls := 0
@@ -31,7 +32,7 @@ class RiskPlayer extends Node:
 		if mutation == "pool": chest.pool = TREASURE
 		return can_take
 
-	func try_spend_health(amount: float, minimum: float = 1.0) -> bool:
+	func try_spend_health(amount: int, minimum: int = HEALTH_UNITS.HP_SCALE) -> bool:
 		spend_calls += 1
 		if not external_counts.is_empty(): external_counts.spend_calls = spend_calls
 		if hp < amount + minimum: return false
@@ -129,7 +130,7 @@ func test_risk_success_spends_once_stores_and_emits_created_before_requested() -
 	chest.offer_requested.connect(func(offer, who): order.append("requested"); assert_same(who, player); assert_same(offer, controller.runtime.reward_offer))
 	chest.open_offer()
 	var offer: RewardOffer = controller.runtime.reward_offer
-	assert_not_null(offer); assert_eq(player.hp, 1.0); assert_eq(player.spend_calls, 1); assert_eq(offer.options.size(), 3)
+	assert_not_null(offer); assert_eq(player.hp, HEALTH_UNITS.from_hp(1.0)); assert_eq(player.spend_calls, 1); assert_eq(offer.options.size(), 3)
 	assert_eq(offer.pool_id, &"risk"); assert_eq(offer.sector_index, 2); assert_eq(offer.node_id, 24); assert_eq(offer.player_slot, 0); assert_eq(offer.reward_index, 0)
 	assert_false(offer.paid_with_temporal_echoes); assert_true(offer.option_costs.is_empty()); assert_eq(order, ["created"]); assert_true(chest._activating)
 	await get_tree().process_frame
@@ -138,7 +139,7 @@ func test_risk_success_spends_once_stores_and_emits_created_before_requested() -
 	assert_false(chest._activating)
 
 func test_risk_insufficient_hp_fails_closed_and_reopen_does_not_reroll() -> void:
-	var f := _risk_fixture(); var chest: RewardChest = f.chest; var player: RiskPlayer = f.player; player.hp = 1.0
+	var f := _risk_fixture(); var chest: RewardChest = f.chest; var player: RiskPlayer = f.player; player.hp = HEALTH_UNITS.from_hp(1.0)
 	await get_tree().process_frame; chest._unlock(); watch_signals(chest); chest.open_offer(); chest.open_offer()
 	assert_null(f.controller.runtime.reward_offer); assert_eq(player.spend_calls, 2); assert_signal_not_emitted(chest, &"offer_created"); assert_signal_not_emitted(chest, &"offer_requested"); assert_false(chest._activating)
 

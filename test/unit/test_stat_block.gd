@@ -24,6 +24,17 @@ func test_stat_block_applies_allowed_modifier() -> void:
 	stat_block.add_modifier(modifier)
 	assert_eq(stat_block.get_stat(&"max_speed"), 175.0)
 
+func test_max_health_has_no_universal_maximum_cap() -> void:
+	var stat_block := StatBlock.new(StatCatalog.get_all())
+	var modifier := StatModifierDef.new()
+	modifier.stat = &"max_health"
+	modifier.op = StatDef.Op.FLAT
+	modifier.value = 100000.0
+	modifier.source_id = &"test_source"
+
+	stat_block.add_modifier(modifier)
+	assert_eq(stat_block.get_stat(&"max_health"), 100003.0)
+
 func test_stat_block_clears_temporary_modifiers() -> void:
 	var stat_block := StatBlock.new(StatCatalog.get_all())
 	var permanent_modifier := StatModifierDef.new()

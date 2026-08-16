@@ -1,11 +1,14 @@
 class_name EnemyProjectile
 extends Area2D
 
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
+
 @export var speed := 260.0
 @export var damage := 1.0
 @export var lifetime := 2.5
 
 var _velocity := Vector2.ZERO
+var _damage: int = 0
 var _life := 0.0
 var _source: Node
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
@@ -21,10 +24,15 @@ func launch(origin: Vector2, direction: Vector2, source: Node, amount: float = 1
 	global_position = origin
 	_source = source
 	damage = amount
+	_damage = HEALTH_UNITS.from_hp(damage)
 	_velocity = direction.normalized() * speed
 	rotation = _velocity.angle()
 	_life = lifetime
 	$Sprite2D.frame = 0
+
+## Returns the launch-time health units without re-quantizing authored damage.
+func get_damage_units() -> int:
+	return _damage
 
 func _physics_process(delta: float) -> void:
 	global_position += _velocity * delta
@@ -36,7 +44,7 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if body.has_method(&"take_damage"):
 		var info := DamageInfo.new()
-		info.amount = damage
+		info.amount = _damage
 		info.source = _source
 		info.tags = [&"enemy_projectile"]
 		info.position = global_position

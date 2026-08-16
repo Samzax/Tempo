@@ -13,5 +13,6 @@ enum Op {
 @export var default_base: float = 0.0
 @export var default_min: float = 0.0
 @export var default_max: float = 100000.0
+@export var max_limit_enabled: bool = true
 @export var is_integer: bool = false
 @export var allowed_ops: Array[int] = []

@@ -4,6 +4,7 @@ const HUNTER_SCENE := preload("res://scenes/enemies/hunter.tscn")
 const HUNTER_SCRIPT := preload("res://scripts/enemies/hunter.gd")
 const SPAWN_DIRECTOR := preload("res://scripts/directors/spawn_director.gd")
 const ENEMY_SCENE := preload("res://scenes/enemies/enemy.tscn")
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
 func _hunter() -> Node:
 	var hunter: Node = HUNTER_SCENE.instantiate()
@@ -13,7 +14,7 @@ func _hunter() -> Node:
 
 func _damage(amount: float) -> DamageInfo:
 	var info := DamageInfo.new()
-	info.amount = amount
+	info.amount = HEALTH_UNITS.from_hp(amount)
 	return info
 
 func test_enemy_stun_timer_reapplies_by_maximum_blocks_motion_and_expires() -> void:
@@ -215,7 +216,7 @@ func test_health_component_damage_causes_real_death_and_cancels_attack() -> void
 	var hunter := await _hunter()
 	hunter.enter_attack_state(HUNTER_SCRIPT.AttackState.TELEGRAPH)
 	assert_true(is_instance_valid(hunter.health))
-	hunter.take_damage(_damage(hunter.health.max_health))
+	hunter.take_damage(_damage(HEALTH_UNITS.to_hp(hunter.health.max_health)))
 	assert_true(hunter._dead)
 	assert_eq(hunter.attack_state, HUNTER_SCRIPT.AttackState.TELEGRAPH)
 	assert_null(hunter._telegraph_tween)
@@ -225,23 +226,23 @@ func test_health_component_damage_causes_real_death_and_cancels_attack() -> void
 
 func test_hunter_take_damage_returns_damage_consumed_by_health_component() -> void:
 	var hunter := await _hunter()
-	assert_almost_eq(hunter.take_damage(_damage(2.5)), 2.5, 0.001)
-	assert_almost_eq(hunter.health.health, hunter.health.max_health - 2.5, 0.001)
-	var overkill := hunter.take_damage(_damage(999.0))
-	assert_almost_eq(overkill, hunter.health.max_health - 2.5, 0.001)
-	assert_almost_eq(hunter.health.health, 0.0, 0.001)
-	assert_eq(hunter.take_damage(_damage(1.0)), 0.0)
+	assert_eq(hunter.take_damage(_damage(2.5)), HEALTH_UNITS.from_hp(2.5))
+	assert_eq(hunter.health.health, hunter.health.max_health - HEALTH_UNITS.from_hp(2.5))
+	var overkill: int = hunter.take_damage(_damage(999.0))
+	assert_eq(overkill, HEALTH_UNITS.from_hp(hunter.max_health) - HEALTH_UNITS.from_hp(2.5))
+	assert_eq(hunter.health.health, 0)
+	assert_eq(hunter.take_damage(_damage(1.0)), 0)
 
 func test_hunter_take_damage_rejects_null_and_excessive_trigger_depth() -> void:
 	var hunter := await _hunter()
-	var before := hunter.health.health
+	var before: int = hunter.health.health
 
-	assert_eq(hunter.take_damage(null), 0.0)
+	assert_eq(hunter.take_damage(null), 0)
 	assert_eq(hunter.health.health, before)
 
 	var chained := _damage(2.0)
 	chained.trigger_depth = 4
-	assert_eq(hunter.take_damage(chained), 0.0)
+	assert_eq(hunter.take_damage(chained), 0)
 	assert_eq(hunter.health.health, before)
 
 func test_hunter_death_grants_one_echo_directly_without_pickup() -> void:
@@ -263,7 +264,7 @@ func test_hunter_reward_is_configurable_and_defaults_to_one() -> void:
 	GameState.reset_for_new_run()
 	assert_eq(hunter.temporal_echo_reward, 1)
 	hunter.temporal_echo_reward = 3
-	hunter.take_damage(_damage(hunter.health.max_health))
+	hunter.take_damage(_damage(HEALTH_UNITS.to_hp(hunter.health.max_health)))
 	assert_eq(GameState.temporal_echoes, 3)
 
 func test_hunter_death_disables_collision_animates_frames_and_frees_after_last_frame() -> void:
@@ -297,7 +298,7 @@ func test_hunter_zero_reward_does_not_credit_echoes() -> void:
 	var hunter := await _hunter()
 	GameState.reset_for_new_run()
 	hunter.temporal_echo_reward = 0
-	hunter.take_damage(_damage(hunter.health.max_health))
+	hunter.take_damage(_damage(HEALTH_UNITS.to_hp(hunter.health.max_health)))
 	assert_eq(GameState.temporal_echoes, 0)
 
 func test_hunter_uses_four_border_culling_policy_after_room_entry() -> void:

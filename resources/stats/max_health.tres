@@ -8,5 +8,6 @@ id = &"max_health"
 default_base = 3.0
 default_min = 1.0
 default_max = 100000.0
+max_limit_enabled = false
 is_integer = true
 allowed_ops = Array[int]([0])

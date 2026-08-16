@@ -87,7 +87,7 @@ func test_damage_is_once_per_target_until_cooldown_even_with_multiple_segments()
 	_emit_one_segment()
 	_manager._physics_process(0.01)
 	assert_eq(_target.calls.size(), 1)
-	assert_eq(_target.calls[0].amount, 1.0)
+	assert_eq(_target.calls[0].amount, 100)
 	assert_true(_target.calls[0].tags.has(&"engine_trail"))
 	assert_eq(_target.calls[0].source, _source)
 	_manager.emit_from_anchors(Vector2(80.0, 0.0), Vector2(80.0, 0.0))
@@ -167,7 +167,7 @@ func test_movement_states_preserve_trail_geometry_count_and_damage() -> void:
 			assert_eq(geometry, expected_geometry)
 		_manager._physics_process(0.01)
 		assert_eq(_target.calls.size(), 1)
-		assert_eq(_target.calls[0].amount, 1.0)
+		assert_eq(_target.calls[0].amount, 100)
 
 func test_curved_trail_keeps_continuous_distinct_samples_on_both_strands() -> void:
 	_manager.configure(_source, 1.0, 16.0, 0.7, 0.5, 7.0, Color(0.2, 0.7, 1.0))

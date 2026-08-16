@@ -10,7 +10,7 @@ func _enemy() -> Node:
 	await get_tree().process_frame
 	return enemy
 
-func _damage(amount: float) -> DamageInfo:
+func _damage(amount: int) -> DamageInfo:
 	var info := DamageInfo.new()
 	info.amount = amount
 	return info
@@ -92,7 +92,7 @@ func test_scene_has_approved_assets_and_frames() -> void:
 	assert_eq(enemy.fire_fx.texture.get_width(), 512)
 	assert_eq(enemy.fire_fx.texture.get_height(), 64)
 	assert_eq(enemy.fire_fx.hframes, 8)
-	assert_eq(enemy.health.max_health, 12.0)
+	assert_eq(enemy.health.max_health, 1200)
 
 func test_telegraph_duration_is_point_seven_and_is_visible_before_fire() -> void:
 	var enemy := await _enemy()
@@ -107,47 +107,47 @@ func test_telegraph_duration_is_point_seven_and_is_visible_before_fire() -> void
 
 func test_vulnerability_multiplies_damage_only_after_fire_and_preserves_original() -> void:
 	var enemy := await _enemy()
-	var original := _damage(2.0)
+	var original := _damage(200)
 	enemy._enter_state(SCRIPT.AttackState.TELEGRAPH)
-	assert_almost_eq(enemy.take_damage(original), 2.0, 0.001)
-	assert_almost_eq(enemy.health.health, 10.0, 0.001)
+	assert_eq(enemy.take_damage(original), 200)
+	assert_eq(enemy.health.health, 1000)
 	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
-	var vulnerable := _damage(2.0)
-	assert_almost_eq(enemy.take_damage(vulnerable), 2.0, 0.001)
-	assert_almost_eq(enemy.health.health, 4.0, 0.001)
-	assert_almost_eq(original.amount, 2.0, 0.001)
-	assert_almost_eq(vulnerable.amount, 2.0, 0.001)
+	var vulnerable := _damage(200)
+	assert_eq(enemy.take_damage(vulnerable), 200)
+	assert_eq(enemy.health.health, 400)
+	assert_eq(original.amount, 200)
+	assert_eq(vulnerable.amount, 200)
 
 func test_vulnerability_returns_normalized_consumption_and_emits_actual_drop() -> void:
 	var enemy := await _enemy()
 	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
 	watch_signals(enemy.health)
 
-	var info := _damage(2.0)
-	assert_almost_eq(enemy.take_damage(info), 2.0, 0.001)
-	assert_almost_eq(enemy.health.health, 6.0, 0.001)
+	var info := _damage(200)
+	assert_eq(enemy.take_damage(info), 200)
+	assert_eq(enemy.health.health, 600)
 	assert_signal_emit_count(enemy.health, &"damaged", 1)
 
 func test_fire_state_is_the_transition_that_opens_vulnerability() -> void:
 	var enemy := await _enemy()
 	enemy._enter_state(SCRIPT.AttackState.FIRE)
 	assert_eq(enemy.attack_state, SCRIPT.AttackState.FIRE)
-	var before_fire := _damage(1.0)
+	var before_fire := _damage(100)
 	enemy.take_damage(before_fire)
-	assert_almost_eq(enemy.health.health, 11.0, 0.001)
+	assert_eq(enemy.health.health, 1100)
 	enemy._physics_process(0.0)
 	assert_eq(enemy.attack_state, SCRIPT.AttackState.VULNERABLE)
-	var after_fire := _damage(1.0)
+	var after_fire := _damage(100)
 	enemy.take_damage(after_fire)
-	assert_almost_eq(enemy.health.health, 8.0, 0.001)
+	assert_eq(enemy.health.health, 800)
 
 func test_vulnerability_keeps_enemy_trigger_depth_protection() -> void:
 	var enemy := await _enemy()
 	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
-	var chained := _damage(2.0)
+	var chained := _damage(200)
 	chained.trigger_depth = 4
-	assert_almost_eq(enemy.take_damage(chained), 0.0, 0.001)
-	assert_almost_eq(enemy.health.health, 12.0, 0.001)
+	assert_eq(enemy.take_damage(chained), 0)
+	assert_eq(enemy.health.health, 1200)
 
 func test_locked_direction_remains_the_projectile_direction() -> void:
 	var enemy := await _enemy()
@@ -384,13 +384,13 @@ func test_idle_stops_movement_hides_effects_and_takes_normal_damage() -> void:
 	assert_eq(enemy.velocity, Vector2.ZERO)
 	assert_false(enemy.telegraph.visible)
 	assert_false(enemy.fire_fx.visible)
-	var damage := _damage(2.0)
-	assert_almost_eq(enemy.take_damage(damage), 2.0, 0.001)
-	assert_almost_eq(enemy.health.health, 10.0, 0.001)
+	var damage := _damage(200)
+	assert_eq(enemy.take_damage(damage), 200)
+	assert_eq(enemy.health.health, 1000)
 
 func test_vulnerable_return_matches_effective_loss_after_chained_damage() -> void:
 	var enemy := await _enemy()
 	enemy._enter_state(SCRIPT.AttackState.VULNERABLE)
-	var damage := _damage(5.0)
-	assert_almost_eq(enemy.take_damage(damage), 4.0, 0.001)
-	assert_almost_eq(enemy.health.health, 0.0, 0.001)
+	var damage := _damage(500)
+	assert_eq(enemy.take_damage(damage), 400)
+	assert_eq(enemy.health.health, 0)

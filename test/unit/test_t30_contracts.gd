@@ -258,8 +258,8 @@ func test_session_starts_explicitly_transitions_once_and_preserves_player() -> v
 	assert_false(map.visible)
 	assert_eq(map.node_selected.get_connections().size(), 1)
 
-	var hp: float = player.health.health
-	player.health.health = hp - 1.0
+	var hp: int = player.health.health
+	player.health.health = hp - HealthUnits.from_hp(1.0)
 	var luck: float = player.get_luck()
 	var max_speed: float = player._stats.get_stat(&"max_speed")
 	var blink_ratio: float = player.blink_cooldown_ratio()
@@ -282,7 +282,7 @@ func test_session_starts_explicitly_transitions_once_and_preserves_player() -> v
 	assert_eq(session.run_state.sector_index, 0)
 	assert_eq((room_host.get_child(0).get_node("RoomController") as RoomController).room_def.room_type, RoomDef.RoomType.OPENING)
 	assert_same(main.get_node("World/Player"), player)
-	assert_eq(player.health.health, hp - 1.0)
+	assert_eq(player.health.health, hp - HealthUnits.from_hp(1.0))
 	assert_eq(player.get_luck(), luck)
 	assert_eq(player._stats.get_stat(&"max_speed"), max_speed)
 	assert_eq(player.blink_cooldown_ratio(), blink_ratio)

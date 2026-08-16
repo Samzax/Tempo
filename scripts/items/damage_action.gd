@@ -2,6 +2,8 @@ class_name DamageAction
 extends ActionDef
 ## Provoca um estouro em area, propagando a profundidade e limitando a cadeia.
 
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
+
 @export var amount: float = 1.0
 @export var radius: float = 40.0
 @export var tags: Array[StringName] = [&"explosion"]
@@ -27,6 +29,7 @@ func execute(context: EffectContext) -> void:
 		pos = owner.global_position
 	else:
 		return
+	var damage_units := HEALTH_UNITS.from_hp(amount)
 	var hit := 0
 	for e in tree.get_nodes_in_group(&"enemies"):
 		if not is_instance_valid(e) or e.is_queued_for_deletion():
@@ -35,7 +38,7 @@ func execute(context: EffectContext) -> void:
 			continue
 		if e.global_position.distance_to(pos) <= radius:
 			var info := DamageInfo.new()
-			info.amount = amount
+			info.amount = damage_units
 			info.source = owner
 			info.tags = tags.duplicate()
 			info.position = e.global_position

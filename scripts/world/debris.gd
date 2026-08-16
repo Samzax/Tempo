@@ -1,5 +1,6 @@
 class_name Debris
 extends RigidBody2D
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
 enum SizeClass { LARGE, MEDIUM, SMALL }
 
@@ -29,12 +30,14 @@ var _room_bounds := Rect2(Vector2.ZERO, Vector2(720.0, 405.0))
 var _age := 0.0
 var _has_entered_room := false
 var _destroyed := false
+var _contact_damage_units: int = 0
 
 func _ready() -> void:
 	add_to_group(&"debris")
 	health.died.connect(_on_died)
 	health.damaged.connect(_on_damaged)
 	_configure_size()
+	_contact_damage_units = HEALTH_UNITS.from_hp(contact_damage)
 	linear_velocity = drift_velocity
 	body_entered.connect(_on_body_entered)
 	_has_entered_room = _room_bounds.has_point(global_position)
@@ -50,13 +53,13 @@ func _physics_process(delta: float) -> void:
 	if _age >= lifetime or (_has_entered_room and not _room_bounds.grow(cull_margin).has_point(global_position)):
 		queue_free()
 
-func take_damage(info: DamageInfo) -> float:
+func take_damage(info: DamageInfo) -> int:
 	if info == null or info.trigger_depth > 3:
-		return 0.0
+		return 0
 	return health.apply_damage(info)
 
 func _configure_size() -> void:
-	health.max_health = [6.0, 3.0, 1.0][size_class]
+	health.max_health = HEALTH_UNITS.from_hp([6.0, 3.0, 1.0][size_class])
 	sprite.texture = METEOR_TEXTURES[size_class]
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.scale = Vector2.ONE
@@ -75,15 +78,15 @@ func _hull_for(kind: SizeClass) -> PackedVector2Array:
 		_:
 			return PackedVector2Array([Vector2(-6, -4), Vector2(-1, -5), Vector2(4, -3), Vector2(6, 1), Vector2(4, 4), Vector2(-3, 4), Vector2(-6, 1)])
 
-func _on_damaged(_info: DamageInfo, _actual_drop: float) -> void:
-	if not _destroyed and health.health > 0.0:
+func _on_damaged(_info: DamageInfo, _actual_drop: int) -> void:
+	if not _destroyed and health.health > 0:
 		_emit_fx(HIT_TEXTURE, 2, Vector2(32, 32), 0.05, HIT_SCALES[size_class])
 
 func _on_body_entered(body: Node) -> void:
 	if not body.is_in_group(&"player") or not body.has_method(&"take_damage"):
 		return
 	var info := DamageInfo.new()
-	info.amount = contact_damage
+	info.amount = _contact_damage_units
 	info.source = self
 	info.tags = [&"contact", &"debris"]
 	info.position = global_position

@@ -152,9 +152,9 @@ func _on_died(fatal_info: DamageInfo) -> void:
 	_death_elapsed = 0.0
 	sprite.frame = DEATH_FIRST_FRAME
 
-func take_damage(info: DamageInfo) -> float:
+func take_damage(info: DamageInfo) -> int:
 	if _dead:
-		return 0.0
+		return 0
 	return super(info)
 
 func _cancel_attack_cycle() -> void:

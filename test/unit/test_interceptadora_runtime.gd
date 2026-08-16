@@ -2,9 +2,12 @@ extends GutTest
 
 class DamageTarget extends Node2D:
 	var calls: Array[DamageInfo] = []
+	var ship_to_mutate: ShipDef = null
 
 	func take_damage(info: DamageInfo) -> void:
 		calls.append(info)
+		if ship_to_mutate != null:
+			ship_to_mutate.blink_trail_damage = 1.55
 
 var _root: Node2D
 var _effects: Node2D
@@ -57,7 +60,20 @@ func test_aligned_target_is_damaged_once_with_real_damage_info() -> void:
 	assert_eq(info.source, _player)
 	assert_true(info.tags.has(&"blink"))
 	assert_true(info.tags.has(&"interceptor_blink_trail"))
-	assert_eq(info.amount, 4.5)
+	assert_eq(info.amount, 450)
+
+func test_blink_trail_quantizes_damage_once_before_iterating_targets() -> void:
+	_ship.blink_trail_damage = 1.45
+	_target.ship_to_mutate = _ship
+	var second_target := DamageTarget.new()
+	second_target.ship_to_mutate = _ship
+	second_target.add_to_group("enemies")
+	second_target.position = Vector2(175, 100)
+	_root.add_child(second_target)
+
+	_player._resolve_blink_trail_damage(Vector2(100, 100), Vector2(200, 100))
+	assert_eq(_target.calls[0].amount, 145)
+	assert_eq(second_target.calls[0].amount, 145)
 
 func test_target_outside_trail_width_is_not_hit() -> void:
 	_target.position = Vector2(150, 106)
@@ -72,7 +88,7 @@ func test_real_interceptadora_blink_width_hits_at_24_5_and_misses_at_25_0() -> v
 	_player._resolve_blink_trail_damage(Vector2(100, 100), Vector2(200, 100))
 	assert_eq(_target.calls.size(), 1)
 	var hit_info := _target.calls[0]
-	assert_eq(hit_info.amount, 2.0)
+	assert_eq(hit_info.amount, 200)
 	assert_eq(hit_info.source, _player)
 	assert_true(hit_info.tags.has(&"blink"))
 	assert_true(hit_info.tags.has(&"interceptor_blink_trail"))
@@ -291,7 +307,7 @@ func test_projectile_consumes_statblock_damage() -> void:
 	bullet._active = false
 	bullet._on_hit(_target)
 	assert_eq(_target.calls.size(), 1)
-	assert_eq(_target.calls[0].amount, 7.25)
+	assert_eq(_target.calls[0].amount, 725)
 	assert_eq(_target.calls[0].source, _player)
 	assert_true(_target.calls[0].tags.has(&"projectile"))
 

@@ -2,51 +2,63 @@ class_name HealthComponent
 extends Node
 ## Componente reutilizável de vida. Usado pelo jogador e pelos inimigos.
 
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
+
 signal died(fatal_info: DamageInfo)
-signal damaged(info: DamageInfo, actual_drop: float)
+signal damaged(info: DamageInfo, actual_drop: int)
 
-@export var max_health: float = 3.0
+var _max_health: int = 300
+var _health: int = 0
 
-var health: float
+## Authoring boundaries assign quantized HealthUnits to this field.
+@export var max_health: int:
+	get:
+		return _max_health
+	set(value):
+		_max_health = maxi(value, 0)
+		_health = mini(_health, _max_health)
+
+## Authoritative health state, in HealthUnits. Invalid negative state is rejected.
+var health: int:
+	get:
+		return _health
+	set(value):
+		_health = clampi(value, 0, _max_health)
 
 func _ready() -> void:
 	health = max_health
 
-func apply_damage(info: DamageInfo) -> float:
+func apply_damage(info: DamageInfo) -> int:
 	if info == null:
-		return 0.0
-	if not is_finite(info.amount):
-		return 0.0
+		return 0
 	## Ignora dano nulo ou negativo para preservar os limites de vida.
-	if info.amount <= 0.0:
-		return 0.0
-	if health <= 0.0:
-		return 0.0
+	if info.amount <= 0:
+		return 0
+	if health <= 0:
+		return 0
 	var previous_health := health
-	health = clampf(health - info.amount, 0.0, max_health)
+	health = maxi(health - mini(info.amount, health), 0)
 	var actual_drop := previous_health - health
-	if actual_drop > 0.0:
+	if actual_drop > 0:
 		damaged.emit(info, actual_drop)
-	if health <= 0.0:
+	if health <= 0:
 		died.emit(info)
 	return actual_drop
 
-func try_spend_health(amount: float, minimum_remaining: float = 1.0) -> bool:
-	if not is_finite(amount) or not is_finite(minimum_remaining) or not is_finite(health):
-		return false
-	if amount <= 0.0 or minimum_remaining < 0.0:
+func try_spend_health(amount: int, minimum_remaining: int = HEALTH_UNITS.HP_SCALE) -> bool:
+	if amount <= 0 or minimum_remaining < 0 or health < 0:
 		return false
 	var remaining := health - amount
-	if not is_finite(remaining) or remaining < minimum_remaining:
+	if remaining < minimum_remaining:
 		return false
 	health = remaining
 	return true
 
 ## Recupera vida ate o maximo. Ignora valores nao-positivos.
-func heal(amount: float) -> void:
-	if amount <= 0.0:
+func heal(amount: int) -> void:
+	if amount <= 0:
 		return
-	health = clampf(health + amount, 0.0, max_health)
+	health = mini(HEALTH_UNITS.saturating_add(health, amount), max_health)
 
 func reset() -> void:
 	health = max_health

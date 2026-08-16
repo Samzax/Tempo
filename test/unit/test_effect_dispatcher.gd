@@ -233,8 +233,8 @@ func test_self_removal_during_execute_leaves_no_cooldown() -> void:
 func test_health_below_condition() -> void:
 	var owner: HealthOwnerStub = autofree(HealthOwnerStub.new()) as HealthOwnerStub
 	var health := HealthComponent.new()
-	health.max_health = 100.0
-	health.health = 49.0
+	health.max_health = 10000
+	health.health = 4900
 	owner.health = health
 	owner.add_child(health)
 	var context := EffectContext.new()
@@ -243,7 +243,7 @@ func test_health_below_condition() -> void:
 	condition.fraction = 0.5
 
 	assert_true(condition.check(context))
-	health.health = 50.0
+	health.health = 5000
 	assert_false(condition.check(context))
 	owner.health = null
 	assert_false(condition.check(context))

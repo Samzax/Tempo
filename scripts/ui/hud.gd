@@ -1,4 +1,5 @@
 extends Control
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
 class AbilitySlotIcon:
 	extends Control
@@ -15,7 +16,6 @@ class AbilitySlotIcon:
 	const COOLDOWN_WIPE := Color(0.007843, 0.019608, 0.043137, 0.72549) # ARGB 185,2,5,11
 	const DISABLED_DIM := Color(0, 0, 0, 0.352941) # ARGB 90,0,0,0
 	const DISABLED_ICON_TINT := Color(0.478431, 0.501961, 0.545098, 1.0)
-	const KEY_FONT := preload("res://addons/gut/fonts/CourierPrime-Regular.ttf")
 	const ICONS := {
 		&"sobrecarga": preload("res://assets/ui/abilities/sobrecarga.png"),
 		&"escudo": preload("res://assets/ui/abilities/escudo.png"),
@@ -43,7 +43,6 @@ class AbilitySlotIcon:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_key_label = Label.new()
 		_key_label.position = Vector2(4, 1)
-		_key_label.add_theme_font_override("font", KEY_FONT)
 		_key_label.add_theme_font_size_override("font_size", 9)
 		_key_label.add_theme_color_override("font_color", KEY_TEXT)
 		_key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -180,7 +179,7 @@ func _process(_dt: float) -> void:
 		_score.text = "PONTOS  %d" % _gs.score
 		_lives.text = "VIDAS  %d" % _gs.player_lives
 	if _player != null and is_instance_valid(_player) and _player.health != null and is_instance_valid(_player.health):
-		var hp := floori(_player.health.health)
+		var hp := floori(HEALTH_UNITS.to_hp(_player.health.health))
 		for i in _pips.size():
 			_pips[i].color = Color(1.0, 0.3, 0.35) if i < hp else Color(0.25, 0.25, 0.3)
 		_refresh_ability_slots()
@@ -210,16 +209,16 @@ func _bind_player(next_player: Node) -> void:
 	if _player.health != null and is_instance_valid(_player.health):
 		_rebuild_pips(_player.health.max_health)
 
-func _on_player_health_capacity_changed(max_health: float) -> void:
+func _on_player_health_capacity_changed(max_health: int) -> void:
 	_rebuild_pips(max_health)
 
-func _rebuild_pips(max_health: float) -> void:
-	var pip_count := maxi(floori(max_health), 0)
+func _rebuild_pips(max_health: int) -> void:
+	var pip_count := maxi(floori(HEALTH_UNITS.to_hp(max_health)), 0)
 	for child in _pips_row.get_children():
 		_pips_row.remove_child(child)
 		child.queue_free()
 	_pips.clear()
-	var health := floori(_player.health.health) if is_instance_valid(_player) and _player.health != null else 0
+	var health := floori(HEALTH_UNITS.to_hp(_player.health.health)) if is_instance_valid(_player) and _player.health != null else 0
 	for i in pip_count:
 		var pip := ColorRect.new()
 		pip.custom_minimum_size = Vector2(7, 7)

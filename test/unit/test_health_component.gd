@@ -1,102 +1,77 @@
 extends GutTest
 
 const HEALTH_COMPONENT := preload("res://scripts/components/health_component.gd")
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
-func _health(max_health: float = 10.0) -> HealthComponent:
-	var health := HEALTH_COMPONENT.new() as HealthComponent
-	health.max_health = max_health
-	add_child_autofree(health)
+func _health(maximum_hp: float = 10.0) -> HealthComponent:
+	var component := HEALTH_COMPONENT.new() as HealthComponent
+	component.max_health = HEALTH_UNITS.from_hp(maximum_hp)
+	add_child_autofree(component)
 	await get_tree().process_frame
-	return health
+	return component
 
-func _damage(amount: float) -> DamageInfo:
+func _damage(amount_hp: float) -> DamageInfo:
 	var info := DamageInfo.new()
-	info.amount = amount
+	info.amount = HEALTH_UNITS.from_hp(amount_hp)
 	return info
 
-func test_partial_damage_returns_actual_applied_amount() -> void:
-	var health := await _health()
-	assert_eq(health.apply_damage(_damage(3.5)), 3.5)
-	assert_eq(health.health, 6.5)
+func test_quantization_has_one_explicit_scale() -> void:
+	assert_eq(HEALTH_UNITS.HP_SCALE, 100)
+	assert_eq(HEALTH_UNITS.from_hp(0.334), 33)
+	assert_eq(HEALTH_UNITS.from_hp(3.34), 334)
+	assert_eq(HEALTH_UNITS.to_hp(334), 3.34)
 
-func test_overkill_returns_only_remaining_health() -> void:
-	var health := await _health(10.0)
-	assert_eq(health.apply_damage(_damage(25.0)), 10.0)
-	assert_eq(health.health, 0.0)
-
-func test_invalid_damage_and_dead_target_return_zero() -> void:
-	var health := await _health()
-	assert_eq(health.apply_damage(null), 0.0)
-	assert_eq(health.apply_damage(_damage(0.0)), 0.0)
-	assert_eq(health.apply_damage(_damage(-2.0)), 0.0)
-	assert_eq(health.apply_damage(_damage(10.0)), 10.0)
-	assert_eq(health.apply_damage(_damage(1.0)), 0.0)
-
-func test_non_finite_damage_returns_zero_without_health_or_signals() -> void:
-	var health := await _health()
+func test_fractional_damage_and_signal_use_exact_units() -> void:
+	var health := await _health(3.34)
+	var hit := _damage(0.34)
 	watch_signals(health)
-	assert_eq(health.apply_damage(_damage(NAN)), 0.0)
-	assert_eq(health.apply_damage(_damage(INF)), 0.0)
-	assert_eq(health.health, 10.0)
-	assert_signal_emit_count(health, &"damaged", 0)
-	assert_signal_emit_count(health, &"died", 0)
+	assert_eq(health.apply_damage(hit), 34)
+	assert_eq(health.health, 300)
+	assert_signal_emitted_with_parameters(health, &"damaged", [hit, 34])
 
-func test_damage_and_death_signals_keep_single_application_behavior() -> void:
-	var health := await _health(10.0)
-	var first_hit := _damage(3.0)
-	var fatal_hit := _damage(20.0)
+func test_fatal_damage_keeps_damage_info_and_death_signal() -> void:
+	var health := await _health(1.0)
+	var fatal := _damage(2.0)
+	fatal.source = self
+	fatal.tags = [&"test", &"fatal"]
+	fatal.position = Vector2(12, 34)
+	fatal.trigger_depth = 2
 	watch_signals(health)
-	assert_eq(health.apply_damage(first_hit), 3.0)
-	assert_signal_emitted_with_parameters(health, &"damaged", [first_hit, 3.0])
-	assert_eq(health.apply_damage(fatal_hit), 7.0)
-	assert_signal_emitted_with_parameters(health, &"damaged", [fatal_hit, 7.0])
-	assert_signal_emitted_with_parameters(health, &"died", [fatal_hit])
-	assert_eq(health.apply_damage(_damage(1.0)), 0.0)
-	assert_signal_emit_count(health, &"died", 1)
+	assert_eq(health.apply_damage(fatal), 100)
+	assert_signal_emitted_with_parameters(health, &"damaged", [fatal, 100])
+	assert_signal_emitted_with_parameters(health, &"died", [fatal])
+	assert_eq(fatal.amount, 200)
+	assert_eq(fatal.source, self)
+	assert_eq(fatal.tags, [&"test", &"fatal"])
+	assert_eq(fatal.position, Vector2(12, 34))
+	assert_eq(fatal.trigger_depth, 2)
 
-func test_try_spend_health_success_is_silent_and_exact() -> void:
+func test_damage_is_cumulative_without_implicit_iframes() -> void:
+	var health := await _health(1.0)
+	assert_eq(health.apply_damage(_damage(0.25)), 25)
+	assert_eq(health.apply_damage(_damage(0.25)), 25)
+	assert_eq(health.health, 50)
+
+func test_heal_and_spend_use_canonical_units() -> void:
 	var health := await _health(2.0)
-	health.health = 2.0
-	watch_signals(health)
-	assert_true(health.try_spend_health(1.0))
-	assert_eq(health.health, 1.0)
-	assert_signal_emit_count(health, &"damaged", 0)
-	assert_signal_emit_count(health, &"died", 0)
-	assert_false(health.try_spend_health(1.0))
-	assert_eq(health.health, 1.0)
-	assert_signal_emit_count(health, &"damaged", 0)
-	assert_signal_emit_count(health, &"died", 0)
+	health.health = 150
+	assert_true(health.try_spend_health(25, 100))
+	assert_eq(health.health, 125)
+	health.heal(50)
+	assert_eq(health.health, 175)
+	health.heal(1000)
+	assert_eq(health.health, 200)
 
-func test_try_spend_health_honors_custom_minimum_without_partial_debit() -> void:
-	var health := await _health(10.0)
-	health.health = 3.0
-	assert_true(health.try_spend_health(1.0, 2.0))
-	assert_eq(health.health, 2.0)
-	assert_false(health.try_spend_health(1.0, 2.0))
-	assert_eq(health.health, 2.0)
-	assert_false(health.try_spend_health(2.0, 1.0))
-	assert_eq(health.health, 2.0)
+func test_invalid_authored_values_are_rejected_and_large_values_saturate() -> void:
+	for value in [0.0, -1.0, NAN, INF]:
+		assert_eq(HEALTH_UNITS.from_hp(value), 0)
+	assert_eq(HEALTH_UNITS.from_hp(1.0e308), HEALTH_UNITS.MAX_UNITS)
+	assert_eq(HEALTH_UNITS.saturating_add(HEALTH_UNITS.MAX_UNITS - 1, 10), HEALTH_UNITS.MAX_UNITS)
 
-func test_try_spend_health_rejects_invalid_amount_minimum_and_health() -> void:
-	for amount in [0.0, -1.0, NAN, INF]:
-		var health := await _health(5.0); health.health = 3.0
-		assert_false(health.try_spend_health(amount)); assert_eq(health.health, 3.0)
-	for minimum in [-1.0, NAN, INF]:
-		var health := await _health(5.0); health.health = 3.0
-		assert_false(health.try_spend_health(1.0, minimum)); assert_eq(health.health, 3.0)
-	for current in [NAN, INF]:
-		var health := await _health(5.0); health.health = current
-		assert_false(health.try_spend_health(1.0))
-		if is_nan(current):
-			assert_true(is_nan(health.health))
-		else:
-			assert_eq(health.health, INF)
-
-func test_try_spend_health_rejects_nonfinite_remaining_and_sequential_calls_are_atomic() -> void:
-	var health := await _health(5.0)
-	health.health = 1.0
-	assert_false(health.try_spend_health(INF, 0.0))
-	assert_eq(health.health, 1.0)
-	health.health = 1.0e308
-	assert_false(health.try_spend_health(-1.0e308, 0.0))
-	assert_eq(health.health, 1.0e308)
+func test_damage_clamps_at_zero_without_overflow() -> void:
+	var health := await _health(1.0)
+	var lethal := DamageInfo.new()
+	lethal.amount = HEALTH_UNITS.MAX_UNITS
+	assert_eq(health.apply_damage(lethal), 100)
+	assert_eq(health.health, 0)
+	assert_eq(health.apply_damage(lethal), 0)

@@ -1,12 +1,13 @@
 class_name Player
 extends CharacterBody2D
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 ## Nave do jogador.
 ## Movimento X,Y com aceleração/atrito, inclinação progressiva (5 poses),
 ## propulsor reativo, disparo primário (Espaço) e blink (Shift): teleporte
 ## instantâneo com i-frames. Recebe dano por contato com inimigos (respeitando
 ## os i-frames) e renasce no centro ao morrer.
 
-signal health_capacity_changed(max_health: float)
+signal health_capacity_changed(max_health: int)
 	
 @export var ship: ShipDef
 @export var character: CharacterDef
@@ -112,7 +113,7 @@ func _ready() -> void:
 	health.damaged.connect(_on_health_damaged)
 	if not sprite.animation_finished.is_connected(_on_hull_animation_finished):
 		sprite.animation_finished.connect(_on_hull_animation_finished)
-	health.max_health = _stats.get_stat(&"max_health")
+	health.max_health = HEALTH_UNITS.from_hp(_stats.get_stat(&"max_health"))
 	health.health = health.max_health
 	_projectiles = get_tree().get_first_node_in_group("projectiles")
 	_effects = get_tree().get_first_node_in_group("effects")
@@ -265,7 +266,7 @@ func _configure_loadout() -> void:
 	_inventory = Inventory.new(_stats, _dispatcher)
 	if is_instance_valid(health):
 		var previous_max_health := health.max_health
-		health.max_health = _stats.get_stat(&"max_health")
+		health.max_health = HEALTH_UNITS.from_hp(_stats.get_stat(&"max_health"))
 		health.health = health.max_health
 		if health.max_health != previous_max_health:
 			health_capacity_changed.emit(health.max_health)
@@ -443,7 +444,7 @@ func buy_item(item: ItemDef, cost: int) -> bool:
 func can_acquire_item(item: ItemDef) -> bool:
 	return item != null and _inventory != null and _inventory.can_acquire(item)
 
-func try_spend_health(amount: float, minimum_remaining: float = 1.0) -> bool:
+func try_spend_health(amount: int, minimum_remaining: int = HEALTH_UNITS.HP_SCALE) -> bool:
 	if not is_instance_valid(health):
 		return false
 	return health.try_spend_health(amount, minimum_remaining)
@@ -453,14 +454,16 @@ func sandbox_set_stat_override(stat_id: StringName, value: float) -> bool:
 	if _stats == null or not StatCatalog.has_stat(stat_id):
 		return false
 	var definition := StatCatalog.get_stat(stat_id)
-	var normalized := clampf(value, definition.default_min, definition.default_max)
+	var normalized := maxf(value, definition.default_min)
+	if definition.max_limit_enabled:
+		normalized = minf(normalized, definition.default_max)
 	if definition.is_integer:
 		normalized = float(roundi(normalized))
 	_stats.set_base(stat_id, normalized)
 	if stat_id == &"max_health":
 		var previous_max_health := health.max_health
-		health.max_health = normalized
-		health.health = minf(health.health, health.max_health)
+		health.max_health = HEALTH_UNITS.from_hp(normalized)
+		health.health = mini(health.health, health.max_health)
 		if health.max_health != previous_max_health:
 			health_capacity_changed.emit(health.max_health)
 	return true
@@ -940,7 +943,7 @@ func _cancel_bruta_charge() -> void:
 	velocity = _collision_knockback_velocity
 
 func _is_player_alive() -> bool:
-	return health != null and health.health > 0.0
+	return health != null and health.health > 0
 
 func _is_bruta_charge_processing_valid(generation: int) -> bool:
 	return generation == _bruta_charge_generation and _is_player_alive() and _is_bruta_charging()
@@ -1035,16 +1038,16 @@ func _is_collision_impact_generation_current(generation: int) -> bool:
 	return is_collision_impact_active() and generation == _collision_impact_generation
 
 ## Recebe dano respeitando a profundidade maxima de efeitos e proteções deliberadas.
-func take_damage(info: DamageInfo) -> void:
+func take_damage(info: DamageInfo) -> int:
 	if info.trigger_depth > 3:
-		return
+		return 0
 	if is_invulnerable():
-		return
+		return 0
 	if _consume_shield_charge():
-		return
-	health.apply_damage(info)
+		return 0
+	return health.apply_damage(info)
 
-func _on_health_damaged(info: DamageInfo, _actual_drop: float) -> void:
+func _on_health_damaged(info: DamageInfo, _actual_drop: int) -> void:
 	EventBus.player_hit.emit(info)
 	_dispatcher.dispatch(&"on_damaged", info, 0)
 
@@ -1221,6 +1224,7 @@ func _resolve_blink_trail_damage(origin: Vector2, dest: Vector2) -> void:
 		return
 	var hit_targets: Dictionary = {}
 	var radius := ship.blink_trail_width * 0.5
+	var damage_units := HEALTH_UNITS.from_hp(ship.blink_trail_damage)
 	for node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(node) or node.is_queued_for_deletion() or not node.has_method("take_damage"):
 			continue
@@ -1236,7 +1240,7 @@ func _resolve_blink_trail_damage(origin: Vector2, dest: Vector2) -> void:
 			continue
 		hit_targets[target_id] = true
 		var info := DamageInfo.new()
-		info.amount = ship.blink_trail_damage
+		info.amount = damage_units
 		info.source = self
 		info.position = target.global_position
 		info.tags = [&"blink", &"interceptor_blink_trail"]

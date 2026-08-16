@@ -2,6 +2,8 @@ class_name EngineTrailManager
 extends Node2D
 ## Um unico CanvasItem guarda a geometria logica e desenha a decoracao do rastro.
 
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
+
 const MAX_SAMPLES_PER_STRAND := 22
 const MAX_LOGICAL_SEGMENTS := MAX_SAMPLES_PER_STRAND * 2
 
@@ -9,7 +11,7 @@ var segments: Array[Dictionary] = []
 var target_next_damage: Dictionary = {}
 
 var _source: Node = null
-var _damage := 0.0
+var _damage: int = 0
 var _width := 0.0
 var _duration := 0.8
 var _damage_cooldown := 0.5
@@ -24,7 +26,7 @@ var _ignition_pending := false
 
 func configure(source: Node, damage: float, width: float, duration: float, damage_cooldown: float, spacing: float, thrust_color: Color) -> void:
 	_source = source
-	_damage = damage
+	_damage = HEALTH_UNITS.from_hp(damage)
 	_width = width
 	_duration = duration
 	_damage_cooldown = damage_cooldown
@@ -129,7 +131,7 @@ func _prune_target_cooldowns() -> void:
 			target_next_damage.erase(target_id)
 
 func _resolve_damage() -> void:
-	if _damage <= 0.0 or _width <= 0.0 or segments.is_empty() or not is_instance_valid(_source):
+	if _damage <= 0 or _width <= 0.0 or segments.is_empty() or not is_instance_valid(_source):
 		return
 	var radius := _width * 0.5
 	for node in get_tree().get_nodes_in_group(&"enemies"):

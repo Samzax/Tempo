@@ -1,5 +1,6 @@
 class_name Enemy
 extends CharacterBody2D
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 ## Inimigo base, orientado a dados: o comportamento de movimento e os atributos
 ## vêm de valores exportados, então cada variação é o mesmo cenário com dados
 ## diferentes (perseguidor, serpente, descida reta...).
@@ -44,7 +45,7 @@ func _ready() -> void:
 	add_to_group("enemies")
 	if sprite == null:
 		sprite = get_node_or_null("CoreReactor") as Sprite2D
-	health.max_health = max_health
+	health.max_health = HEALTH_UNITS.from_hp(max_health)
 	health.reset()
 	health.died.connect(_on_died)
 	if sprite != null:
@@ -152,9 +153,9 @@ func _integrate_motion() -> void:
 	move_and_slide()
 
 ## Recebe dano dos projéteis do jogador.
-func take_damage(info: DamageInfo) -> float:
+func take_damage(info: DamageInfo) -> int:
 	if info == null or info.trigger_depth > 3:
-		return 0.0
+		return 0
 	return health.apply_damage(info)
 
 func get_collision_radius() -> float:

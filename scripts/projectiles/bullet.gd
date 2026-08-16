@@ -1,4 +1,6 @@
 extends Area2D
+
+const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 ## Projétil do jogador. Viaja em linha reta, some por tempo de vida ou ao sair
 ## da tela, e retorna ao pool. O dano será aplicado ao componente de vida do
 ## alvo quando os inimigos existirem (T4/T8).
@@ -16,7 +18,7 @@ var _life: float = 0.0
 var _active: bool = false
 var _shooter: Node = null
 var _room_bounds := Rect2(Vector2.ZERO, Vector2(720, 405))
-var _remaining_damage: float = 0.0
+var _remaining_damage: int = 0
 var _hit_targets: Dictionary = {}
 var _activation_epoch: int = 0
 var _range_remaining: float = 0.0
@@ -58,7 +60,7 @@ func activate(
 	damage = damage_amount if valid_damage else 0.0
 	speed = safe_speed
 	lifetime = safe_lifetime
-	_remaining_damage = damage
+	_remaining_damage = HEALTH_UNITS.from_hp(damage)
 	_hit_targets.clear()
 	scale = DEFAULT_SCALE * safe_scale
 	_velocity = dir.normalized() * speed
@@ -107,13 +109,11 @@ func _on_hit(other: Node) -> void:
 		_despawn()
 		return
 	var consumed := _remaining_damage
-	if typeof(reported_consumption) == TYPE_FLOAT or typeof(reported_consumption) == TYPE_INT:
-		var numeric_consumption := float(reported_consumption)
-		if not is_nan(numeric_consumption) and not is_inf(numeric_consumption):
-			consumed = clampf(numeric_consumption, 0.0, _remaining_damage)
+	if reported_consumption is int:
+		consumed = clampi(reported_consumption, 0, _remaining_damage)
 
 	_remaining_damage -= consumed
-	if _remaining_damage <= 0.0:
+	if _remaining_damage <= 0:
 		_despawn()
 
 func _despawn() -> void:
@@ -121,7 +121,7 @@ func _despawn() -> void:
 		return
 	var despawn_epoch := _activation_epoch
 	_active = false
-	_remaining_damage = 0.0
+	_remaining_damage = 0
 	_hit_targets.clear()
 	_range_remaining = 0.0
 	_despawn_on_valid_hit = false

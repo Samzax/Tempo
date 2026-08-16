@@ -53,7 +53,7 @@ shape = SubResource("Circle_influence")
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
-max_health = 6.0
+max_health = 600
 
 [node name="Hurtbox" type="Area2D" parent="."]
 collision_layer = 32

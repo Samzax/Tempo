@@ -159,7 +159,7 @@ position = Vector2(0, -12)
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("3_health")
-max_health = 5
+max_health = 500
 
 [node name="Hurtbox" type="Area2D" parent="."]
 collision_layer = 2
