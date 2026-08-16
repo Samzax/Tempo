@@ -10,6 +10,8 @@ const VALID_TAGS := {
 	&"projectile": true,
 	&"contact": true,
 	&"blink": true,
+	&"engine_trail": true,
+	&"interestelar_engine_trail": true,
 	&"drone": true,
 	&"explosion": true,
 	&"curse": true,

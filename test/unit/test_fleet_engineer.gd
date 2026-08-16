@@ -442,7 +442,6 @@ func test_room_clear_dispatches_once_and_not_again_on_revisit() -> void:
 	session._on_room_cleared(node_def, 1)
 	assert_eq(player.room_clear_calls, 1)
 	assert_false(session._room_active)
-
 	# Re-entry/revisit of an already completed node must not dispatch again.
 	session._room_active = true
 	session._on_room_cleared(node_def, 1)
