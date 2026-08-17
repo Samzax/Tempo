@@ -56,6 +56,40 @@ func spawn_electric_drone(position := Vector2.ZERO, formation_open := false) -> 
 		add_child(_electric_grid)
 	return _electric_grid.spawn_drone(position, formation_open)
 
+func electric_grid_controller() -> ElectricGridController:
+	return _electric_grid if is_instance_valid(_electric_grid) else null
+
+func configure_electric_geometry(connect_distance: float, break_distance: float, aura_radius: float) -> bool:
+	if not _has_electric_grid_authority(): return false
+	if _electric_grid == null or not is_instance_valid(_electric_grid):
+		_electric_grid = ElectricGridController.new()
+		_electric_grid.name = "ElectricGridController"
+		add_child(_electric_grid)
+	return _electric_grid.configure_geometry(connect_distance, break_distance, aura_radius)
+
+func update_electric_drone_positions(active_drones: Dictionary) -> bool:
+	return _has_electric_grid_authority() and is_instance_valid(_electric_grid) and _electric_grid.update_drone_positions(active_drones)
+
+func set_electric_drone_formation_state(drone_id: int, formation_open: bool) -> bool:
+	return _has_electric_grid_authority() and is_instance_valid(_electric_grid) and _electric_grid.set_drone_formation_state(drone_id, formation_open)
+
+func destroy_electric_drone(drone_id: int) -> bool:
+	return _has_electric_grid_authority() and is_instance_valid(_electric_grid) and _electric_grid.destroy_drone(drone_id)
+
+func electric_drone_snapshot() -> Dictionary:
+	if not _has_electric_grid_authority() or not is_instance_valid(_electric_grid): return {}
+	return _electric_grid.active_snapshot()
+
+func electric_drone_ids() -> Array[int]:
+	if not _has_electric_grid_authority() or not is_instance_valid(_electric_grid): return []
+	return _electric_grid.active_drone_ids()
+
+func teardown_electric_grid() -> void:
+	if is_instance_valid(_electric_grid):
+		_electric_grid.teardown()
+		_electric_grid.queue_free()
+	_electric_grid = null
+
 func _has_electric_grid_authority() -> bool:
 	return not multiplayer.has_multiplayer_peer() or multiplayer.is_server()
 

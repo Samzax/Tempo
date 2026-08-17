@@ -9,6 +9,10 @@ var stun_duration := 0.5
 var stun_immunity_duration := 1.0
 var tick_seconds := 0.1
 var residual_lifetime_ticks := 0
+## Disabled by default so standalone users retain the previous unconstrained graph.
+## These are structural gate candidates, not final fairness/tuning values.
+var connect_distance := INF
+var break_distance := INF
 var graph_revision := 0
 var state_revision := 0 # Monotonic cursor for every replicated mutation, not just topology.
 
@@ -161,6 +165,7 @@ func _valid_snapshot(state: Dictionary) -> bool:
 	var edge_keys := {}; var forbidden_keys := {}; var degree := {}
 	for edge in state.edges:
 		if not _valid_edge(edge, drone_ids): return false
+		if bool(_snapshot_drone(state.drones, int(edge.a)).get("formation_open", false)) or bool(_snapshot_drone(state.drones, int(edge.b)).get("formation_open", false)): return false
 		var edge_key := str(_edge_pair(int(edge.a), int(edge.b)))
 		if edge_keys.has(edge_key): return false
 		edge_keys[edge_key] = true
@@ -239,8 +244,15 @@ func _recompute() -> void:
 	for left_index in range(ids.size()):
 		for right_index in range(left_index + 1, ids.size()):
 			var a: int = ids[left_index]; var b: int = ids[right_index]
+			# A drone in transit is never an electrical endpoint.
+			if bool(_drones[a].get("formation_open", false)) or bool(_drones[b].get("formation_open", false)): continue
 			if _is_forbidden(a, b): continue
-			candidates.append({"a": a, "b": b, "distance": _drones[a].get("position", Vector2.ZERO).distance_to(_drones[b].get("position", Vector2.ZERO))})
+			var distance := _drones[a].get("position", Vector2.ZERO).distance_to(_drones[b].get("position", Vector2.ZERO))
+			var was_active := _has_edge(a, b)
+			# Hysteresis is applied before degree/cycle selection: retained links use
+			# break_distance, while newly proposed links use connect_distance.
+			if (was_active and distance <= break_distance) or (not was_active and distance <= connect_distance):
+				candidates.append({"a": a, "b": b, "distance": distance})
 	candidates.sort_custom(func(x, y): return x.distance < y.distance if not is_equal_approx(x.distance, y.distance) else (x.a < y.a or (x.a == y.a and x.b < y.b)))
 	var selected: Array = []; var degree := {}
 	for candidate in candidates:
@@ -339,6 +351,11 @@ func _connected(start: int, goal: int, selected: Array) -> bool:
 		if seen.has(node): continue
 		seen[node] = true
 		for next in adjacency.get(node, []): stack.append(next)
+	return false
+func _has_edge(a: int, b: int) -> bool:
+	var pair := _edge_pair(a, b)
+	for edge in _edges:
+		if int(edge.a) == pair[0] and int(edge.b) == pair[1]: return true
 	return false
 func _component_has_open(start: int, selected: Array) -> bool:
 	var stack := [start]; var seen := {}

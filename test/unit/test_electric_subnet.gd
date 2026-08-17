@@ -21,8 +21,43 @@ func test_authority_and_deterministic_graph_degree_and_open_rule() -> void:
 		assert_lte(graph.edges().filter(func(item): return item.a == edge.b or item.b == edge.b).size(), 2)
 	assert_true(graph.subnets()[0].closed)
 	assert_true(graph.set_formation_open(3, true))
-	assert_eq(graph.edges().size(), 2)
+	assert_eq(graph.edges().size(), 1)
+	for edge in graph.edges(): assert_ne(edge.a, 3); assert_ne(edge.b, 3)
 	for subnet in graph.subnets(): assert_false(subnet.closed)
+
+func test_structural_distance_hysteresis_and_deterministic_ties() -> void:
+	var graph := ElectricSubnetScript.new()
+	graph.connect_distance = 58.0; graph.break_distance = 74.0
+	graph.register_drone(_drone(1, Vector2.ZERO)); graph.register_drone(_drone(2, Vector2(58, 0)))
+	assert_eq(graph.edges(), [{"a": 1, "b": 2}])
+	graph.register_drone(_drone(3, Vector2(0, 58))); graph.register_drone(_drone(4, Vector2(58, 58)))
+	assert_lte(graph.edges().filter(func(edge): return edge.a == 1 or edge.b == 1).size(), 2)
+	assert_eq(graph.edges()[0], {"a": 1, "b": 2})
+	var hysteresis := ElectricSubnetScript.new(); hysteresis.connect_distance = 58.0; hysteresis.break_distance = 74.0
+	hysteresis.register_drone(_drone(1, Vector2.ZERO)); hysteresis.register_drone(_drone(5, Vector2(58, 0)))
+	assert_eq(hysteresis.edges(), [{"a": 1, "b": 5}])
+	hysteresis.register_drone(_drone(5, Vector2(74.01, 0)))
+	assert_eq(hysteresis.edges(), [])
+	var retained := ElectricSubnetScript.new(); retained.connect_distance = 58.0; retained.break_distance = 74.0
+	retained.register_drone(_drone(5, Vector2.ZERO)); retained.register_drone(_drone(6, Vector2(58.0, 0)))
+	assert_eq(retained.edges(), [{"a": 5, "b": 6}])
+	retained.register_drone(_drone(6, Vector2(74.0, 0)))
+	assert_eq(retained.edges(), [{"a": 5, "b": 6}])
+	retained.register_drone(_drone(5, Vector2(74.01, 0)))
+	assert_eq(retained.edges(), [{"a": 5, "b": 6}])
+	assert_true(graph.set_formation_open(2, true))
+	assert_false(graph.edges().any(func(edge): return edge.a == 2 or edge.b == 2))
+	assert_true(graph.set_formation_open(2, false))
+	assert_true(graph.edges().any(func(edge): return edge.a == 1 and edge.b == 2))
+
+func test_formation_open_endpoints_are_absent_from_edges_subnets_and_areas() -> void:
+	var graph := ElectricSubnetScript.new()
+	graph.connect_distance = 58.0; graph.break_distance = 74.0
+	for record in [_drone(1, Vector2.ZERO), _drone(2, Vector2(20, 0)), _drone(3, Vector2(40, 0))]: graph.register_drone(record)
+	graph.set_formation_open(2, true)
+	for edge in graph.edges(): assert_ne(edge.a, 2); assert_ne(edge.b, 2)
+	for subnet in graph.subnets(): assert_false(subnet.drone_ids.has(2))
+	assert_true(graph.snapshot().formation_open_drone_ids.has(2))
 
 func test_revision_changes_only_for_topology() -> void:
 	var graph = ElectricSubnetScript.new()

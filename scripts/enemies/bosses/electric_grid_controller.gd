@@ -18,10 +18,16 @@ var _areas: Dictionary = {}
 var _targets: Dictionary = {} # ID -> WeakRef; never retained by the RefCounted core.
 var _registered_drones: Dictionary = {}
 
+## Structural gate defaults for the approved Asas layout; they are not final combat tuning.
+var connect_distance := 58.0
+var break_distance := 74.0
+var aura_radius := 18.0
+
 func _init(host_authority: bool = true) -> void:
 	is_host = host_authority
 	drone_manager = DroneManager.new(host_authority)
 	electric_subnet = ElectricSubnet.new(host_authority)
+	configure_geometry(connect_distance, break_distance, aura_radius)
 
 func _ready() -> void:
 	set_physics_process(is_host)
@@ -39,6 +45,51 @@ func destroy_drone(drone_id: int) -> bool:
 		return false
 	_sync_graph_from_manager()
 	return true
+
+func set_drone_formation_state(drone_id: int, formation_open: bool) -> bool:
+	if not is_host:
+		return false
+	var active := {drone_id: {"position": Vector2.ZERO, "formation_open": formation_open}}
+	for drone in drone_manager.active_drones():
+		if int(drone.id) == drone_id:
+			active[drone_id].position = drone.position
+			return update_drone_positions(active)
+	return false
+
+func configure_geometry(next_connect: float, next_break: float, next_aura: float) -> bool:
+	if not is_host or not is_finite(next_connect) or not is_finite(next_break) or not is_finite(next_aura):
+		return false
+	if next_connect <= 0.0 or next_break < next_connect or next_aura <= 0.0:
+		return false
+	connect_distance = next_connect
+	break_distance = next_break
+	aura_radius = next_aura
+	electric_subnet.connect_distance = connect_distance
+	electric_subnet.break_distance = break_distance
+	for area_value in _areas.values():
+		var area := area_value as ElectricSubnetArea
+		if area != null: area.aura_radius = aura_radius
+	_sync_graph_from_manager()
+	return true
+
+func active_snapshot() -> Dictionary:
+	return electric_subnet.snapshot().duplicate(true)
+
+func active_drone_ids() -> Array[int]:
+	var ids: Array[int] = []
+	for drone in drone_manager.active_drones(): ids.append(int(drone.id))
+	return ids
+
+func teardown() -> void:
+	set_physics_process(false)
+	for area_value in _areas.values():
+		var area := area_value as ElectricSubnetArea
+		if is_instance_valid(area):
+			_disconnect_area_signals(area)
+			area.queue_free()
+	_areas.clear()
+	_targets.clear()
+	_registered_drones.clear()
 
 ## Positions are keyed by the IDs issued by DroneManager. Unknown IDs are ignored.
 func update_drone_positions(active_drones: Dictionary) -> bool:
@@ -175,6 +226,7 @@ func _sync_areas(subnets: Array, positions: Dictionary) -> void:
 			area = SUBNET_AREA.new() as ElectricSubnetArea
 			area.name = "ElectricSubnetArea_%s" % subnet_id.replace(":", "_")
 			area.subnet_id = subnet_id
+			area.aura_radius = aura_radius
 			area.network_id_resolver = target_id_resolver
 			area.target_seen.connect(_on_area_target_seen)
 			area.target_left.connect(_on_area_target_left)

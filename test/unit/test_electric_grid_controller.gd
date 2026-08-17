@@ -52,6 +52,19 @@ func test_client_never_mutates_drone_or_graph_state() -> void:
 	assert_eq(controller.electric_subnet.graph_revision, 0)
 	assert_eq(controller._server_tick, 0)
 
+func test_configure_geometry_validates_injects_limits_and_teardown_is_idempotent() -> void:
+	var controller := _controller()
+	for invalid in [[0.0, 74.0, 18.0], [75.0, 74.0, 18.0], [58.0, 74.0, 0.0], [NAN, 74.0, 18.0], [58.0, INF, 18.0]]:
+		assert_false(controller.configure_geometry(invalid[0], invalid[1], invalid[2]))
+	assert_true(controller.configure_geometry(12.0, 20.0, 9.0))
+	assert_eq(controller.electric_subnet.connect_distance, 12.0)
+	assert_eq(controller.electric_subnet.break_distance, 20.0)
+	_spawn_pair(controller)
+	assert_gt(controller._areas.size(), 0)
+	for area in controller._areas.values(): assert_eq((area as ElectricSubnetArea).aura_radius, 9.0)
+	controller.teardown(); controller.teardown()
+	assert_eq(controller._areas.size(), 0)
+
 func test_each_subnet_has_its_own_area_and_reuses_edge_shapes() -> void:
 	var controller := _controller()
 	_spawn_pair(controller)
