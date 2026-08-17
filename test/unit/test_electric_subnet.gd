@@ -251,9 +251,9 @@ func test_client_rejects_graph_signature_conflict() -> void:
 
 func test_graph_signature_covers_edges_subnets_forbidden_and_formation() -> void:
 	var graph = ElectricSubnetScript.new()
-	graph.register_drone(_drone(1, Vector2.ZERO)); graph.register_drone(_drone(2, Vector2.RIGHT)); graph.register_drone(_drone(3, Vector2(2, 0)))
-	graph.set_formation_open(1, true)
-	graph.set_forbidden_edge(2, 3)
+	graph.register_drone(_drone(1, Vector2.ZERO)); graph.register_drone(_drone(2, Vector2(20, 0))); graph.register_drone(_drone(3, Vector2(40, 0))); graph.register_drone(_drone(4, Vector2(60, 0)))
+	graph.set_formation_open(4, true)
+	graph.set_forbidden_edge(1, 2)
 	var state = graph.snapshot()
 	# Each payload changes one signed dimension while retaining the original signature.
 	var edge_changed = state.duplicate(true); edge_changed.edges = []; edge_changed.state_revision += 1

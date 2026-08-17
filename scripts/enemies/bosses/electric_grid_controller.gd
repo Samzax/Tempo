@@ -278,8 +278,13 @@ func _resolve_damage_tick() -> void:
 		if area == null:
 			continue
 		for target_id in area.target_ids():
+			var reference := _targets.get(target_id) as WeakRef
+			var body: Node = reference.get_ref() as Node if reference != null else null
+			if body == null or not is_instance_valid(body) or body.is_queued_for_deletion():
+				_targets.erase(target_id)
+				continue
 			if not targets_by_id.has(target_id):
-				targets_by_id[target_id] = {"network_id": target_id, "is_player": true, "subnet_ids": []}
+				targets_by_id[target_id] = {"network_id": target_id, "is_player": body.is_in_group(&"player"), "subnet_ids": []}
 			targets_by_id[target_id].subnet_ids.append(subnet_id)
 	var targets: Array = targets_by_id.values()
 	for event in electric_subnet.resolve_damage_tick(_server_tick, targets):

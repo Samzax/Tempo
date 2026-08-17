@@ -247,7 +247,7 @@ func _recompute() -> void:
 			# A drone in transit is never an electrical endpoint.
 			if bool(_drones[a].get("formation_open", false)) or bool(_drones[b].get("formation_open", false)): continue
 			if _is_forbidden(a, b): continue
-			var distance := _drones[a].get("position", Vector2.ZERO).distance_to(_drones[b].get("position", Vector2.ZERO))
+			var distance: float = float(_drones[a].get("position", Vector2.ZERO).distance_to(_drones[b].get("position", Vector2.ZERO)))
 			var was_active := _has_edge(a, b)
 			# Hysteresis is applied before degree/cycle selection: retained links use
 			# break_distance, while newly proposed links use connect_distance.

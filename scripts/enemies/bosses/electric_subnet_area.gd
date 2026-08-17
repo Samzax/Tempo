@@ -17,7 +17,7 @@ var _target_ids: Dictionary = {}
 
 func _ready() -> void:
 	collision_layer = 0
-	collision_mask = 2 # Player layer from the gameplay scenes.
+	collision_mask = 6 # Player (2) and enemy (4) layers from the gameplay scenes.
 	monitoring = true
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
@@ -78,7 +78,7 @@ func target_ids() -> Array[String]:
 	return ids
 
 func _on_body_entered(body: Node2D) -> void:
-	if not is_instance_valid(body) or body.is_queued_for_deletion() or not body.is_in_group(&"player"):
+	if not _is_damageable_target(body):
 		return
 	var target_id := _target_id(body)
 	_target_ids[target_id] = true
@@ -88,8 +88,18 @@ func _on_body_exited(body: Node2D) -> void:
 	if not is_instance_valid(body):
 		return
 	var target_id := _target_id(body)
+	if not _target_ids.has(target_id):
+		return
 	_target_ids.erase(target_id)
 	target_left.emit(target_id)
+
+func _is_damageable_target(body: Node2D) -> bool:
+	if not is_instance_valid(body) or body.is_queued_for_deletion():
+		return false
+	if not body.is_in_group(&"player") and not body.is_in_group(&"enemies"):
+		return false
+	var property: Variant = body.get("health")
+	return property is HealthComponent or body.get_node_or_null("HealthComponent") is HealthComponent
 
 func _target_id(body: Node2D) -> String:
 	if network_id_resolver.is_valid():

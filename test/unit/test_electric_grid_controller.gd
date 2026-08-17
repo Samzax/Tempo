@@ -15,6 +15,13 @@ class FakePlayer extends CharacterBody2D:
 		push_error("Electric bridge must use HealthComponent, not Player.take_damage")
 		return 0
 
+class FakeEnemy extends CharacterBody2D:
+	var health: HealthComponent
+	var stun_calls := 0
+
+	func apply_stun(_duration: float) -> void:
+		stun_calls += 1
+
 func _controller(host := true) -> ElectricGridController:
 	var controller := CONTROLLER.new(host) as ElectricGridController
 	add_child_autofree(controller)
@@ -59,7 +66,8 @@ func test_configure_geometry_validates_injects_limits_and_teardown_is_idempotent
 	assert_true(controller.configure_geometry(12.0, 20.0, 9.0))
 	assert_eq(controller.electric_subnet.connect_distance, 12.0)
 	assert_eq(controller.electric_subnet.break_distance, 20.0)
-	_spawn_pair(controller)
+	controller.spawn_drone(Vector2.ZERO)
+	controller.spawn_drone(Vector2(10.0, 0.0))
 	assert_gt(controller._areas.size(), 0)
 	for area in controller._areas.values(): assert_eq((area as ElectricSubnetArea).aura_radius, 9.0)
 	controller.teardown(); controller.teardown()
@@ -74,8 +82,8 @@ func test_each_subnet_has_its_own_area_and_reuses_edge_shapes() -> void:
 	var shape := area._shapes["1:2"] as CollisionShape2D
 	controller.update_drone_positions({1: {"position": Vector2(5, 0), "formation_open": false}})
 	assert_same(area._shapes["1:2"], shape)
-	controller.spawn_drone(Vector2(100, 0))
-	controller.spawn_drone(Vector2(120, 0))
+	controller.spawn_drone(Vector2(5, 0))
+	controller.spawn_drone(Vector2(25, 0))
 	for left in [1, 2]:
 		for right in [3, 4]:
 			controller.electric_subnet.set_forbidden_edge(left, right)
@@ -83,17 +91,21 @@ func test_each_subnet_has_its_own_area_and_reuses_edge_shapes() -> void:
 	assert_eq(controller._areas.size(), 2)
 	assert_true(controller._areas.has(subnet_id))
 	for split_id in controller._areas.keys():
-		assert_eq((controller._areas[split_id] as ElectricSubnetArea).collision_mask, 2)
+		assert_eq((controller._areas[split_id] as ElectricSubnetArea).collision_mask, 6)
 	assert_true(controller._areas[subnet_id]._shapes.has("1:2"))
-	assert_ne(controller._areas[subnet_id]._shapes["1:2"], shape)
+	assert_same(controller._areas[subnet_id]._shapes["1:2"], shape)
 
 func test_real_area_signal_transition_keeps_target_until_last_area_exits() -> void:
 	var controller := _controller()
 	controller.set_physics_process(false)
 	var player := CharacterBody2D.new()
+	var health := HealthComponent.new()
+	health.name = "HealthComponent"
+	health.max_health = 100
 	player.collision_layer = 2
 	player.collision_mask = 0
 	player.add_to_group(&"player")
+	player.add_child(health)
 	player.set_meta(&"network_id", "real-shared")
 	var player_shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
@@ -154,8 +166,8 @@ func test_overlapping_subnets_apply_independently_through_health_component_and_o
 	_add_player_shape(player)
 	add_child_autofree(player)
 	_spawn_pair(controller)
-	controller.spawn_drone(Vector2(100, 0))
-	controller.spawn_drone(Vector2(120, 0))
+	controller.spawn_drone(Vector2(5, 0))
+	controller.spawn_drone(Vector2(25, 0))
 	for left in [1, 2]:
 		for right in [3, 4]:
 			controller.electric_subnet.set_forbidden_edge(left, right)
@@ -168,6 +180,50 @@ func test_overlapping_subnets_apply_independently_through_health_component_and_o
 	controller._physics_process(0.1)
 	assert_eq(health.health, 86)
 	assert_eq(player.stun_calls, 1) # The core marks one event eligible; its immunity is untouched here.
+
+func test_enemy_on_active_subnet_takes_damage_without_stun() -> void:
+	var controller := _controller()
+	var enemy := FakeEnemy.new()
+	enemy.add_to_group(&"enemies")
+	enemy.collision_layer = 4
+	enemy.collision_mask = 0
+	enemy.set_meta(&"network_id", "damage-enemy")
+	var health := HealthComponent.new()
+	health.name = "HealthComponent"
+	health.max_health = 100
+	enemy.health = health
+	enemy.add_child(health)
+	_add_player_shape(enemy)
+	add_child_autofree(enemy)
+	_spawn_pair(controller)
+	enemy.position = Vector2(10.0, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_true(controller._targets.has("damage-enemy"))
+	controller.electric_subnet.damage_per_tick = 7.0
+	controller._physics_process(0.1)
+	assert_eq(health.health, 93)
+	assert_eq(enemy.stun_calls, 0)
+
+func test_unrelated_bodies_are_ignored_and_not_cached() -> void:
+	var controller := _controller()
+	var ungrouped := CharacterBody2D.new()
+	ungrouped.collision_layer = 4
+	_add_player_shape(ungrouped)
+	add_child_autofree(ungrouped)
+	var enemy_without_health := CharacterBody2D.new()
+	enemy_without_health.add_to_group(&"enemies")
+	enemy_without_health.collision_layer = 4
+	_add_player_shape(enemy_without_health)
+	add_child_autofree(enemy_without_health)
+	_spawn_pair(controller)
+	ungrouped.position = Vector2(10.0, 0.0)
+	enemy_without_health.position = Vector2(10.0, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_false(controller._targets.has(str(ungrouped.get_instance_id())))
+	assert_false(controller._targets.has(str(enemy_without_health.get_instance_id())))
+	assert_eq(controller._targets.size(), 0)
 
 func test_invalid_target_is_ignored_before_damage() -> void:
 	var controller := _controller()
