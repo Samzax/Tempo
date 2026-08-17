@@ -107,7 +107,7 @@ func test_duplicate_residual_is_idempotent_but_distinct_subnets_are_cumulative()
 
 func test_multiple_residuals_per_subnet_are_distinct_and_state_only() -> void:
 	var graph = ElectricSubnetScript.new(); graph.damage_per_tick = 3.0
-	var graph_cursor := graph.graph_revision; var state_cursor := graph.state_revision
+	var graph_cursor: int = graph.graph_revision; var state_cursor: int = graph.state_revision
 	assert_true(graph.add_residual("a", "r1", 0, 5))
 	assert_eq(graph.graph_revision, graph_cursor); assert_gt(graph.state_revision, state_cursor)
 	assert_true(graph.add_residual("a", "r2", 0, 5))
@@ -146,7 +146,7 @@ func test_old_snapshot_is_rejected_without_regressing_revision() -> void:
 	var graph = ElectricSubnetScript.new()
 	graph.register_drone(_drone(1, Vector2.ZERO)); graph.register_drone(_drone(2, Vector2.RIGHT))
 	var client = ElectricSubnetScript.new(false); assert_true(client.apply_snapshot(graph.snapshot()))
-	var current_revision := client.graph_revision
+	var current_revision: int = client.graph_revision
 	var stale = graph.snapshot(); stale.graph_revision = current_revision - 1
 	stale.state_revision = graph.state_revision - 1
 	assert_false(client.apply_snapshot(stale))
@@ -259,6 +259,18 @@ func test_snapshot_rejects_missing_edge_endpoint() -> void:
 	for id in [1, 2, 3, 4]: source.register_drone(_drone(id, Vector2(id, 0)))
 	var missing_endpoint = source.snapshot(); missing_endpoint.edges = [{"a":1,"b":99}]
 	assert_false(ElectricSubnetScript.new(false).apply_snapshot(missing_endpoint))
+
+func test_removing_drone_clears_forbidden_edges_and_snapshot_topology() -> void:
+	var graph = ElectricSubnetScript.new()
+	for id in [1, 2, 3]: graph.register_drone(_drone(id, Vector2(id, 0)))
+	assert_true(graph.set_forbidden_edge(1, 3))
+	assert_true(graph.remove_drone(3))
+	var state: Dictionary = graph.snapshot()
+	assert_eq(state.forbidden_edges, [])
+	for edge in state.edges:
+		assert_ne(edge.a, 3)
+		assert_ne(edge.b, 3)
+	assert_eq(state.drones.map(func(drone): return int(drone.id)), [1, 2])
 
 func test_snapshot_rejects_degree_three() -> void:
 	var source = ElectricSubnetScript.new()

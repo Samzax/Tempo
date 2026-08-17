@@ -35,6 +35,7 @@ func register_drone(drone: Dictionary) -> bool:
 func remove_drone(drone_id: int) -> bool:
 	if not is_server or not _drones.has(drone_id): return false
 	_drones.erase(drone_id)
+	_remove_forbidden_edges_for(drone_id)
 	_recompute()
 	_touch_state()
 	return true
@@ -300,7 +301,7 @@ func _valid_identity(identity) -> bool:
 func _valid_edge(edge, drone_ids: Dictionary) -> bool:
 	return edge is Dictionary and edge.has("a") and edge.has("b") and int(edge.a) != int(edge.b) and drone_ids.has(int(edge.a)) and drone_ids.has(int(edge.b))
 func _touch_state() -> void: state_revision += 1
-func _edge_pair(a: int, b: int) -> Array: return [min(a, b), max(a, b)]
+func _edge_pair(a: int, b: int) -> Array: return [mini(a, b), maxi(a, b)]
 func _is_forbidden(a: int, b: int) -> bool:
 	var pair := _edge_pair(a, b); return _forbidden.has(pair[0]) and _forbidden[pair[0]].has(pair[1])
 func _set_forbidden(a: int, b: int, forbidden: bool) -> void:
@@ -311,9 +312,17 @@ func _set_forbidden(a: int, b: int, forbidden: bool) -> void:
 	elif _forbidden.has(pair[0]):
 		_forbidden[pair[0]].erase(pair[1])
 		if _forbidden[pair[0]].is_empty(): _forbidden.erase(pair[0])
+func _remove_forbidden_edges_for(drone_id: int) -> void:
+	_forbidden.erase(drone_id)
+	for a in _forbidden.keys():
+		_forbidden[a].erase(drone_id)
+		if _forbidden[a].is_empty(): _forbidden.erase(a)
 func _seconds_to_ticks(seconds: float) -> int: return maxi(1, ceili(seconds / maxf(tick_seconds, 0.001)))
 func _ids_key(ids: Array) -> String:
-	var parts: Array[String] = []; for id in ids: parts.append(str(id)); return ":".join(parts)
+	var parts := PackedStringArray()
+	for id in ids:
+		parts.append(str(id))
+	return ":".join(parts)
 func _open_drone_ids() -> Array:
 	var ids: Array = []; for id in _drones.keys(): if bool(_drones[id].get("formation_open", false)): ids.append(id)
 	ids.sort(); return ids
@@ -384,10 +393,10 @@ func _normalize_snapshot(state: Dictionary) -> Dictionary:
 	normalized.drones.sort_custom(func(a, b): return int(a.id) < int(b.id))
 	for edge in normalized.edges:
 		if edge is Dictionary and edge.has_all(["a", "b"]):
-			var low := min(int(edge.a), int(edge.b)); var high := max(int(edge.a), int(edge.b)); edge.a = low; edge.b = high
+			var low := mini(int(edge.a), int(edge.b)); var high := maxi(int(edge.a), int(edge.b)); edge.a = low; edge.b = high
 	for edge in normalized.forbidden_edges:
 		if edge is Dictionary and edge.has_all(["a", "b"]):
-			var low := min(int(edge.a), int(edge.b)); var high := max(int(edge.a), int(edge.b)); edge.a = low; edge.b = high
+			var low := mini(int(edge.a), int(edge.b)); var high := maxi(int(edge.a), int(edge.b)); edge.a = low; edge.b = high
 	normalized.edges.sort_custom(func(a, b): return int(a.a) < int(b.a) or (int(a.a) == int(b.a) and int(a.b) < int(b.b)))
 	normalized.forbidden_edges.sort_custom(func(a, b): return int(a.a) < int(b.a) or (int(a.a) == int(b.a) and int(a.b) < int(b.b)))
 	normalized.formation_open_drone_ids.sort()

@@ -27,12 +27,37 @@ const VERTICAL_SPRITE_ROTATION_OFFSET := -PI / 2.0
 @onready var conduit_chains: Array[Node] = _nodes_in_group(&"regente_conduit_chain")
 
 var _facing := Vector2.DOWN
+var _electric_grid: ElectricGridController
 
 func _ready() -> void:
 	super()
 	_initialize_pivots()
 	_reset_chains()
 	queue_redraw()
+
+## Explicit/lazy hook: no bridge node is created until drone gameplay configures it.
+func configure_electric_drones(active_drones: Dictionary) -> bool:
+	if active_drones.is_empty():
+		return false
+	if not _has_electric_grid_authority():
+		return false
+	if _electric_grid == null or not is_instance_valid(_electric_grid):
+		_electric_grid = ElectricGridController.new()
+		_electric_grid.name = "ElectricGridController"
+		add_child(_electric_grid)
+	return _electric_grid.configure_drones(active_drones)
+
+func spawn_electric_drone(position := Vector2.ZERO, formation_open := false) -> Dictionary:
+	if not _has_electric_grid_authority():
+		return {}
+	if _electric_grid == null or not is_instance_valid(_electric_grid):
+		_electric_grid = ElectricGridController.new()
+		_electric_grid.name = "ElectricGridController"
+		add_child(_electric_grid)
+	return _electric_grid.spawn_drone(position, formation_open)
+
+func _has_electric_grid_authority() -> bool:
+	return not multiplayer.has_multiplayer_peer() or multiplayer.is_server()
 
 func _physics_process(delta: float) -> void:
 	if _should_cull():

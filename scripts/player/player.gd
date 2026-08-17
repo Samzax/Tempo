@@ -65,6 +65,7 @@ var _ability_e_cd_duration: float = 0.0
 var _ability_shift_cd: float = 0.0
 var _ability_shift_cd_duration: float = 0.0
 var _invuln_timer: float = 0.0
+var _stun_remaining: float = 0.0
 var _shield_charges: Dictionary = {}
 var is_sandbox_invulnerable: bool = false
 var _aim_vector: Vector2 = Vector2.UP
@@ -525,6 +526,12 @@ func _physics_process(delta: float) -> void:
 	_stats.tick(delta)
 	_dispatcher.tick(delta)
 	_tick_timers(delta)
+	if _consume_stun(delta):
+		_cancel_bruta_charge()
+		velocity = Vector2.ZERO
+		_check_contact(delta)
+		_update_invuln_visual()
+		return
 	_update_aim()
 	var omni := _is_omni_ship()
 	if not omni:
@@ -794,6 +801,23 @@ func _tick_timers(delta: float) -> void:
 	_ability_shift_cd = maxf(0.0, _ability_shift_cd - delta)
 	_invuln_timer = maxf(0.0, _invuln_timer - delta)
 
+## Atordoamento elétrico: reaplicações preservam a maior duração restante.
+func apply_stun(duration: float) -> void:
+	if not is_finite(duration) or duration <= 0.0:
+		return
+	_stun_remaining = maxf(_stun_remaining, duration)
+
+func is_stunned() -> bool:
+	return _stun_remaining > 0.0
+
+## Consome o stun uma vez por quadro de física e informa se os controles ficaram bloqueados.
+func _consume_stun(delta: float) -> bool:
+	if not is_stunned():
+		return false
+	var frame_delta := maxf(delta, 0.0) if is_finite(delta) else 0.0
+	_stun_remaining = maxf(0.0, _stun_remaining - frame_delta)
+	return true
+
 ## Blink: teleporte instantâneo na direção da mira,
 ## com efeito de colapso na origem e no destino, i-frames e recarga.
 func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
@@ -1060,6 +1084,7 @@ func _on_died(_fatal_info: DamageInfo) -> void:
 	_collision_impact_generation += 1
 	_cancel_bruta_charge()
 	_collision_knockback_velocity = Vector2.ZERO
+	_stun_remaining = 0.0
 	_collision_impact_pairs.clear()
 	_clear_engineer_deployables()
 	GameState.player_lives = maxi(0, GameState.player_lives - 1)
