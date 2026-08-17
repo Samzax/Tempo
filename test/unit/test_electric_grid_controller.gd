@@ -4,7 +4,7 @@ const CONTROLLER := preload("res://scripts/enemies/bosses/electric_grid_controll
 const AREA := preload("res://scripts/enemies/bosses/electric_subnet_area.gd")
 const BOSS_SCENE := preload("res://scenes/enemies/bosses/regente_dos_ecos.tscn")
 
-class FakePlayer extends Node2D:
+class FakePlayer extends CharacterBody2D:
 	var health: HealthComponent
 	var stun_calls := 0
 	var stun_duration := 0.0
@@ -23,6 +23,13 @@ func _controller(host := true) -> ElectricGridController:
 func _spawn_pair(controller: ElectricGridController) -> void:
 	controller.spawn_drone(Vector2.ZERO)
 	controller.spawn_drone(Vector2(20.0, 0.0))
+
+func _add_player_shape(player: CharacterBody2D, radius := 2.0) -> void:
+	var collision := CollisionShape2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = radius
+	collision.shape = shape
+	player.add_child(collision)
 
 func test_tick_accumulator_keeps_remainder_across_sliced_deltas() -> void:
 	var controller := _controller()
@@ -67,25 +74,57 @@ func test_each_subnet_has_its_own_area_and_reuses_edge_shapes() -> void:
 	assert_true(controller._areas[subnet_id]._shapes.has("1:2"))
 	assert_ne(controller._areas[subnet_id]._shapes["1:2"], shape)
 
-func test_area_uses_fake_overlap_and_resolver_without_physics_server() -> void:
-	var area := AREA.new() as ElectricSubnetArea
-	add_child_autofree(area)
-	area.network_id_resolver = func(_body: Node2D) -> String: return "resolved-player"
-	var player := FakePlayer.new()
+func test_real_area_signal_transition_keeps_target_until_last_area_exits() -> void:
+	var controller := _controller()
+	controller.set_physics_process(false)
+	var player := CharacterBody2D.new()
+	player.collision_layer = 2
+	player.collision_mask = 0
 	player.add_to_group(&"player")
+	player.set_meta(&"network_id", "real-shared")
+	var player_shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 2.0
+	player_shape.shape = circle
+	player.add_child(player_shape)
 	add_child_autofree(player)
-	area._on_body_entered(player)
-	assert_eq(area.target_ids(), ["resolved-player"])
-	area._on_body_exited(player)
-	assert_eq(area.target_ids(), [])
-
-func test_area_rejects_non_player_fake_overlap() -> void:
-	var area := AREA.new() as ElectricSubnetArea
-	add_child_autofree(area)
-	var body := Node2D.new()
-	add_child_autofree(body)
-	area._on_body_entered(body)
-	assert_eq(area.target_ids(), [])
+	var first := AREA.new() as ElectricSubnetArea
+	var second := AREA.new() as ElectricSubnetArea
+	add_child_autofree(first)
+	add_child_autofree(second)
+	first.sync_edges([{"a": 1, "b": 2}], {1: Vector2.ZERO, 2: Vector2(40.0, 0.0)})
+	second.sync_edges([{"a": 1, "b": 2}], {1: Vector2(60.0, 0.0), 2: Vector2(100.0, 0.0)})
+	controller._areas = {"first": first, "second": second}
+	first.target_seen.connect(controller._on_area_target_seen)
+	first.target_left.connect(controller._on_area_target_left)
+	second.target_seen.connect(controller._on_area_target_seen)
+	second.target_left.connect(controller._on_area_target_left)
+	var seen: Array[String] = []
+	var left: Array[String] = []
+	first.target_seen.connect(func(target_id: String, _body: Node2D) -> void: seen.append("first:" + target_id))
+	second.target_seen.connect(func(target_id: String, _body: Node2D) -> void: seen.append("second:" + target_id))
+	first.target_left.connect(func(target_id: String) -> void: left.append("first:" + target_id))
+	second.target_left.connect(func(target_id: String) -> void: left.append("second:" + target_id))
+	player.position = Vector2(20.0, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_true(controller._targets.has("real-shared"))
+	assert_true(first.target_ids().has("real-shared"))
+	assert_false(second.target_ids().has("real-shared"))
+	assert_eq(seen, ["first:real-shared"])
+	player.move_and_collide(Vector2(60.0, 0.0))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_true(controller._targets.has("real-shared"))
+	assert_false(first.target_ids().has("real-shared"))
+	assert_true(second.target_ids().has("real-shared"))
+	assert_eq(seen, ["first:real-shared", "second:real-shared"])
+	assert_eq(left, ["first:real-shared"])
+	player.move_and_collide(Vector2(-60.0, 80.0))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_false(controller._targets.has("real-shared"))
+	assert_eq(left, ["first:real-shared", "second:real-shared"])
 
 func test_overlapping_subnets_apply_independently_through_health_component_and_only_stun_players() -> void:
 	var controller := _controller()
@@ -96,6 +135,10 @@ func test_overlapping_subnets_apply_independently_through_health_component_and_o
 	health.max_health = 100
 	player.health = health
 	player.add_child(health)
+	player.collision_layer = 2
+	player.collision_mask = 0
+	player.set_meta(&"network_id", "damage-player")
+	_add_player_shape(player)
 	add_child_autofree(player)
 	_spawn_pair(controller)
 	controller.spawn_drone(Vector2(100, 0))
@@ -104,8 +147,10 @@ func test_overlapping_subnets_apply_independently_through_health_component_and_o
 		for right in [3, 4]:
 			controller.electric_subnet.set_forbidden_edge(left, right)
 	controller._sync_graph_from_manager()
-	for area in controller._areas.values():
-		(area as ElectricSubnetArea)._on_body_entered(player)
+	player.position = Vector2(10.0, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_true(controller._targets.has("damage-player"))
 	controller.electric_subnet.damage_per_tick = 7.0
 	controller._physics_process(0.1)
 	assert_eq(health.health, 86)

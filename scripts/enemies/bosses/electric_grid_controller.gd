@@ -177,6 +177,7 @@ func _sync_areas(subnets: Array, positions: Dictionary) -> void:
 			area.subnet_id = subnet_id
 			area.network_id_resolver = target_id_resolver
 			area.target_seen.connect(_on_area_target_seen)
+			area.target_left.connect(_on_area_target_left)
 			add_child(area)
 			_areas[subnet_id] = area
 		area.sync_edges(subnet.edges, positions)
@@ -185,11 +186,38 @@ func _sync_areas(subnets: Array, positions: Dictionary) -> void:
 			var stale := _areas[subnet_id] as ElectricSubnetArea
 			_areas.erase(subnet_id)
 			if is_instance_valid(stale):
+				_disconnect_area_signals(stale)
 				stale.queue_free()
+			_forget_targets_without_active_area()
 
 func _on_area_target_seen(target_id: String, body: Node2D) -> void:
 	if is_instance_valid(body) and not body.is_queued_for_deletion():
 		_targets[target_id] = weakref(body)
+
+func _on_area_target_left(target_id: String) -> void:
+	# A target can be inside multiple subnet areas. Remove its cached node only
+	# after the area which emitted this signal has removed the ID and no active
+	# sibling still reports it.
+	if not _target_is_in_active_area(target_id):
+		_targets.erase(target_id)
+
+func _target_is_in_active_area(target_id: String) -> bool:
+	for area_value in _areas.values():
+		var area := area_value as ElectricSubnetArea
+		if area != null and target_id in area.target_ids():
+			return true
+	return false
+
+func _forget_targets_without_active_area() -> void:
+	for target_id in _targets.keys():
+		if not _target_is_in_active_area(String(target_id)):
+			_targets.erase(target_id)
+
+func _disconnect_area_signals(area: ElectricSubnetArea) -> void:
+	if area.target_seen.is_connected(_on_area_target_seen):
+		area.target_seen.disconnect(_on_area_target_seen)
+	if area.target_left.is_connected(_on_area_target_left):
+		area.target_left.disconnect(_on_area_target_left)
 
 func _resolve_damage_tick() -> void:
 	var targets_by_id: Dictionary = {}
