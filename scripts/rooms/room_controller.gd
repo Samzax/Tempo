@@ -31,6 +31,7 @@ const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 const DEBRIS_SCENE := preload("res://scenes/world/debris.tscn")
 const ENVIRONMENT_PRESENTATION := preload("res://scripts/rooms/environment_presentation.gd")
 const SECTOR3_CORE_PRESENTATION := preload("res://scripts/rooms/sector3_core_presentation.gd")
+const REGENTE_ENCOUNTER_ORCHESTRATOR := preload("res://scripts/enemies/bosses/regente_encounter_orchestrator.gd")
 
 var _sector3_core: Sector3CorePresentation
 var _sector3_completed_on_entry := false
@@ -40,19 +41,25 @@ func _ready() -> void:
 	if room_def == null:
 		push_error("RoomController requires a RoomDef.")
 		return
-	_director = get_node_or_null(director_path)
-	if _director == null or not _director.has_method(&"start") or not _director.has_signal(&"enemy_spawned") or not _director.has_signal(&"spawns_finished") or not _director.has_signal(&"spawns_failed"):
-		push_error("RoomController requires a SpawnDirector.")
-		return
 	_room_root = get_node_or_null(room_root_path)
 	if _room_root == null:
 		push_error("RoomController requires a room root.")
+		return
+	# O encounter e produzido somente pelo host; clientes aguardam a replicacao
+	# da sala e nunca criam runtime, inimigos ou hazards locais.
+	if room_def.encounter_profile == &"regente_dos_ecos" and not _has_host_authority():
+		return
+	_director = _create_encounter_director() if room_def.encounter_profile == &"regente_dos_ecos" else get_node_or_null(director_path)
+	if _director == null or not _director.has_method(&"start") or not _director.has_signal(&"enemy_spawned") or not _director.has_signal(&"spawns_finished") or not _director.has_signal(&"spawns_failed"):
+		push_error("RoomController requires an encounter director.")
 		return
 	runtime = RoomRuntime.new()
 	runtime.room_cleared.connect(_on_combat_cleared)
 	var enemies := _find_local_group_member(&"enemies_container")
 	if enemies != null and _director.has_method(&"set_enemy_container"):
 		_director.call(&"set_enemy_container", enemies)
+	if _director.has_method(&"configure_encounter"):
+		_director.call(&"configure_encounter", self, room_def.get_bounds())
 	_apply_environment_presentation()
 	_apply_sector3_core()
 	_start_room_observation()
@@ -72,6 +79,23 @@ func _ready() -> void:
 		started = _director.call(&"start", room_def.finite_spawn_count)
 	if not started:
 		runtime.fail_start()
+
+## O SpawnDirector presente na cena continua sendo o fallback das salas legadas.
+## A Regente recebe um produtor proprio, sem remover nem reutilizar esse node.
+func _create_encounter_director() -> Node:
+	if not _has_host_authority():
+		return null
+	var directors := _room_root.get_node_or_null("Directors")
+	if directors == null:
+		push_error("Regente encounter requires a Directors host.")
+		return null
+	var orchestrator := REGENTE_ENCOUNTER_ORCHESTRATOR.new()
+	orchestrator.name = &"RegenteEncounterOrchestrator"
+	directors.add_child(orchestrator)
+	return orchestrator
+
+func _has_host_authority() -> bool:
+	return not multiplayer.has_multiplayer_peer() or multiplayer.is_server()
 
 func _spawn_initial_debris() -> void:
 	if not is_inside_tree() or room_def.initial_debris.is_empty() or _room_root == null:
@@ -169,6 +193,8 @@ func _spawn_point_for_warning(wave_index: int, spawn_index: int) -> Vector2:
 func _on_enemy_resolved(enemy: Enemy, reason: int) -> void:
 	if _is_tearing_down or runtime == null:
 		return
+	if _director != null and _director.has_method(&"notify_core_resolved"):
+		_director.call(&"notify_core_resolved", enemy, reason)
 	if _sector3_core != null:
 		_sector3_core.record_enemy_resolved(reason)
 	runtime.resolve_enemy(enemy, reason)

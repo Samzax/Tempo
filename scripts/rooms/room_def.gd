@@ -95,6 +95,15 @@ func configure_sector3_upper_waves() -> void:
 	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
 	initial_debris.clear()
 
+## O encontro da Regente e deliberadamente singular: nao ha agenda de waves
+## nem fallback para o contador legado do SpawnDirector.
+func configure_regente_dos_ecos_encounter() -> void:
+	encounter_profile = &"regente_dos_ecos"
+	wave_specs.clear()
+	finite_spawn_count = 0
+	cull_policy = CullPolicy.NONE
+	initial_debris.clear()
+
 func configure_encounter_profile(profile: StringName) -> void:
 	match profile:
 		&"phase_one":
@@ -103,3 +112,5 @@ func configure_encounter_profile(profile: StringName) -> void:
 			configure_upper_waves()
 		&"sector3_upper":
 			configure_sector3_upper_waves()
+		&"regente_dos_ecos":
+			configure_regente_dos_ecos_encounter()

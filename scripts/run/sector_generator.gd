@@ -20,6 +20,7 @@ static func generate(run_seed: int, sector_index: int) -> SectorDef:
 	var disconnected_lower := _make_node(4, 2, 1, SectorNode.NodeType.COMBAT)
 	var disconnected_merge := _make_node(5, 3, 0, SectorNode.NodeType.COMBAT)
 	var boss := _make_node(6, 4, 0, SectorNode.NodeType.BOSS)
+	boss.encounter_profile = &"regente_dos_ecos"
 	start.children = [upper.id]
 	upper.children = [core.id]
 	core.children = [boss.id]
