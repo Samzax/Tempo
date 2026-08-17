@@ -70,6 +70,26 @@ func sync_edges(edges: Array, drone_positions: Dictionary) -> void:
 			if is_instance_valid(stale):
 				stale.queue_free()
 
+## Move a retained edge collider between subnet Areas during graph reconciliation.
+## The controller only calls this when the canonical edge key remains active.
+func take_edge_shape(key: String) -> CollisionShape2D:
+	var collision := _shapes.get(key) as CollisionShape2D
+	if collision == null:
+		return null
+	_shapes.erase(key)
+	if collision.get_parent() == self:
+		remove_child(collision)
+	return collision
+
+func adopt_edge_shape(key: String, collision: CollisionShape2D) -> void:
+	if collision == null or _shapes.has(key):
+		return
+	var previous_parent := collision.get_parent()
+	if previous_parent != null:
+		previous_parent.remove_child(collision)
+	add_child(collision)
+	_shapes[key] = collision
+
 func target_ids() -> Array[String]:
 	var ids: Array[String] = []
 	for target_id in _target_ids.keys():

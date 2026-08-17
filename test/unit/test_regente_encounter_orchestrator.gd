@@ -46,12 +46,19 @@ func test_core_resolution_clears_room_once_and_tears_down_owned_children() -> vo
 	var owned := Node.new()
 	owned.set_meta(&"regente_encounter_owned", true)
 	core.add_child(owned)
+	var health_component: HealthComponent = core.get_node_or_null("HealthComponent") as HealthComponent
+	assert_not_null(health_component)
+	if health_component == null:
+		return
 	var info := DAMAGE_INFO.new()
-	info.amount = core.max_health
+	info.amount = health_component.max_health
 	core.take_damage(info)
-	await get_tree().process_frame
-	await get_tree().process_frame
+	for _frame in range(8):
+		if controller.runtime.is_cleared():
+			break
+		await get_tree().process_frame
 	assert_true(controller.runtime.is_cleared())
+	await get_tree().process_frame
 	assert_eq(controller.runtime.active_enemy_count(), 0)
 	assert_signal_emit_count(controller, &"room_cleared", 1)
 	assert_signal_emit_count(controller, &"room_completed", 1)

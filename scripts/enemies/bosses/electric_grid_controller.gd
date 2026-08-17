@@ -232,6 +232,7 @@ func _sync_areas(subnets: Array, positions: Dictionary) -> void:
 			area.target_left.connect(_on_area_target_left)
 			add_child(area)
 			_areas[subnet_id] = area
+		_retain_edge_shapes(area, subnet.edges)
 		area.sync_edges(subnet.edges, positions)
 	for subnet_id in _areas.keys():
 		if not alive.has(subnet_id):
@@ -241,6 +242,28 @@ func _sync_areas(subnets: Array, positions: Dictionary) -> void:
 				_disconnect_area_signals(stale)
 				stale.queue_free()
 			_forget_targets_without_active_area()
+
+## A subnet ID names a connected component, so it can change while an edge
+## remains in the graph (merge then split). Keep that edge's collider node
+## rather than recreating it in the replacement Area.
+func _retain_edge_shapes(destination: ElectricSubnetArea, edges: Array) -> void:
+	for edge in edges:
+		if not edge is Dictionary:
+			continue
+		var key := _edge_key(int(edge.get("a", -1)), int(edge.get("b", -1)))
+		if destination._shapes.has(key):
+			continue
+		for area_value in _areas.values():
+			var source := area_value as ElectricSubnetArea
+			if source == null or source == destination:
+				continue
+			var collision := source.take_edge_shape(key)
+			if collision != null:
+				destination.adopt_edge_shape(key, collision)
+				break
+
+func _edge_key(a: int, b: int) -> String:
+	return "%d:%d" % [min(a, b), max(a, b)]
 
 func _on_area_target_seen(target_id: String, body: Node2D) -> void:
 	if is_instance_valid(body) and not body.is_queued_for_deletion():

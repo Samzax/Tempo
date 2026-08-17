@@ -28,6 +28,7 @@ const VERTICAL_SPRITE_ROTATION_OFFSET := -PI / 2.0
 
 var _facing := Vector2.DOWN
 var _electric_grid: ElectricGridController
+var _encounter_movement_locked := false
 
 func _ready() -> void:
 	super()
@@ -90,6 +91,15 @@ func teardown_electric_grid() -> void:
 		_electric_grid.queue_free()
 	_electric_grid = null
 
+## Encounter-private movement gate used by the host combat loop. It does not
+## change base chase tuning and restores normal pursuit when unlocked.
+func set_encounter_movement_locked(locked: bool) -> void:
+	if not _has_electric_grid_authority():
+		return
+	_encounter_movement_locked = locked
+	if locked:
+		velocity = Vector2.ZERO
+
 func _has_electric_grid_authority() -> bool:
 	return not multiplayer.has_multiplayer_peer() or multiplayer.is_server()
 
@@ -117,6 +127,8 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 func _target_velocity() -> Vector2:
+	if _encounter_movement_locked:
+		return Vector2.ZERO
 	if is_instance_valid(_player):
 		if global_position.distance_to(_player.global_position) <= root_stop_distance:
 			return Vector2.ZERO
