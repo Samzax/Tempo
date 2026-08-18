@@ -97,7 +97,7 @@ func test_laser_requires_all_slots_and_returns_to_electric_after_bow() -> void:
 	assert_false(o._begin_laser_cycle()); o._electric_slots[3].occupied = true
 	assert_true(o._begin_laser_cycle()); o._advance_laser_cycle(4.0)
 	assert_eq(o._laser_cycle, o.LaserCycle.INACTIVE)
-	assert_eq(o._next_laser_pattern, o.LaserPattern.SHIELD)
+	assert_eq(o._next_laser_pattern, o.LaserPattern.WINGS)
 	assert_true(o._combat_loop_active)
 
 func test_stop_resolution_and_abort_remove_all_beams_without_orphans() -> void:
