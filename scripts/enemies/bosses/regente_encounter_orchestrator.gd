@@ -18,8 +18,9 @@ enum State { INTRO, SETTLE, READY, ATTACK_HANDOFF, DEFEATED, VICTORY }
 enum CombatCycle { COOLDOWN, TELEGRAPH, ATTACK_PULSE, SETTLE }
 enum ExplosiveCycle { INACTIVE, TRANSITION, TRACKING, LOCKED, DETONATION, BANK_INTERVAL, RECONSTITUTE }
 enum LaserCycle { INACTIVE, TRANSITION, TELEGRAPH, FIRING, RECOVERY }
-enum LaserPattern { SHIELD, BOW, WINGS, RIFT }
+enum LaserPattern { SHIELD, BOW, WINGS, RIFT, WHIP }
 enum RiftPhase { INACTIVE, ZIPPER, FLUSH, FINAL }
+enum WhipPhase { INACTIVE, STROKE, CRACK }
 
 # Provisional first-slice timings. These are implementation placeholders, not
 # final combat tuning.
@@ -62,6 +63,9 @@ const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 @export_range(0.0, 10.0, 0.01) var LASER_RIFT_ZIPPER_HOLD_SECONDS := 0.04
 @export_range(0.0, 1.0, 0.01) var LASER_RIFT_FLUSH_SECONDS := 0.01
 @export_range(0.01, 10.0, 0.01) var LASER_RIFT_FINAL_SECONDS := 1.2
+@export_range(0.01, 10.0, 0.01) var LASER_WHIP_STROKE_SECONDS := 0.60
+@export_range(0.01, 10.0, 0.01) var LASER_WHIP_CRACK_SECONDS := 0.80
+@export_range(1.0, 256.0, 1.0) var LASER_WHIP_LINK_WIDTH_PX := 16.0
 const LASER_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 const LASER_SHIELD_OFFSETS: Array[Vector2] = [Vector2(-108, -132), Vector2(-119, -108), Vector2(-126, -84), Vector2(-130, -60), Vector2(-132, -36), Vector2(-133, -12), Vector2(133, -132), Vector2(132, -108), Vector2(130, -84), Vector2(126, -60), Vector2(119, -36), Vector2(108, -12)]
 ## Sete drones formam o crescente (0..6) e cinco o chevron (7..11).
@@ -75,6 +79,10 @@ const LASER_WINGS_BANK_F: Array[int] = [4, 5, 10, 11]
 const LASER_RIFT_OFFSETS: Array[Vector2] = [Vector2(-130, -50), Vector2(-90, -110), Vector2(-20, -145), Vector2(60, -135), Vector2(115, -90), Vector2(140, -25), Vector2(135, 45), Vector2(-80, -30), Vector2(-35, 10), Vector2(15, 40), Vector2(65, 55), Vector2(100, 75)]
 const LASER_RIFT_ZIPPER_LINKS: Array[Vector2i] = [Vector2i(0, 1), Vector2i(1, 2), Vector2i(2, 3), Vector2i(3, 4), Vector2i(4, 5), Vector2i(5, 6)]
 const LASER_RIFT_FINAL_LINKS: Array[Vector2i] = [Vector2i(0, 7), Vector2i(7, 8), Vector2i(8, 9)]
+## Corrente aberta canônica D1 -> D12. Nunca fecha de volta para a raiz.
+const LASER_WHIP_OFFSETS: Array[Vector2] = [Vector2(-130, -30), Vector2(-105, -75), Vector2(-60, -115), Vector2(0, -135), Vector2(65, -120), Vector2(120, -85), Vector2(150, -35), Vector2(145, 20), Vector2(110, 65), Vector2(60, 95), Vector2(0, 110), Vector2(-65, 105)]
+const LASER_WHIP_TERMINAL_INDEX := 11
+const LASER_CYCLE_TIME_EPSILON := 0.00001
 
 var state: State = State.INTRO
 var _enemy_container: Node
@@ -109,6 +117,10 @@ var _next_laser_pattern: LaserPattern = LaserPattern.SHIELD
 var _laser_bank_index := 0
 var _rift_phase: RiftPhase = RiftPhase.INACTIVE
 var _rift_zipper_index := 0
+var _whip_phase: WhipPhase = WhipPhase.INACTIVE
+## Key is "link_index:target_id". Distinct links intentionally damage together.
+var _whip_hit_targets: Dictionary = {}
+var _whip_current_offsets: Array[Vector2] = []
 
 func set_enemy_container(container: Node) -> void:
 	_enemy_container = container
@@ -558,7 +570,7 @@ func _finish_explosive_cycle() -> void:
 	_explosive_transition_just_started = false
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
-	# Combined-loop order is deterministic: Shield, Bow, Wings, then Rift, with
+	# Combined-loop order is deterministic: Shield, Bow, Wings, Rift, then Whip, with
 	# an electric lap between attacks. No RNG or phase gate participates here.
 	if not _begin_laser_cycle():
 		_start_electric_combat_loop()
@@ -575,7 +587,12 @@ func _begin_laser_cycle() -> bool:
 	_laser_cycle = LaserCycle.TRANSITION
 	_laser_elapsed = 0.0
 	_laser_bank_index = 0
-	_set_laser_pattern_positions()
+	if _laser_pattern == LaserPattern.WHIP:
+		_whip_phase = WhipPhase.INACTIVE
+		_whip_hit_targets.clear()
+		_set_whip_positions(0.0)
+	else:
+		_set_laser_pattern_positions()
 	_core.set_encounter_movement_locked(true)
 	return true
 
@@ -587,9 +604,13 @@ func _advance_laser_cycle(delta: float) -> void:
 		return
 	_set_laser_tracking_target()
 	_laser_elapsed += maxf(0.0, delta)
+	if _laser_pattern == LaserPattern.WHIP and _laser_cycle == LaserCycle.FIRING and _whip_phase == WhipPhase.STROKE:
+		_advance_whip_stroke()
 	var transitions := 0
-	while _laser_cycle != LaserCycle.INACTIVE and transitions < 5 and _laser_elapsed >= _laser_cycle_duration():
+	while _laser_cycle != LaserCycle.INACTIVE and transitions < 5 and _laser_elapsed + LASER_CYCLE_TIME_EPSILON >= _laser_cycle_duration():
 		_laser_elapsed -= _laser_cycle_duration()
+		if absf(_laser_elapsed) <= LASER_CYCLE_TIME_EPSILON:
+			_laser_elapsed = 0.0
 		match _laser_cycle:
 			LaserCycle.TRANSITION: _start_laser_telegraph()
 			LaserCycle.TELEGRAPH: _start_laser_firing()
@@ -607,12 +628,14 @@ func _laser_cycle_duration() -> float:
 				if _rift_phase == RiftPhase.ZIPPER: return LASER_RIFT_ZIPPER_STEP_SECONDS + LASER_RIFT_ZIPPER_HOLD_SECONDS
 				if _rift_phase == RiftPhase.FLUSH: return LASER_RIFT_FLUSH_SECONDS
 				if _rift_phase == RiftPhase.FINAL: return LASER_RIFT_FINAL_SECONDS
+			if _laser_pattern == LaserPattern.WHIP:
+				return LASER_WHIP_STROKE_SECONDS if _whip_phase == WhipPhase.STROKE else LASER_WHIP_CRACK_SECONDS
 			return LASER_FIRE_SECONDS
 		LaserCycle.RECOVERY: return LASER_RECOVERY_SECONDS
 	return 0.0
 
 func _start_laser_telegraph() -> void:
-	if _laser_pattern == LaserPattern.RIFT:
+	if _laser_pattern == LaserPattern.RIFT or _laser_pattern == LaserPattern.WHIP:
 		# RIFT telegraph intentionally has no damage beams.
 		_laser_cycle = LaserCycle.TELEGRAPH
 		return
@@ -625,6 +648,11 @@ func _start_laser_telegraph() -> void:
 func _start_laser_firing() -> void:
 	if _laser_pattern == LaserPattern.RIFT:
 		_start_rift_zipper()
+		return
+	if _laser_pattern == LaserPattern.WHIP:
+		_whip_phase = WhipPhase.STROKE
+		_whip_hit_targets.clear()
+		_laser_cycle = LaserCycle.FIRING
 		return
 	for beam in _active_laser_beams():
 		if not is_instance_valid(beam):
@@ -643,6 +671,13 @@ func _stop_laser_firing() -> void:
 	if _laser_pattern == LaserPattern.RIFT:
 		_advance_rift_firing()
 		return
+	if _laser_pattern == LaserPattern.WHIP:
+		if _whip_phase == WhipPhase.STROKE:
+			_start_whip_crack()
+			return
+		_stop_whip_crack()
+		_laser_cycle = LaserCycle.RECOVERY
+		return
 	for beam in _active_laser_beams():
 		if is_instance_valid(beam): beam.stop()
 	if _laser_pattern == LaserPattern.WINGS and _laser_bank_index < 2:
@@ -657,6 +692,9 @@ func _finish_laser_cycle() -> void:
 	_laser_bank_index = 0
 	_rift_phase = RiftPhase.INACTIVE
 	_rift_zipper_index = 0
+	_whip_phase = WhipPhase.INACTIVE
+	_whip_hit_targets.clear()
+	_whip_current_offsets.clear()
 	_next_laser_pattern = _scheduled_laser_pattern_after(_laser_pattern)
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
@@ -671,6 +709,9 @@ func _abort_laser_cycle() -> void:
 	_laser_bank_index = 0
 	_rift_phase = RiftPhase.INACTIVE
 	_rift_zipper_index = 0
+	_whip_phase = WhipPhase.INACTIVE
+	_whip_hit_targets.clear()
+	_whip_current_offsets.clear()
 	if is_instance_valid(_core): _core.set_encounter_movement_locked(false)
 	if not _torn_down: _start_electric_combat_loop()
 
@@ -682,7 +723,8 @@ func _scheduled_laser_pattern_after(pattern: LaserPattern) -> LaserPattern:
 		LaserPattern.SHIELD: return LaserPattern.BOW
 		LaserPattern.BOW: return LaserPattern.WINGS
 		LaserPattern.WINGS: return LaserPattern.RIFT
-		LaserPattern.RIFT: return LaserPattern.SHIELD
+		LaserPattern.RIFT: return LaserPattern.WHIP
+		LaserPattern.WHIP: return LaserPattern.SHIELD
 	return LaserPattern.SHIELD
 
 func _set_laser_shield_positions() -> void:
@@ -706,11 +748,15 @@ func _laser_offsets_for(pattern: LaserPattern) -> Array[Vector2]:
 		return WING_OFFSETS
 	if pattern == LaserPattern.RIFT:
 		return LASER_RIFT_OFFSETS
+	if pattern == LaserPattern.WHIP:
+		return LASER_WHIP_OFFSETS
 	return LASER_SHIELD_OFFSETS
 
 func _laser_emitter_indices_for(pattern: LaserPattern) -> Array[int]:
 	var indices: Array[int] = []
 	if pattern == LaserPattern.RIFT:
+		return indices
+	if pattern == LaserPattern.WHIP:
 		return indices
 	if pattern == LaserPattern.BOW:
 		indices.append(LASER_BOW_EMITTER_INDEX)
@@ -725,11 +771,11 @@ func _laser_emitter_indices_for(pattern: LaserPattern) -> Array[int]:
 
 func _laser_damage_tags_for(pattern: LaserPattern) -> Array[StringName]:
 	var tags: Array[StringName] = [&"laser"]
-	tags.append(&"bow" if pattern == LaserPattern.BOW else (&"wings" if pattern == LaserPattern.WINGS else (&"rift" if pattern == LaserPattern.RIFT else &"shield")))
+	tags.append(&"bow" if pattern == LaserPattern.BOW else (&"wings" if pattern == LaserPattern.WINGS else (&"rift" if pattern == LaserPattern.RIFT else (&"whip_crack" if pattern == LaserPattern.WHIP else &"shield"))))
 	return tags
 
 func _set_laser_tracking_target() -> void:
-	if (_laser_pattern == LaserPattern.WINGS or _laser_pattern == LaserPattern.RIFT) and _laser_cycle == LaserCycle.FIRING:
+	if (_laser_pattern == LaserPattern.WINGS or _laser_pattern == LaserPattern.RIFT or _laser_pattern == LaserPattern.WHIP) and _laser_cycle == LaserCycle.FIRING:
 		return
 	var target := _player_target_node()
 	for beam in _laser_beams:
@@ -743,6 +789,111 @@ func _active_laser_beams() -> Array[LaserBeam2D]:
 		if index >= 0 and index < _laser_beams.size():
 			active.append(_laser_beams[index])
 	return active
+
+## WHIP keeps one open, physical chain.  The individual rectangles are queries,
+## not Nodes, so the attack never creates a beam per link or owns extra slots.
+func _set_whip_positions(progress: float) -> void:
+	if not is_instance_valid(_core):
+		return
+	var updates: Dictionary = {}
+	_whip_current_offsets.clear()
+	var root := LASER_WHIP_OFFSETS[0]
+	for index in range(LASER_WHIP_OFFSETS.size()):
+		var target := LASER_WHIP_OFFSETS[index]
+		# The root remains anchored while the unfolding wave travels root -> tip.
+		var windup := root + (target - root) * 0.38 + (Vector2(-18, 22) if index > 0 else Vector2.ZERO)
+		var link_progress := clampf(progress * 1.65 - float(index) / float(LASER_WHIP_OFFSETS.size() - 1) * 0.65, 0.0, 1.0)
+		var offset := windup.lerp(target, link_progress)
+		_whip_current_offsets.append(offset)
+		if index < _electric_slots.size():
+			var slot := _electric_slots[index]
+			if bool(slot.get("occupied", false)):
+				updates[int(slot.get("drone_id", -1))] = {"position": _core.global_position + offset, "formation_open": false}
+	if not updates.is_empty():
+		_core.update_electric_drone_positions(updates)
+
+func _advance_whip_stroke() -> void:
+	var progress := clampf(_laser_elapsed / LASER_WHIP_STROKE_SECONDS, 0.0, 1.0)
+	_set_whip_positions(progress)
+	_apply_whip_compound_hits()
+
+## Authoritative physical query across exactly the eleven consecutive links.
+## Dedupe is per link + target, allowing different links to damage cumulatively.
+func _apply_whip_compound_hits() -> void:
+	if not _has_host_authority() or not is_inside_tree() or _whip_current_offsets.size() != LASER_WHIP_OFFSETS.size():
+		return
+	var world := _core.get_world_2d().direct_space_state
+	for link_index in range(LASER_WHIP_OFFSETS.size() - 1):
+		var start := _core.global_position + _whip_current_offsets[link_index]
+		var endpoint := _core.global_position + _whip_current_offsets[link_index + 1]
+		var segment := endpoint - start
+		if segment.length_squared() <= 0.0001:
+			continue
+		var shape := RectangleShape2D.new()
+		shape.size = Vector2(segment.length(), LASER_WHIP_LINK_WIDTH_PX)
+		var query := PhysicsShapeQueryParameters2D.new()
+		query.shape = shape
+		query.transform = Transform2D(segment.angle(), start.lerp(endpoint, 0.5))
+		query.collision_mask = LASER_COLLISION_MASK
+		query.collide_with_bodies = true
+		query.collide_with_areas = false
+		for result in world.intersect_shape(query):
+			var target := result.get("collider") as Node
+			if not _is_whip_damage_target(target):
+				continue
+			var key := "%d:%d" % [link_index, target.get_instance_id()]
+			var last_hit := float(_whip_hit_targets.get(key, -INF))
+			if _laser_elapsed - last_hit < LASER_HIT_TICK_SECONDS:
+				continue
+			_whip_hit_targets[key] = _laser_elapsed
+			var info := DamageInfo.new()
+			info.amount = LASER_DAMAGE_HEALTH_UNITS
+			info.source = _core
+			info.tags = [&"laser", &"whip_physical"]
+			info.position = start.lerp(endpoint, 0.5)
+			target.take_damage(info)
+
+func _is_whip_damage_target(target: Node) -> bool:
+	if target == null or not is_instance_valid(target) or target.is_queued_for_deletion():
+		return false
+	if not (target.is_in_group(&"player") or target.is_in_group(&"enemies")) or not target.has_method(&"take_damage"):
+		return false
+	return target.get("health") is HealthComponent or target.get_node_or_null("HealthComponent") is HealthComponent
+
+func _start_whip_crack() -> void:
+	# Stroke collision ends before the terminal laser exists.
+	_whip_phase = WhipPhase.CRACK
+	_release_laser_beams()
+	var beam := LASER_BEAM_2D.new() as LaserBeam2D
+	add_child(beam)
+	# Register before configuration so every failure path is owned by cleanup.
+	_laser_beams.append(beam)
+	beam.beam_width_px = LASER_BEAM_WIDTH_PX
+	beam.hit_tick_seconds = LASER_HIT_TICK_SECONDS
+	beam.turn_rate_radians = LASER_TURN_RATE_RADIANS
+	var tip := _whip_slot_position(LASER_WHIP_TERMINAL_INDEX)
+	var tangent := tip - _whip_slot_position(LASER_WHIP_TERMINAL_INDEX - 1)
+	beam.configure(tip, LASER_DAMAGE_HEALTH_UNITS, _core, [&"laser", &"whip_crack"], LASER_COLLISION_MASK)
+	if tangent.length_squared() <= 0.0001 or not beam.configure_segment(tip, tip + tangent.normalized() * beam.beam_length_px) or not beam.start_telegraph():
+		_abort_laser_cycle()
+		return
+	beam.freeze_tracking()
+	if not beam.start_firing():
+		_abort_laser_cycle()
+		return
+
+func _stop_whip_crack() -> void:
+	_release_laser_beams()
+	_whip_phase = WhipPhase.INACTIVE
+	_whip_hit_targets.clear()
+
+func _whip_slot_position(index: int) -> Vector2:
+	var offset := _whip_current_offsets[index] if index < _whip_current_offsets.size() else LASER_WHIP_OFFSETS[index]
+	return _core.global_position + offset
+
+## Observation hook for focused runtime tests; it exposes no renderer or RPC.
+func whip_runtime_snapshot() -> Dictionary:
+	return {"phase": _whip_phase, "link_count": LASER_WHIP_OFFSETS.size() - 1, "terminal_index": LASER_WHIP_TERMINAL_INDEX, "active_beam_count": _laser_beams.size(), "hit_keys": _whip_hit_targets.size()}
 
 func _start_rift_zipper() -> void:
 	_rift_phase = RiftPhase.ZIPPER
@@ -837,7 +988,10 @@ func laser_runtime_snapshot() -> Dictionary:
 	for beam in _laser_beams:
 		if is_instance_valid(beam):
 			beams.append(beam.runtime_snapshot())
-	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "pattern": _laser_pattern, "next_pattern": _next_laser_pattern, "bank_index": _laser_bank_index, "rift_phase": _rift_phase, "rift_zipper_index": _rift_zipper_index, "active_emitter_indices": _laser_wings_bank_indices() if _laser_pattern == LaserPattern.WINGS else _laser_emitter_indices_for(_laser_pattern), "beams": beams}
+	var active_indices := _laser_wings_bank_indices() if _laser_pattern == LaserPattern.WINGS else _laser_emitter_indices_for(_laser_pattern)
+	if _laser_pattern == LaserPattern.WHIP and _whip_phase == WhipPhase.CRACK:
+		active_indices = [LASER_WHIP_TERMINAL_INDEX]
+	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "pattern": _laser_pattern, "next_pattern": _next_laser_pattern, "bank_index": _laser_bank_index, "rift_phase": _rift_phase, "rift_zipper_index": _rift_zipper_index, "whip_phase": _whip_phase, "active_emitter_indices": active_indices, "beams": beams}
 
 func _try_replace_electric_drone() -> bool:
 	if _core.electric_drone_ids().size() >= WING_OFFSETS.size(): return false
@@ -866,6 +1020,9 @@ func _clear_electric_lifecycle() -> void:
 	_laser_bank_index = 0
 	_rift_phase = RiftPhase.INACTIVE
 	_rift_zipper_index = 0
+	_whip_phase = WhipPhase.INACTIVE
+	_whip_hit_targets.clear()
+	_whip_current_offsets.clear()
 	_laser_pattern = LaserPattern.SHIELD
 	_next_laser_pattern = LaserPattern.SHIELD
 	_release_explosive_cocoons()
