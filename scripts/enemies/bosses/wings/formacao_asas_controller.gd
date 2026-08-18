@@ -43,9 +43,7 @@ func configure(cocoons: Array) -> bool:
 	_fired_banks.clear()
 	return true
 
-## Avanço determinístico para integração: cada posição inicia o tracking e é
-## imediatamente travada. Não modela tempo, movimento ou aquisição por física.
-func lock_bank(bank: StringName, positions_by_cocoon: Dictionary) -> bool:
+func begin_tracking_bank(bank: StringName, positions_by_cocoon: Dictionary) -> bool:
 	if not BANKS.has(bank):
 		return false
 	var ids: Array = BANKS[bank]
@@ -57,7 +55,27 @@ func lock_bank(bank: StringName, positions_by_cocoon: Dictionary) -> bool:
 	for cocoon_id in ids:
 		var position: Vector2 = positions_by_cocoon[cocoon_id]
 		var cocoon: Node = _cocoons[cocoon_id]
-		if not cocoon.start_tracking(position) or not cocoon.lock_position(position):
+		if not cocoon.start_tracking(position):
+			return false
+	return true
+
+func update_tracking_bank(bank: StringName, positions_by_cocoon: Dictionary) -> bool:
+	if not BANKS.has(bank):
+		return false
+	for cocoon_id in BANKS[bank]:
+		var cocoon := _cocoons.get(cocoon_id) as CasuloExplosivo
+		var position: Variant = positions_by_cocoon.get(cocoon_id)
+		if cocoon == null or not position is Vector2 or not cocoon.update_tracking_position(position):
+			return false
+	return true
+
+func lock_bank(bank: StringName, positions_by_cocoon: Dictionary) -> bool:
+	if not BANKS.has(bank):
+		return false
+	for cocoon_id in BANKS[bank]:
+		var cocoon := _cocoons.get(cocoon_id) as CasuloExplosivo
+		var position: Variant = positions_by_cocoon.get(cocoon_id)
+		if cocoon == null or not position is Vector2 or not cocoon.lock_position(position):
 			return false
 	return true
 
@@ -115,6 +133,22 @@ func reconstitute_all() -> bool:
 	_next_bank_index = 0
 	_fired_banks.clear()
 	return true
+
+func cancel_sequence() -> void:
+	for cocoon_id in COCOON_IDS:
+		var cocoon := _cocoons.get(cocoon_id) as CasuloExplosivo
+		if cocoon != null:
+			cocoon.cancel_sequence()
+	_next_bank_index = 0
+	_fired_banks.clear()
+
+func runtime_snapshot() -> Dictionary:
+	var cocoons: Dictionary = {}
+	for cocoon_id in COCOON_IDS:
+		var cocoon := _cocoons.get(cocoon_id) as CasuloExplosivo
+		if cocoon != null:
+			cocoons[cocoon_id] = cocoon.runtime_snapshot()
+	return {"next_bank_index": _next_bank_index, "cocoons": cocoons}
 
 func get_cocoon(cocoon_id: int) -> Node:
 	return _cocoons.get(cocoon_id) as Node

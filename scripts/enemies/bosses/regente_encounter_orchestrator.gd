@@ -4,6 +4,8 @@ extends Node
 ## RoomController ja consome; combate e ataques pertencem a blocos posteriores.
 
 const REGENTE_SCENE := preload("res://scenes/enemies/bosses/regente_dos_ecos.tscn")
+const CASULO_EXPLOSIVO := preload("res://scripts/enemies/bosses/wings/casulo_explosivo.gd")
+const FORMACAO_ASAS_CONTROLLER := preload("res://scripts/enemies/bosses/wings/formacao_asas_controller.gd")
 
 signal enemy_spawned(enemy: Enemy)
 signal spawns_finished
@@ -13,6 +15,7 @@ enum State { INTRO, SETTLE, READY, ATTACK_HANDOFF, DEFEATED, VICTORY }
 # Kept separate from State: State describes encounter resolution, while this
 # host-only loop describes the playable electric combat cadence.
 enum CombatCycle { COOLDOWN, TELEGRAPH, ATTACK_PULSE, SETTLE }
+enum ExplosiveCycle { INACTIVE, TRANSITION, TRACKING, LOCKED, DETONATION, BANK_INTERVAL, RECONSTITUTE }
 
 # Provisional first-slice timings. These are implementation placeholders, not
 # final combat tuning.
@@ -23,6 +26,20 @@ const ELECTRIC_SETTLE_SECONDS := 0.5
 # Provisional deterministic expansion of the approved wing offsets; it does
 # not introduce a second topology or alter the grid's connection rules.
 const ELECTRIC_OPEN_OFFSET_SCALE := 1.65
+
+## Provisional explosive slice values. Damage is expressed in authored HP and
+## converted once to HealthUnits (0.25 HP = 25 units); radius is likewise an
+## editable initial interpretation of the approved provisional 24 px answer.
+const EXPLOSIVE_DAMAGE_HP := 0.25
+const EXPLOSIVE_DAMAGE_HEALTH_UNITS := 25
+const EXPLOSIVE_RADIUS_PX := 24.0
+const EXPLOSIVE_TRANSITION_SECONDS := 0.8
+const EXPLOSIVE_TRACKING_SECONDS := 0.75
+const EXPLOSIVE_LOCKED_SECONDS := 0.45
+const EXPLOSIVE_DETONATION_SECONDS := 0.15
+const EXPLOSIVE_BANK_INTERVAL_SECONDS := 0.35
+const EXPLOSIVE_RECONSTITUTE_SECONDS := 0.8
+const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 
 var state: State = State.INTRO
 var _enemy_container: Node
@@ -39,6 +56,16 @@ const WING_OFFSETS: Array[Vector2] = [Vector2(-38, -28), Vector2(-54, -48), Vect
 const REPLACEMENT_INTERVAL := 1.0
 var _electric_slots: Array[Dictionary] = []
 var _replacement_elapsed := 0.0
+var _electric_laps_completed := 0
+var _explosive_formation: FormacaoAsasController
+var _explosive_cocoons: Array[CasuloExplosivo] = []
+var _explosive_cycle: ExplosiveCycle = ExplosiveCycle.INACTIVE
+var _explosive_elapsed := 0.0
+var _explosive_bank_index := 0
+var _explosive_tracking_origins: Dictionary = {}
+# TRANSITION starts at a physics-frame boundary. This prevents the residual
+# electric SETTLE frame from being charged against the explosive timer.
+var _explosive_transition_just_started := false
 
 func set_enemy_container(container: Node) -> void:
 	_enemy_container = container
@@ -69,6 +96,7 @@ func start(_spawn_limit: int) -> bool:
 	_core.global_position = _room_bounds.get_center()
 	_enemy_container.add_child(_core)
 	_initialize_electric_wings()
+	_initialize_explosive_wings()
 	# RoomController e o dono exclusivo da conexao resolved e do RoomRuntime;
 	# este sinal faz o core percorrer exatamente essa API existente.
 	enemy_spawned.emit(_core)
@@ -89,9 +117,12 @@ func stop() -> void:
 
 func _physics_process(delta: float) -> void:
 	if _torn_down or not _has_host_authority() or not is_instance_valid(_core): return
+	_explosive_transition_just_started = false
 	_advance_electric_combat_loop(delta)
-	_update_electric_slot_positions()
-	_settle_electric_transitions()
+	_advance_explosive_cycle(delta)
+	if _explosive_cycle == ExplosiveCycle.INACTIVE:
+		_update_electric_slot_positions()
+		_settle_electric_transitions()
 	_replacement_elapsed += maxf(0.0, delta)
 	if _replacement_elapsed >= REPLACEMENT_INTERVAL:
 		# This is a global structural scheduler gate, not combat cadence/tuning.
@@ -122,6 +153,7 @@ func _exit_tree() -> void:
 	stop()
 
 func _clear_encounter_children() -> void:
+	_release_explosive_cocoons()
 	if not is_instance_valid(_core):
 		return
 	_core.teardown_electric_grid()
@@ -141,6 +173,24 @@ func _initialize_electric_wings() -> void:
 		var drone := _core.spawn_electric_drone(_core.global_position, true)
 		if drone.is_empty(): continue
 		slot.drone_id = int(drone.id); slot.occupied = true; slot.transition = true
+
+func _initialize_explosive_wings() -> void:
+	if not is_instance_valid(_core) or not _has_host_authority():
+		return
+	_release_explosive_cocoons()
+	var cocoons: Array = []
+	for index in range(WING_OFFSETS.size()):
+		var cocoon := CASULO_EXPLOSIVO.new() as CasuloExplosivo
+		add_child(cocoon)
+		_explosive_cocoons.append(cocoon)
+		cocoon.set_slot_id(index + 1)
+		cocoon.set_slot_position(_core.global_position + WING_OFFSETS[index])
+		cocoon.configure_damage(EXPLOSIVE_DAMAGE_HEALTH_UNITS, _core, [&"explosive", &"wing"], cocoon.global_position)
+		cocoons.append(cocoon)
+	_explosive_formation = FORMACAO_ASAS_CONTROLLER.new() as FormacaoAsasController
+	if not _explosive_formation.configure(cocoons):
+		push_warning("Regente explosive wings could not configure canonical cocoon IDs.")
+		_release_explosive_cocoons()
 
 func _update_electric_slot_positions() -> void:
 	var updates: Dictionary = {}
@@ -188,7 +238,11 @@ func _advance_electric_combat_loop(delta: float) -> void:
 			CombatCycle.ATTACK_PULSE:
 				_enter_electric_combat_cycle(CombatCycle.SETTLE)
 			CombatCycle.SETTLE:
-				_enter_electric_combat_cycle(CombatCycle.COOLDOWN)
+				_electric_laps_completed += 1
+				if _electric_laps_completed >= 1 and _begin_explosive_cycle():
+					_electric_laps_completed = 0
+				else:
+					_enter_electric_combat_cycle(CombatCycle.COOLDOWN)
 		transitions += 1
 
 func _enter_electric_combat_cycle(next_cycle: CombatCycle) -> void:
@@ -243,6 +297,214 @@ func _stop_electric_combat_loop() -> void:
 	# Restore flags before grid teardown; no post-teardown updates are possible.
 	_settle_all_electric_slots()
 
+func _begin_explosive_cycle() -> bool:
+	if _torn_down or not is_instance_valid(_core) or _explosive_formation == null or not _all_explosive_slots_available():
+		return false
+	_combat_loop_active = false
+	_combat_cycle_elapsed = 0.0
+	_combat_cycle = CombatCycle.COOLDOWN
+	_explosive_cycle = ExplosiveCycle.TRANSITION
+	_explosive_elapsed = 0.0
+	_explosive_bank_index = 0
+	_explosive_tracking_origins.clear()
+	_explosive_transition_just_started = true
+	_core.set_encounter_movement_locked(true)
+	return true
+
+func _advance_explosive_cycle(delta: float) -> void:
+	if _explosive_cycle == ExplosiveCycle.INACTIVE:
+		return
+	if _explosive_transition_just_started:
+		return
+	if _torn_down or not is_instance_valid(_core) or not _all_explosive_slots_available():
+		_abort_explosive_cycle()
+		return
+	_explosive_elapsed += maxf(0.0, delta)
+	var transitions := 0
+	while _explosive_cycle != ExplosiveCycle.INACTIVE and transitions < 8 and _explosive_elapsed >= _explosive_cycle_duration():
+		_explosive_elapsed -= _explosive_cycle_duration()
+		match _explosive_cycle:
+			ExplosiveCycle.TRANSITION:
+				_start_explosive_tracking()
+			ExplosiveCycle.TRACKING:
+				_lock_explosive_bank()
+			ExplosiveCycle.LOCKED:
+				_detonate_explosive_bank()
+			ExplosiveCycle.DETONATION:
+				_explosive_cycle = ExplosiveCycle.BANK_INTERVAL if _explosive_bank_index < FormacaoAsasController.BANK_ORDER.size() - 1 else ExplosiveCycle.RECONSTITUTE
+			ExplosiveCycle.BANK_INTERVAL:
+				_explosive_bank_index += 1
+				_start_explosive_tracking()
+			ExplosiveCycle.RECONSTITUTE:
+				_finish_explosive_cycle()
+		transitions += 1
+	if _explosive_cycle == ExplosiveCycle.TRACKING:
+		_update_explosive_tracking()
+
+func _explosive_cycle_duration() -> float:
+	match _explosive_cycle:
+		ExplosiveCycle.TRANSITION: return EXPLOSIVE_TRANSITION_SECONDS
+		ExplosiveCycle.TRACKING: return EXPLOSIVE_TRACKING_SECONDS
+		ExplosiveCycle.LOCKED: return EXPLOSIVE_LOCKED_SECONDS
+		ExplosiveCycle.DETONATION: return EXPLOSIVE_DETONATION_SECONDS
+		ExplosiveCycle.BANK_INTERVAL: return EXPLOSIVE_BANK_INTERVAL_SECONDS
+		ExplosiveCycle.RECONSTITUTE: return EXPLOSIVE_RECONSTITUTE_SECONDS
+	return 0.0
+
+func _start_explosive_tracking() -> void:
+	if _explosive_bank_index >= FormacaoAsasController.BANK_ORDER.size():
+		_abort_explosive_cycle()
+		return
+	var bank: StringName = FormacaoAsasController.BANK_ORDER[_explosive_bank_index]
+	var positions := _explosive_bank_slot_positions(bank)
+	_explosive_tracking_origins = positions.duplicate(true)
+	if not _explosive_formation.begin_tracking_bank(bank, positions):
+		_abort_explosive_cycle()
+		return
+	_explosive_cycle = ExplosiveCycle.TRACKING
+
+func _update_explosive_tracking() -> void:
+	var bank: StringName = FormacaoAsasController.BANK_ORDER[_explosive_bank_index]
+	var target := _player_target_position()
+	var weight := clampf(_explosive_elapsed / EXPLOSIVE_TRACKING_SECONDS, 0.0, 1.0)
+	var positions: Dictionary = {}
+	for cocoon_id in FormacaoAsasController.BANKS[bank]:
+		var origin: Vector2 = _explosive_tracking_origins.get(cocoon_id, _core.global_position)
+		# Target is sampled on the host; origin + normalized phase makes the path deterministic.
+		positions[cocoon_id] = origin.lerp(target, weight)
+	if not _explosive_formation.update_tracking_bank(bank, positions):
+		_abort_explosive_cycle()
+
+func _lock_explosive_bank() -> void:
+	var bank: StringName = FormacaoAsasController.BANK_ORDER[_explosive_bank_index]
+	# Consume the complete tracking phase before freezing: a zero-remainder
+	# physics frame still locks at the host's last sampled player position.
+	var terminal_positions: Dictionary = {}
+	var terminal_target := _player_target_position()
+	for cocoon_id in FormacaoAsasController.BANKS[bank]:
+		terminal_positions[cocoon_id] = terminal_target
+	if not _explosive_formation.update_tracking_bank(bank, terminal_positions):
+		_abort_explosive_cycle()
+		return
+	var positions: Dictionary = {}
+	for cocoon_id in FormacaoAsasController.BANKS[bank]:
+		var cocoon := _explosive_formation.get_cocoon(cocoon_id) as CasuloExplosivo
+		if cocoon == null:
+			_abort_explosive_cycle()
+			return
+		positions[cocoon_id] = cocoon.global_position
+	if not _explosive_formation.lock_bank(bank, positions):
+		_abort_explosive_cycle()
+		return
+	_explosive_cycle = ExplosiveCycle.LOCKED
+
+func _detonate_explosive_bank() -> void:
+	var bank: StringName = FormacaoAsasController.BANK_ORDER[_explosive_bank_index]
+	var overlaps: Dictionary = {}
+	for cocoon_id in FormacaoAsasController.BANKS[bank]:
+		var cocoon := _explosive_formation.get_cocoon(cocoon_id) as CasuloExplosivo
+		if cocoon == null:
+			_abort_explosive_cycle()
+			return
+		cocoon.configure_damage(EXPLOSIVE_DAMAGE_HEALTH_UNITS, _core, [&"explosive", &"wing"], cocoon.locked_position)
+		overlaps[cocoon_id] = _query_explosive_targets(cocoon.locked_position)
+	if not _explosive_formation.fire_bank(bank, overlaps):
+		_abort_explosive_cycle()
+		return
+	_explosive_cycle = ExplosiveCycle.DETONATION
+
+func _query_explosive_targets(position: Vector2) -> Array[Node]:
+	if _torn_down or not is_instance_valid(_core):
+		return []
+	var shape := CircleShape2D.new()
+	shape.radius = EXPLOSIVE_RADIUS_PX
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.transform = Transform2D(0.0, position)
+	query.collision_mask = EXPLOSIVE_COLLISION_MASK
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	var targets: Array[Node] = []
+	for result in _core.get_world_2d().direct_space_state.intersect_shape(query):
+		var collider := result.get("collider") as Node
+		if _is_explosive_damage_target(collider):
+			targets.append(collider)
+	return targets
+
+func _is_explosive_damage_target(target: Node) -> bool:
+	if target == null or not is_instance_valid(target) or target.is_queued_for_deletion():
+		return false
+	if not (target.is_in_group(&"player") or target.is_in_group(&"enemies")) or not target.has_method(&"take_damage"):
+		return false
+	return target.get("health") is HealthComponent or target.get_node_or_null("HealthComponent") is HealthComponent
+
+func _player_target_position() -> Vector2:
+	var players := get_tree().get_nodes_in_group(&"player")
+	for player in players:
+		if player is Node2D and is_instance_valid(player) and not player.is_queued_for_deletion():
+			return (player as Node2D).global_position
+	return _core.global_position
+
+func _explosive_bank_slot_positions(bank: StringName) -> Dictionary:
+	var positions: Dictionary = {}
+	for cocoon_id in FormacaoAsasController.BANKS[bank]:
+		var slot_index := int(cocoon_id) - 1
+		positions[cocoon_id] = _core.global_position + WING_OFFSETS[slot_index]
+		var cocoon := _explosive_formation.get_cocoon(cocoon_id) as CasuloExplosivo
+		if cocoon != null:
+			cocoon.set_slot_position(positions[cocoon_id])
+	return positions
+
+func _all_explosive_slots_available() -> bool:
+	if _electric_slots.size() != WING_OFFSETS.size() or not is_instance_valid(_core):
+		return false
+	var active_ids: Dictionary = {}
+	for drone_id in _core.electric_drone_ids():
+		active_ids[drone_id] = true
+	for slot in _electric_slots:
+		if not bool(slot.get("occupied", false)) or not active_ids.has(int(slot.get("drone_id", -1))):
+			return false
+	return true
+
+func _abort_explosive_cycle() -> void:
+	if _explosive_formation != null:
+		_explosive_formation.cancel_sequence()
+	_explosive_cycle = ExplosiveCycle.INACTIVE
+	_explosive_elapsed = 0.0
+	_explosive_bank_index = 0
+	_explosive_tracking_origins.clear()
+	_explosive_transition_just_started = false
+	if is_instance_valid(_core):
+		_core.set_encounter_movement_locked(false)
+	# Missing external drones remain owned by the existing global replacement flow.
+	if not _torn_down:
+		_start_electric_combat_loop()
+
+func _finish_explosive_cycle() -> void:
+	if _explosive_formation == null or not _explosive_formation.reconstitute_all():
+		_abort_explosive_cycle()
+		return
+	_explosive_cycle = ExplosiveCycle.INACTIVE
+	_explosive_elapsed = 0.0
+	_explosive_bank_index = 0
+	_explosive_tracking_origins.clear()
+	_explosive_transition_just_started = false
+	_restore_explosive_slot_positions()
+	_settle_all_electric_slots()
+	_start_electric_combat_loop()
+
+func _restore_explosive_slot_positions() -> void:
+	if _explosive_formation == null or not is_instance_valid(_core):
+		return
+	for index in range(WING_OFFSETS.size()):
+		var cocoon := _explosive_formation.get_cocoon(index + 1) as CasuloExplosivo
+		if cocoon != null:
+			cocoon.set_slot_position(_core.global_position + WING_OFFSETS[index])
+
+## Observation-only contract for runtime tests; no renderer or replication is added.
+func explosive_runtime_snapshot() -> Dictionary:
+	return {"cycle": _explosive_cycle, "elapsed": _explosive_elapsed, "bank_index": _explosive_bank_index, "formation": _explosive_formation.runtime_snapshot() if _explosive_formation != null else {}}
+
 func _try_replace_electric_drone() -> bool:
 	if _core.electric_drone_ids().size() >= WING_OFFSETS.size(): return false
 	var candidate: Dictionary = {}
@@ -259,6 +521,22 @@ func _try_replace_electric_drone() -> bool:
 func _clear_electric_lifecycle() -> void:
 	_replacement_elapsed = 0.0
 	_electric_slots.clear()
+	_electric_laps_completed = 0
+	_explosive_elapsed = 0.0
+	_explosive_bank_index = 0
+	_explosive_tracking_origins.clear()
+	_explosive_cycle = ExplosiveCycle.INACTIVE
+	_explosive_transition_just_started = false
+	_release_explosive_cocoons()
+
+func _release_explosive_cocoons() -> void:
+	if _explosive_formation != null:
+		_explosive_formation.cancel_sequence()
+	_explosive_formation = null
+	for cocoon in _explosive_cocoons:
+		if is_instance_valid(cocoon) and not cocoon.is_queued_for_deletion():
+			cocoon.queue_free()
+	_explosive_cocoons.clear()
 
 func _finish_spawns() -> void:
 	if _finished_emitted:

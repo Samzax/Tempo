@@ -11,6 +11,7 @@ var state: State = State.IDLE
 var tracking_target: Node
 var tracked_position := Vector2.ZERO
 var locked_position := Vector2.ZERO
+var slot_position := Vector2.ZERO
 
 ## Perfil inteiramente injetado em HealthUnits; zero significa perfil ainda não configurado.
 var damage_amount: int = 0
@@ -36,6 +37,18 @@ func enter_slot() -> bool:
 	tracked_position = Vector2.ZERO
 	locked_position = Vector2.ZERO
 	hit_targets.clear()
+	return true
+
+## Posicao puramente logica: este primeiro slice nao cria renderer nem Area2D.
+func set_slot_position(position: Vector2) -> void:
+	slot_position = position
+	global_position = position
+
+func update_tracking_position(position: Vector2) -> bool:
+	if state != State.TRACKING:
+		return false
+	tracked_position = position
+	global_position = position
 	return true
 
 func configure_damage(amount: int, source: Node, tags: Array[StringName], position: Vector2) -> bool:
@@ -67,6 +80,7 @@ func lock_position(position: Vector2) -> bool:
 	if state != State.TRACKING:
 		return false
 	locked_position = position
+	global_position = position
 	state = State.LOCKED
 	return true
 
@@ -107,6 +121,27 @@ func reset() -> bool:
 	locked_position = Vector2.ZERO
 	hit_targets.clear()
 	return true
+
+## Cancela uma sequencia incompleta sem destruir o ID logico do casulo.
+func cancel_sequence() -> bool:
+	if cocoon_id <= 0 or state == State.DESTROYED:
+		return false
+	state = State.IN_SLOT
+	tracking_target = null
+	tracked_position = slot_position
+	locked_position = Vector2.ZERO
+	hit_targets.clear()
+	global_position = slot_position
+	return true
+
+## API de observacao para testes; nao representa um objeto visual em runtime.
+func runtime_snapshot() -> Dictionary:
+	return {
+		"id": cocoon_id,
+		"state": state,
+		"position": global_position,
+		"locked_position": locked_position,
+	}
 
 func destroy() -> void:
 	state = State.DESTROYED

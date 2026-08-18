@@ -29,6 +29,7 @@ func _lock_bank(formation: RefCounted, bank: StringName) -> void:
 	var positions: Dictionary = {}
 	for id in FORMACAO.BANKS[bank]:
 		positions[id] = Vector2(id, id * 2)
+	assert_true(formation.begin_tracking_bank(bank, positions))
 	assert_true(formation.lock_bank(bank, positions))
 
 func test_banks_follow_order_and_active_counts_reconstitute() -> void:
