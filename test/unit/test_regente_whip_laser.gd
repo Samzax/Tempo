@@ -41,12 +41,12 @@ func test_whip_is_open_12_slot_chain_with_root_tip_and_no_chord() -> void:
 func test_whip_schedule_is_rift_to_whip_to_electric_then_shield() -> void:
 	var f := _fixture(); var o = f.o
 	assert_eq(o._scheduled_laser_pattern_after(o.LaserPattern.RIFT), o.LaserPattern.WHIP)
-	assert_eq(o._scheduled_laser_pattern_after(o.LaserPattern.WHIP), o.LaserPattern.SHIELD)
+	assert_eq(o._scheduled_laser_pattern_after(o.LaserPattern.WHIP), o.LaserPattern.HALO)
 	_start_whip(o)
 	o._advance_laser_cycle(o.LASER_TRANSITION_SECONDS + o.LASER_TELEGRAPH_SECONDS + o.LASER_WHIP_STROKE_SECONDS + o.LASER_WHIP_CRACK_SECONDS + o.LASER_RECOVERY_SECONDS)
 	assert_eq(o._laser_cycle, o.LaserCycle.INACTIVE)
 	assert_true(o._combat_loop_active)
-	assert_eq(o._next_laser_pattern, o.LaserPattern.SHIELD)
+	assert_eq(o._next_laser_pattern, o.LaserPattern.HALO)
 
 func test_whip_windup_and_telegraph_are_damaging_beam_free() -> void:
 	var f := _fixture(); var o = f.o
@@ -110,6 +110,6 @@ func test_whip_recovery_cleanup_authority_mask_and_regressions() -> void:
 	assert_eq(o.EXPLOSIVE_COLLISION_MASK, 6)
 	assert_eq(o.ELECTRIC_ATTACK_PULSE_SECONDS, 0.5)
 	assert_true(o._has_host_authority())
-	assert_eq(o._scheduled_laser_pattern_after(o.LaserPattern.WHIP), o.LaserPattern.SHIELD)
+	assert_eq(o._scheduled_laser_pattern_after(o.LaserPattern.WHIP), o.LaserPattern.HALO)
 	o.stop(); await get_tree().process_frame
 	for child in o.get_children(): assert_false(child is LASER)

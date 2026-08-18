@@ -77,6 +77,21 @@ func test_one_beam_dedupes_for_local_tick_but_two_beams_stack_damage() -> void:
 	a._apply_firing_hits()
 	assert_eq(target.hits, 2)
 
+func test_firing_never_damages_damage_source_but_damages_external_target() -> void:
+	var source := _target(&"enemies", 4)
+	var external := _target(&"enemies", 4)
+	source.global_position = Vector2.ZERO
+	external.global_position = Vector2(100, 0)
+	var beam := LASER.new()
+	add_child_autofree(beam)
+	beam.configure(Vector2.ZERO, 25, source, [&"laser", &"halo"], 6)
+	assert_false(beam._is_damage_target(source))
+	assert_true(beam._is_damage_target(external))
+	beam.start_telegraph(); beam.start_firing()
+	await get_tree().physics_frame
+	assert_eq(source.hits, 0)
+	assert_eq(external.hits, 1)
+
 func test_stop_and_cleanup_clear_state() -> void:
 	var beam := _beam()
 	beam.start_telegraph(); beam.start_firing(); beam.stop()

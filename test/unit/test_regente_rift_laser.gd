@@ -114,7 +114,7 @@ func test_rift_final_rotates_inertia_then_recovers_to_electric_and_cleans_up() -
 func test_rift_selection_does_not_regress_shield_bow_wings_electric_or_explosive_contracts() -> void:
 	var f := _fixture(); var o: RegenteEncounterOrchestrator = f.o
 	o.start(0)
-	var expected := [o.LaserPattern.SHIELD, o.LaserPattern.BOW, o.LaserPattern.WINGS, o.LaserPattern.RIFT, o.LaserPattern.WHIP]
+	var expected := [o.LaserPattern.SHIELD, o.LaserPattern.BOW, o.LaserPattern.WINGS, o.LaserPattern.RIFT, o.LaserPattern.WHIP, o.LaserPattern.HALO]
 	for pattern in expected:
 		_advance_until_laser_starts(o)
 		assert_eq(o._laser_pattern, pattern)

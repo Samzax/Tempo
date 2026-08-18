@@ -134,6 +134,11 @@ func _apply_firing_hits() -> void:
 func _is_damage_target(target: Node) -> bool:
 	if target == null or not is_instance_valid(target) or target.is_queued_for_deletion():
 		return false
+	# A beam may cross its owner (for example, every HALO diameter crosses the
+	# Regente's core).  Keep the physical mask broad for external enemies while
+	# never routing the beam's own DamageInfo back to its damage source.
+	if target == damage_source:
+		return false
 	if not (target.is_in_group(&"player") or target.is_in_group(&"enemies")) or not target.has_method(&"take_damage"):
 		return false
 	return target.get("health") is HealthComponent or target.get_node_or_null("HealthComponent") is HealthComponent

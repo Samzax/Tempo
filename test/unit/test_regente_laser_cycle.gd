@@ -104,7 +104,7 @@ func test_stop_resolution_and_abort_remove_all_beams_without_orphans() -> void:
 	var f := _fixture(); var o: RegenteEncounterOrchestrator = f.o
 	o.start(0); assert_eq(o._laser_beams.size(), 12)
 	o._abort_laser_cycle()
-	assert_eq(o._laser_beams.size(), 12)
+	assert_eq(o._laser_beams.size(), 0)
 	o.stop(); await get_tree().process_frame
 	assert_eq(o._laser_beams.size(), 0)
 	for child in o.get_children(): assert_false(child is LASER)
