@@ -6,6 +6,7 @@ extends Node
 const REGENTE_SCENE := preload("res://scenes/enemies/bosses/regente_dos_ecos.tscn")
 const CASULO_EXPLOSIVO := preload("res://scripts/enemies/bosses/wings/casulo_explosivo.gd")
 const FORMACAO_ASAS_CONTROLLER := preload("res://scripts/enemies/bosses/wings/formacao_asas_controller.gd")
+const LASER_BEAM_2D := preload("res://scripts/enemies/bosses/wings/laser_beam_2d.gd")
 
 signal enemy_spawned(enemy: Enemy)
 signal spawns_finished
@@ -16,6 +17,7 @@ enum State { INTRO, SETTLE, READY, ATTACK_HANDOFF, DEFEATED, VICTORY }
 # host-only loop describes the playable electric combat cadence.
 enum CombatCycle { COOLDOWN, TELEGRAPH, ATTACK_PULSE, SETTLE }
 enum ExplosiveCycle { INACTIVE, TRANSITION, TRACKING, LOCKED, DETONATION, BANK_INTERVAL, RECONSTITUTE }
+enum LaserCycle { INACTIVE, TRANSITION, TELEGRAPH, FIRING, RECOVERY }
 
 # Provisional first-slice timings. These are implementation placeholders, not
 # final combat tuning.
@@ -40,6 +42,20 @@ const EXPLOSIVE_DETONATION_SECONDS := 0.15
 const EXPLOSIVE_BANK_INTERVAL_SECONDS := 0.35
 const EXPLOSIVE_RECONSTITUTE_SECONDS := 0.8
 const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
+
+## Primeiro slice do Escudo Laser. Posições manuais para permitir ajuste fino
+## de level design sem alterar a topologia canônica dos doze drones.
+@export_category("Laser Shield")
+@export_range(0, 100000, 1) var LASER_DAMAGE_HEALTH_UNITS := 25
+@export_range(1.0, 256.0, 1.0) var LASER_BEAM_WIDTH_PX := 16.0
+@export_range(0.01, 10.0, 0.01) var LASER_TRANSITION_SECONDS := 0.8
+@export_range(0.01, 10.0, 0.01) var LASER_TELEGRAPH_SECONDS := 0.8
+@export_range(0.01, 10.0, 0.01) var LASER_FIRE_SECONDS := 1.5
+@export_range(0.01, 10.0, 0.01) var LASER_RECOVERY_SECONDS := 0.8
+@export_range(0.01, 10.0, 0.01) var LASER_HIT_TICK_SECONDS := 0.25
+@export_range(0.01, 50.0, 0.01) var LASER_TURN_RATE_RADIANS := 5.5
+const LASER_COLLISION_MASK := 6 # layers player (2) | enemy (3)
+const LASER_SHIELD_OFFSETS: Array[Vector2] = [Vector2(-108, -132), Vector2(-119, -108), Vector2(-126, -84), Vector2(-130, -60), Vector2(-132, -36), Vector2(-133, -12), Vector2(133, -132), Vector2(132, -108), Vector2(130, -84), Vector2(126, -60), Vector2(119, -36), Vector2(108, -12)]
 
 var state: State = State.INTRO
 var _enemy_container: Node
@@ -66,6 +82,9 @@ var _explosive_tracking_origins: Dictionary = {}
 # TRANSITION starts at a physics-frame boundary. This prevents the residual
 # electric SETTLE frame from being charged against the explosive timer.
 var _explosive_transition_just_started := false
+var _laser_cycle: LaserCycle = LaserCycle.INACTIVE
+var _laser_elapsed := 0.0
+var _laser_beams: Array[LaserBeam2D] = []
 
 func set_enemy_container(container: Node) -> void:
 	_enemy_container = container
@@ -97,6 +116,7 @@ func start(_spawn_limit: int) -> bool:
 	_enemy_container.add_child(_core)
 	_initialize_electric_wings()
 	_initialize_explosive_wings()
+	_initialize_laser_beams()
 	# RoomController e o dono exclusivo da conexao resolved e do RoomRuntime;
 	# este sinal faz o core percorrer exatamente essa API existente.
 	enemy_spawned.emit(_core)
@@ -120,7 +140,8 @@ func _physics_process(delta: float) -> void:
 	_explosive_transition_just_started = false
 	_advance_electric_combat_loop(delta)
 	_advance_explosive_cycle(delta)
-	if _explosive_cycle == ExplosiveCycle.INACTIVE:
+	_advance_laser_cycle(delta)
+	if _explosive_cycle == ExplosiveCycle.INACTIVE and _laser_cycle == LaserCycle.INACTIVE:
 		_update_electric_slot_positions()
 		_settle_electric_transitions()
 	_replacement_elapsed += maxf(0.0, delta)
@@ -153,6 +174,7 @@ func _exit_tree() -> void:
 	stop()
 
 func _clear_encounter_children() -> void:
+	_release_laser_beams()
 	_release_explosive_cocoons()
 	if not is_instance_valid(_core):
 		return
@@ -191,6 +213,19 @@ func _initialize_explosive_wings() -> void:
 	if not _explosive_formation.configure(cocoons):
 		push_warning("Regente explosive wings could not configure canonical cocoon IDs.")
 		_release_explosive_cocoons()
+
+func _initialize_laser_beams() -> void:
+	_release_laser_beams()
+	if not is_instance_valid(_core) or not _has_host_authority():
+		return
+	for offset in LASER_SHIELD_OFFSETS:
+		var beam := LASER_BEAM_2D.new() as LaserBeam2D
+		add_child(beam)
+		beam.beam_width_px = LASER_BEAM_WIDTH_PX
+		beam.hit_tick_seconds = LASER_HIT_TICK_SECONDS
+		beam.turn_rate_radians = LASER_TURN_RATE_RADIANS
+		beam.configure(_core.global_position + offset, LASER_DAMAGE_HEALTH_UNITS, _core, [&"laser", &"shield"], LASER_COLLISION_MASK)
+		_laser_beams.append(beam)
 
 func _update_electric_slot_positions() -> void:
 	var updates: Dictionary = {}
@@ -439,11 +474,16 @@ func _is_explosive_damage_target(target: Node) -> bool:
 	return target.get("health") is HealthComponent or target.get_node_or_null("HealthComponent") is HealthComponent
 
 func _player_target_position() -> Vector2:
-	var players := get_tree().get_nodes_in_group(&"player")
-	for player in players:
-		if player is Node2D and is_instance_valid(player) and not player.is_queued_for_deletion():
-			return (player as Node2D).global_position
+	var player := _player_target_node()
+	if player != null:
+		return player.global_position
 	return _core.global_position
+
+func _player_target_node() -> Node2D:
+	for player in get_tree().get_nodes_in_group(&"player"):
+		if player is Node2D and is_instance_valid(player) and not player.is_queued_for_deletion():
+			return player as Node2D
+	return null
 
 func _explosive_bank_slot_positions(bank: StringName) -> Dictionary:
 	var positions: Dictionary = {}
@@ -491,7 +531,98 @@ func _finish_explosive_cycle() -> void:
 	_explosive_transition_just_started = false
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
+	# Combined-loop order: explosive reconstitutes every slot, then the Shield
+	# fires once, and only then does the established electric loop resume.
+	if not _begin_laser_cycle():
+		_start_electric_combat_loop()
+
+func _begin_laser_cycle() -> bool:
+	if _torn_down or not is_instance_valid(_core) or not _all_explosive_slots_available():
+		return false
+	_initialize_laser_beams()
+	if _laser_beams.size() != LASER_SHIELD_OFFSETS.size():
+		return false
+	_combat_loop_active = false
+	_combat_cycle_elapsed = 0.0
+	_laser_cycle = LaserCycle.TRANSITION
+	_laser_elapsed = 0.0
+	_set_laser_shield_positions()
+	_core.set_encounter_movement_locked(true)
+	return true
+
+func _advance_laser_cycle(delta: float) -> void:
+	if _laser_cycle == LaserCycle.INACTIVE:
+		return
+	if _torn_down or not is_instance_valid(_core) or not _all_explosive_slots_available():
+		_abort_laser_cycle()
+		return
+	_set_laser_tracking_target()
+	_laser_elapsed += maxf(0.0, delta)
+	var transitions := 0
+	while _laser_cycle != LaserCycle.INACTIVE and transitions < 5 and _laser_elapsed >= _laser_cycle_duration():
+		_laser_elapsed -= _laser_cycle_duration()
+		match _laser_cycle:
+			LaserCycle.TRANSITION: _start_laser_telegraph()
+			LaserCycle.TELEGRAPH: _start_laser_firing()
+			LaserCycle.FIRING: _stop_laser_firing()
+			LaserCycle.RECOVERY: _finish_laser_cycle()
+		transitions += 1
+
+func _laser_cycle_duration() -> float:
+	match _laser_cycle:
+		LaserCycle.TRANSITION: return LASER_TRANSITION_SECONDS
+		LaserCycle.TELEGRAPH: return LASER_TELEGRAPH_SECONDS
+		LaserCycle.FIRING: return LASER_FIRE_SECONDS
+		LaserCycle.RECOVERY: return LASER_RECOVERY_SECONDS
+	return 0.0
+
+func _start_laser_telegraph() -> void:
+	for beam in _laser_beams:
+		if not is_instance_valid(beam) or not beam.start_telegraph():
+			_abort_laser_cycle()
+			return
+	_laser_cycle = LaserCycle.TELEGRAPH
+
+func _start_laser_firing() -> void:
+	for beam in _laser_beams:
+		if not is_instance_valid(beam) or not beam.start_firing():
+			_abort_laser_cycle()
+			return
+	_laser_cycle = LaserCycle.FIRING
+
+func _stop_laser_firing() -> void:
+	for beam in _laser_beams:
+		if is_instance_valid(beam): beam.stop()
+	_laser_cycle = LaserCycle.RECOVERY
+
+func _finish_laser_cycle() -> void:
+	_laser_cycle = LaserCycle.INACTIVE
+	_laser_elapsed = 0.0
+	_restore_explosive_slot_positions()
+	_settle_all_electric_slots()
+	if is_instance_valid(_core): _core.set_encounter_movement_locked(false)
 	_start_electric_combat_loop()
+
+func _abort_laser_cycle() -> void:
+	for beam in _laser_beams:
+		if is_instance_valid(beam): beam.stop()
+	_laser_cycle = LaserCycle.INACTIVE
+	_laser_elapsed = 0.0
+	if is_instance_valid(_core): _core.set_encounter_movement_locked(false)
+	if not _torn_down: _start_electric_combat_loop()
+
+func _set_laser_shield_positions() -> void:
+	var updates: Dictionary = {}
+	for index in range(LASER_SHIELD_OFFSETS.size()):
+		var slot := _electric_slots[index]
+		if bool(slot.get("occupied", false)):
+			updates[int(slot.get("drone_id", -1))] = {"position": _core.global_position + LASER_SHIELD_OFFSETS[index], "formation_open": false}
+	if not updates.is_empty(): _core.update_electric_drone_positions(updates)
+
+func _set_laser_tracking_target() -> void:
+	var target := _player_target_node()
+	for beam in _laser_beams:
+		if is_instance_valid(beam): beam.set_tracking_target(target)
 
 func _restore_explosive_slot_positions() -> void:
 	if _explosive_formation == null or not is_instance_valid(_core):
@@ -504,6 +635,14 @@ func _restore_explosive_slot_positions() -> void:
 ## Observation-only contract for runtime tests; no renderer or replication is added.
 func explosive_runtime_snapshot() -> Dictionary:
 	return {"cycle": _explosive_cycle, "elapsed": _explosive_elapsed, "bank_index": _explosive_bank_index, "formation": _explosive_formation.runtime_snapshot() if _explosive_formation != null else {}}
+
+## Observation-only hook for the first laser slice; no renderer/RPC is added.
+func laser_runtime_snapshot() -> Dictionary:
+	var beams: Array[Dictionary] = []
+	for beam in _laser_beams:
+		if is_instance_valid(beam):
+			beams.append(beam.runtime_snapshot())
+	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "beams": beams}
 
 func _try_replace_electric_drone() -> bool:
 	if _core.electric_drone_ids().size() >= WING_OFFSETS.size(): return false
@@ -527,7 +666,10 @@ func _clear_electric_lifecycle() -> void:
 	_explosive_tracking_origins.clear()
 	_explosive_cycle = ExplosiveCycle.INACTIVE
 	_explosive_transition_just_started = false
+	_laser_cycle = LaserCycle.INACTIVE
+	_laser_elapsed = 0.0
 	_release_explosive_cocoons()
+	_release_laser_beams()
 
 func _release_explosive_cocoons() -> void:
 	if _explosive_formation != null:
@@ -537,6 +679,13 @@ func _release_explosive_cocoons() -> void:
 		if is_instance_valid(cocoon) and not cocoon.is_queued_for_deletion():
 			cocoon.queue_free()
 	_explosive_cocoons.clear()
+
+func _release_laser_beams() -> void:
+	for beam in _laser_beams:
+		if is_instance_valid(beam):
+			beam.cleanup()
+			if not beam.is_queued_for_deletion(): beam.queue_free()
+	_laser_beams.clear()
 
 func _finish_spawns() -> void:
 	if _finished_emitted:
