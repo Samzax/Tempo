@@ -19,6 +19,7 @@ var damage_source: Node
 var damage_tags: Array[StringName] = []
 var tracking_target: Node2D
 var fixed_origin := Vector2.ZERO
+var _tracking_frozen := false
 var _fire_elapsed := 0.0
 var _last_hit_by_target: Dictionary = {}
 
@@ -36,9 +37,13 @@ func configure(origin: Vector2, amount: int, source: Node, tags: Array[StringNam
 func set_tracking_target(target: Node2D) -> void:
 	tracking_target = target
 
+func freeze_tracking() -> void:
+	_tracking_frozen = true
+
 func start_telegraph() -> bool:
 	if state != State.INACTIVE:
 		return false
+	_tracking_frozen = false
 	state = State.TELEGRAPH
 	_update_tracking(0.0)
 	return true
@@ -58,6 +63,7 @@ func stop() -> void:
 
 func cleanup() -> void:
 	stop()
+	_tracking_frozen = false
 	tracking_target = null
 
 func runtime_snapshot() -> Dictionary:
@@ -73,6 +79,8 @@ func _physics_process(delta: float) -> void:
 		_apply_firing_hits()
 
 func _update_tracking(delta: float) -> void:
+	if _tracking_frozen:
+		return
 	if not is_instance_valid(tracking_target) or tracking_target.is_queued_for_deletion():
 		return
 	var to_target := global_position.direction_to(tracking_target.global_position)

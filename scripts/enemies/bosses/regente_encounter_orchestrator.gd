@@ -18,7 +18,7 @@ enum State { INTRO, SETTLE, READY, ATTACK_HANDOFF, DEFEATED, VICTORY }
 enum CombatCycle { COOLDOWN, TELEGRAPH, ATTACK_PULSE, SETTLE }
 enum ExplosiveCycle { INACTIVE, TRANSITION, TRACKING, LOCKED, DETONATION, BANK_INTERVAL, RECONSTITUTE }
 enum LaserCycle { INACTIVE, TRANSITION, TELEGRAPH, FIRING, RECOVERY }
-enum LaserPattern { SHIELD, BOW }
+enum LaserPattern { SHIELD, BOW, WINGS }
 
 # Provisional first-slice timings. These are implementation placeholders, not
 # final combat tuning.
@@ -44,7 +44,7 @@ const EXPLOSIVE_BANK_INTERVAL_SECONDS := 0.35
 const EXPLOSIVE_RECONSTITUTE_SECONDS := 0.8
 const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 
-## Os dois padrões laser compartilham a mesma cadência e o mesmo componente
+## Os padrões laser compartilham o mesmo componente
 ## autoritativo de dano. Os offsets ficam manuais para ajuste fino de design.
 @export_category("Laser Attacks")
 @export_range(0, 100000, 1) var LASER_DAMAGE_HEALTH_UNITS := 25
@@ -55,12 +55,17 @@ const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 @export_range(0.01, 10.0, 0.01) var LASER_RECOVERY_SECONDS := 0.8
 @export_range(0.01, 10.0, 0.01) var LASER_HIT_TICK_SECONDS := 0.25
 @export_range(0.01, 50.0, 0.01) var LASER_TURN_RATE_RADIANS := 5.5
+@export_range(0.01, 10.0, 0.01) var LASER_WINGS_BANK_TELEGRAPH_SECONDS := 0.8
+@export_range(0.01, 10.0, 0.01) var LASER_WINGS_BANK_FIRE_SECONDS := 1.0
 const LASER_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 const LASER_SHIELD_OFFSETS: Array[Vector2] = [Vector2(-108, -132), Vector2(-119, -108), Vector2(-126, -84), Vector2(-130, -60), Vector2(-132, -36), Vector2(-133, -12), Vector2(133, -132), Vector2(132, -108), Vector2(130, -84), Vector2(126, -60), Vector2(119, -36), Vector2(108, -12)]
 ## Sete drones formam o crescente (0..6) e cinco o chevron (7..11).
 ## O ápice frontal do chevron, índice zero-based 9, é o único emissor.
 const LASER_BOW_OFFSETS: Array[Vector2] = [Vector2(-140, -40), Vector2(-110, -80), Vector2(-60, -110), Vector2(0, -120), Vector2(60, -110), Vector2(110, -80), Vector2(140, -40), Vector2(-50, 20), Vector2(-25, 60), Vector2(0, 100), Vector2(25, 60), Vector2(50, 20)]
 const LASER_BOW_EMITTER_INDEX := 9
+const LASER_WINGS_BANK_A: Array[int] = [0, 1, 6, 7]
+const LASER_WINGS_BANK_B: Array[int] = [2, 3, 8, 9]
+const LASER_WINGS_BANK_F: Array[int] = [4, 5, 10, 11]
 
 var state: State = State.INTRO
 var _enemy_container: Node
@@ -92,6 +97,7 @@ var _laser_elapsed := 0.0
 var _laser_beams: Array[LaserBeam2D] = []
 var _laser_pattern: LaserPattern = LaserPattern.SHIELD
 var _next_laser_pattern: LaserPattern = LaserPattern.SHIELD
+var _laser_bank_index := 0
 
 func set_enemy_container(container: Node) -> void:
 	_enemy_container = container
@@ -557,6 +563,7 @@ func _begin_laser_cycle() -> bool:
 	_combat_cycle_elapsed = 0.0
 	_laser_cycle = LaserCycle.TRANSITION
 	_laser_elapsed = 0.0
+	_laser_bank_index = 0
 	_set_laser_pattern_positions()
 	_core.set_encounter_movement_locked(true)
 	return true
@@ -582,33 +589,45 @@ func _advance_laser_cycle(delta: float) -> void:
 func _laser_cycle_duration() -> float:
 	match _laser_cycle:
 		LaserCycle.TRANSITION: return LASER_TRANSITION_SECONDS
-		LaserCycle.TELEGRAPH: return LASER_TELEGRAPH_SECONDS
-		LaserCycle.FIRING: return LASER_FIRE_SECONDS
+		LaserCycle.TELEGRAPH: return LASER_WINGS_BANK_TELEGRAPH_SECONDS if _laser_pattern == LaserPattern.WINGS else LASER_TELEGRAPH_SECONDS
+		LaserCycle.FIRING: return LASER_WINGS_BANK_FIRE_SECONDS if _laser_pattern == LaserPattern.WINGS else LASER_FIRE_SECONDS
 		LaserCycle.RECOVERY: return LASER_RECOVERY_SECONDS
 	return 0.0
 
 func _start_laser_telegraph() -> void:
-	for beam in _laser_beams:
+	for beam in _active_laser_beams():
 		if not is_instance_valid(beam) or not beam.start_telegraph():
 			_abort_laser_cycle()
 			return
 	_laser_cycle = LaserCycle.TELEGRAPH
 
 func _start_laser_firing() -> void:
-	for beam in _laser_beams:
-		if not is_instance_valid(beam) or not beam.start_firing():
+	for beam in _active_laser_beams():
+		if not is_instance_valid(beam):
+			_abort_laser_cycle()
+			return
+		# WINGS captures the aim after its own telegraph. Unlike SHIELD/BOW,
+		# each bank must remain fixed throughout its damage window.
+		if _laser_pattern == LaserPattern.WINGS:
+			beam.freeze_tracking()
+		if not beam.start_firing():
 			_abort_laser_cycle()
 			return
 	_laser_cycle = LaserCycle.FIRING
 
 func _stop_laser_firing() -> void:
-	for beam in _laser_beams:
+	for beam in _active_laser_beams():
 		if is_instance_valid(beam): beam.stop()
+	if _laser_pattern == LaserPattern.WINGS and _laser_bank_index < 2:
+		_laser_bank_index += 1
+		_start_laser_telegraph()
+		return
 	_laser_cycle = LaserCycle.RECOVERY
 
 func _finish_laser_cycle() -> void:
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
+	_laser_bank_index = 0
 	_next_laser_pattern = LaserPattern.BOW if _laser_pattern == LaserPattern.SHIELD else LaserPattern.SHIELD
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
@@ -620,6 +639,7 @@ func _abort_laser_cycle() -> void:
 		if is_instance_valid(beam): beam.stop()
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
+	_laser_bank_index = 0
 	if is_instance_valid(_core): _core.set_encounter_movement_locked(false)
 	if not _torn_down: _start_electric_combat_loop()
 
@@ -638,12 +658,20 @@ func _set_laser_positions(offsets: Array[Vector2]) -> void:
 	if not updates.is_empty(): _core.update_electric_drone_positions(updates)
 
 func _laser_offsets_for(pattern: LaserPattern) -> Array[Vector2]:
-	return LASER_BOW_OFFSETS if pattern == LaserPattern.BOW else LASER_SHIELD_OFFSETS
+	if pattern == LaserPattern.BOW:
+		return LASER_BOW_OFFSETS
+	if pattern == LaserPattern.WINGS:
+		return WING_OFFSETS
+	return LASER_SHIELD_OFFSETS
 
 func _laser_emitter_indices_for(pattern: LaserPattern) -> Array[int]:
 	var indices: Array[int] = []
 	if pattern == LaserPattern.BOW:
 		indices.append(LASER_BOW_EMITTER_INDEX)
+		return indices
+	if pattern == LaserPattern.WINGS:
+		for index in range(WING_OFFSETS.size()):
+			indices.append(index)
 		return indices
 	for index in range(LASER_SHIELD_OFFSETS.size()):
 		indices.append(index)
@@ -651,13 +679,32 @@ func _laser_emitter_indices_for(pattern: LaserPattern) -> Array[int]:
 
 func _laser_damage_tags_for(pattern: LaserPattern) -> Array[StringName]:
 	var tags: Array[StringName] = [&"laser"]
-	tags.append(&"bow" if pattern == LaserPattern.BOW else &"shield")
+	tags.append(&"bow" if pattern == LaserPattern.BOW else (&"wings" if pattern == LaserPattern.WINGS else &"shield"))
 	return tags
 
 func _set_laser_tracking_target() -> void:
+	if _laser_pattern == LaserPattern.WINGS and _laser_cycle == LaserCycle.FIRING:
+		return
 	var target := _player_target_node()
 	for beam in _laser_beams:
 		if is_instance_valid(beam): beam.set_tracking_target(target)
+
+func _active_laser_beams() -> Array[LaserBeam2D]:
+	if _laser_pattern != LaserPattern.WINGS:
+		return _laser_beams
+	var active: Array[LaserBeam2D] = []
+	for index in _laser_wings_bank_indices():
+		if index >= 0 and index < _laser_beams.size():
+			active.append(_laser_beams[index])
+	return active
+
+## Observation hook: the active WINGS bank is always one disjoint group of four.
+func _laser_wings_bank_indices() -> Array[int]:
+	match _laser_bank_index:
+		0: return LASER_WINGS_BANK_A
+		1: return LASER_WINGS_BANK_B
+		2: return LASER_WINGS_BANK_F
+	return []
 
 func _restore_explosive_slot_positions() -> void:
 	if _explosive_formation == null or not is_instance_valid(_core):
@@ -677,7 +724,7 @@ func laser_runtime_snapshot() -> Dictionary:
 	for beam in _laser_beams:
 		if is_instance_valid(beam):
 			beams.append(beam.runtime_snapshot())
-	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "pattern": _laser_pattern, "next_pattern": _next_laser_pattern, "beams": beams}
+	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "pattern": _laser_pattern, "next_pattern": _next_laser_pattern, "bank_index": _laser_bank_index, "active_emitter_indices": _laser_wings_bank_indices() if _laser_pattern == LaserPattern.WINGS else _laser_emitter_indices_for(_laser_pattern), "beams": beams}
 
 func _try_replace_electric_drone() -> bool:
 	if _core.electric_drone_ids().size() >= WING_OFFSETS.size(): return false
@@ -703,6 +750,7 @@ func _clear_electric_lifecycle() -> void:
 	_explosive_transition_just_started = false
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
+	_laser_bank_index = 0
 	_laser_pattern = LaserPattern.SHIELD
 	_next_laser_pattern = LaserPattern.SHIELD
 	_release_explosive_cocoons()
