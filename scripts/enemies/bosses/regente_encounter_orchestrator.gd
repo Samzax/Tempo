@@ -18,6 +18,7 @@ enum State { INTRO, SETTLE, READY, ATTACK_HANDOFF, DEFEATED, VICTORY }
 enum CombatCycle { COOLDOWN, TELEGRAPH, ATTACK_PULSE, SETTLE }
 enum ExplosiveCycle { INACTIVE, TRANSITION, TRACKING, LOCKED, DETONATION, BANK_INTERVAL, RECONSTITUTE }
 enum LaserCycle { INACTIVE, TRANSITION, TELEGRAPH, FIRING, RECOVERY }
+enum LaserPattern { SHIELD, BOW }
 
 # Provisional first-slice timings. These are implementation placeholders, not
 # final combat tuning.
@@ -43,9 +44,9 @@ const EXPLOSIVE_BANK_INTERVAL_SECONDS := 0.35
 const EXPLOSIVE_RECONSTITUTE_SECONDS := 0.8
 const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 
-## Primeiro slice do Escudo Laser. Posições manuais para permitir ajuste fino
-## de level design sem alterar a topologia canônica dos doze drones.
-@export_category("Laser Shield")
+## Os dois padrões laser compartilham a mesma cadência e o mesmo componente
+## autoritativo de dano. Os offsets ficam manuais para ajuste fino de design.
+@export_category("Laser Attacks")
 @export_range(0, 100000, 1) var LASER_DAMAGE_HEALTH_UNITS := 25
 @export_range(1.0, 256.0, 1.0) var LASER_BEAM_WIDTH_PX := 16.0
 @export_range(0.01, 10.0, 0.01) var LASER_TRANSITION_SECONDS := 0.8
@@ -56,6 +57,10 @@ const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 @export_range(0.01, 50.0, 0.01) var LASER_TURN_RATE_RADIANS := 5.5
 const LASER_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 const LASER_SHIELD_OFFSETS: Array[Vector2] = [Vector2(-108, -132), Vector2(-119, -108), Vector2(-126, -84), Vector2(-130, -60), Vector2(-132, -36), Vector2(-133, -12), Vector2(133, -132), Vector2(132, -108), Vector2(130, -84), Vector2(126, -60), Vector2(119, -36), Vector2(108, -12)]
+## Sete drones formam o crescente (0..6) e cinco o chevron (7..11).
+## O ápice frontal do chevron, índice zero-based 9, é o único emissor.
+const LASER_BOW_OFFSETS: Array[Vector2] = [Vector2(-140, -40), Vector2(-110, -80), Vector2(-60, -110), Vector2(0, -120), Vector2(60, -110), Vector2(110, -80), Vector2(140, -40), Vector2(-50, 20), Vector2(-25, 60), Vector2(0, 100), Vector2(25, 60), Vector2(50, 20)]
+const LASER_BOW_EMITTER_INDEX := 9
 
 var state: State = State.INTRO
 var _enemy_container: Node
@@ -85,6 +90,8 @@ var _explosive_transition_just_started := false
 var _laser_cycle: LaserCycle = LaserCycle.INACTIVE
 var _laser_elapsed := 0.0
 var _laser_beams: Array[LaserBeam2D] = []
+var _laser_pattern: LaserPattern = LaserPattern.SHIELD
+var _next_laser_pattern: LaserPattern = LaserPattern.SHIELD
 
 func set_enemy_container(container: Node) -> void:
 	_enemy_container = container
@@ -214,17 +221,20 @@ func _initialize_explosive_wings() -> void:
 		push_warning("Regente explosive wings could not configure canonical cocoon IDs.")
 		_release_explosive_cocoons()
 
-func _initialize_laser_beams() -> void:
+func _initialize_laser_beams(pattern := LaserPattern.SHIELD) -> void:
 	_release_laser_beams()
 	if not is_instance_valid(_core) or not _has_host_authority():
 		return
-	for offset in LASER_SHIELD_OFFSETS:
+	var offsets := _laser_offsets_for(pattern)
+	var emitter_indices := _laser_emitter_indices_for(pattern)
+	for index in emitter_indices:
+		var offset: Vector2 = offsets[index]
 		var beam := LASER_BEAM_2D.new() as LaserBeam2D
 		add_child(beam)
 		beam.beam_width_px = LASER_BEAM_WIDTH_PX
 		beam.hit_tick_seconds = LASER_HIT_TICK_SECONDS
 		beam.turn_rate_radians = LASER_TURN_RATE_RADIANS
-		beam.configure(_core.global_position + offset, LASER_DAMAGE_HEALTH_UNITS, _core, [&"laser", &"shield"], LASER_COLLISION_MASK)
+		beam.configure(_core.global_position + offset, LASER_DAMAGE_HEALTH_UNITS, _core, _laser_damage_tags_for(pattern), LASER_COLLISION_MASK)
 		_laser_beams.append(beam)
 
 func _update_electric_slot_positions() -> void:
@@ -531,22 +541,23 @@ func _finish_explosive_cycle() -> void:
 	_explosive_transition_just_started = false
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
-	# Combined-loop order: explosive reconstitutes every slot, then the Shield
-	# fires once, and only then does the established electric loop resume.
+	# Combined-loop order is deterministic: Shield, then Bow, with an electric
+	# lap between attacks. No RNG or phase gate participates in this slice.
 	if not _begin_laser_cycle():
 		_start_electric_combat_loop()
 
 func _begin_laser_cycle() -> bool:
 	if _torn_down or not is_instance_valid(_core) or not _all_explosive_slots_available():
 		return false
-	_initialize_laser_beams()
-	if _laser_beams.size() != LASER_SHIELD_OFFSETS.size():
+	_laser_pattern = _next_laser_pattern
+	_initialize_laser_beams(_laser_pattern)
+	if _laser_beams.size() != _laser_emitter_indices_for(_laser_pattern).size():
 		return false
 	_combat_loop_active = false
 	_combat_cycle_elapsed = 0.0
 	_laser_cycle = LaserCycle.TRANSITION
 	_laser_elapsed = 0.0
-	_set_laser_shield_positions()
+	_set_laser_pattern_positions()
 	_core.set_encounter_movement_locked(true)
 	return true
 
@@ -598,6 +609,7 @@ func _stop_laser_firing() -> void:
 func _finish_laser_cycle() -> void:
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
+	_next_laser_pattern = LaserPattern.BOW if _laser_pattern == LaserPattern.SHIELD else LaserPattern.SHIELD
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
 	if is_instance_valid(_core): _core.set_encounter_movement_locked(false)
@@ -612,12 +624,35 @@ func _abort_laser_cycle() -> void:
 	if not _torn_down: _start_electric_combat_loop()
 
 func _set_laser_shield_positions() -> void:
+	_set_laser_positions(LASER_SHIELD_OFFSETS)
+
+func _set_laser_pattern_positions() -> void:
+	_set_laser_positions(_laser_offsets_for(_laser_pattern))
+
+func _set_laser_positions(offsets: Array[Vector2]) -> void:
 	var updates: Dictionary = {}
-	for index in range(LASER_SHIELD_OFFSETS.size()):
+	for index in range(offsets.size()):
 		var slot := _electric_slots[index]
 		if bool(slot.get("occupied", false)):
-			updates[int(slot.get("drone_id", -1))] = {"position": _core.global_position + LASER_SHIELD_OFFSETS[index], "formation_open": false}
+			updates[int(slot.get("drone_id", -1))] = {"position": _core.global_position + offsets[index], "formation_open": false}
 	if not updates.is_empty(): _core.update_electric_drone_positions(updates)
+
+func _laser_offsets_for(pattern: LaserPattern) -> Array[Vector2]:
+	return LASER_BOW_OFFSETS if pattern == LaserPattern.BOW else LASER_SHIELD_OFFSETS
+
+func _laser_emitter_indices_for(pattern: LaserPattern) -> Array[int]:
+	var indices: Array[int] = []
+	if pattern == LaserPattern.BOW:
+		indices.append(LASER_BOW_EMITTER_INDEX)
+		return indices
+	for index in range(LASER_SHIELD_OFFSETS.size()):
+		indices.append(index)
+	return indices
+
+func _laser_damage_tags_for(pattern: LaserPattern) -> Array[StringName]:
+	var tags: Array[StringName] = [&"laser"]
+	tags.append(&"bow" if pattern == LaserPattern.BOW else &"shield")
+	return tags
 
 func _set_laser_tracking_target() -> void:
 	var target := _player_target_node()
@@ -642,7 +677,7 @@ func laser_runtime_snapshot() -> Dictionary:
 	for beam in _laser_beams:
 		if is_instance_valid(beam):
 			beams.append(beam.runtime_snapshot())
-	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "beams": beams}
+	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "pattern": _laser_pattern, "next_pattern": _next_laser_pattern, "beams": beams}
 
 func _try_replace_electric_drone() -> bool:
 	if _core.electric_drone_ids().size() >= WING_OFFSETS.size(): return false
@@ -668,6 +703,8 @@ func _clear_electric_lifecycle() -> void:
 	_explosive_transition_just_started = false
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
+	_laser_pattern = LaserPattern.SHIELD
+	_next_laser_pattern = LaserPattern.SHIELD
 	_release_explosive_cocoons()
 	_release_laser_beams()
 

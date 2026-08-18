@@ -53,6 +53,53 @@ func test_cycle_starts_only_with_all_slots_and_enters_telegraph_then_firing() ->
 	o._advance_laser_cycle(0.8)
 	assert_eq(o._laser_cycle, o.LaserCycle.INACTIVE)
 
+func test_bow_offsets_are_unique_seven_rising_five_chevron_and_only_index_nine_emits() -> void:
+	var f := _fixture(); var o: RegenteEncounterOrchestrator = f.o
+	assert_eq(o.LASER_BOW_OFFSETS.size(), 12)
+	var unique := {}; for offset in o.LASER_BOW_OFFSETS: unique[str(offset)] = true
+	assert_eq(unique.size(), 12)
+	assert_eq(o.LASER_BOW_EMITTER_INDEX, 9)
+	o.start(0); o._next_laser_pattern = o.LaserPattern.BOW
+	assert_true(o._begin_laser_cycle())
+	assert_eq(o._laser_pattern, o.LaserPattern.BOW)
+	assert_eq(o._laser_beams.size(), 1)
+	assert_eq(o._laser_beams[0].fixed_origin, o._core.global_position + o.LASER_BOW_OFFSETS[9])
+	for i in 12: assert_eq(i == 9, o._laser_emitter_indices_for(o.LaserPattern.BOW).has(i))
+
+func test_shield_volley_recovers_then_deterministically_selects_bow() -> void:
+	var f := _fixture(); var o: RegenteEncounterOrchestrator = f.o
+	o.start(0); assert_true(o._begin_laser_cycle())
+	o._advance_laser_cycle(0.8 + 0.8 + 1.5 + 0.8)
+	assert_eq(o._laser_pattern, o.LaserPattern.SHIELD)
+	assert_eq(o._next_laser_pattern, o.LaserPattern.BOW)
+	assert_true(o._begin_laser_cycle())
+	assert_eq(o._laser_pattern, o.LaserPattern.BOW)
+
+func test_bow_drones_stay_in_slots_while_only_beam_tracks_and_cleanup_preserves_defaults() -> void:
+	var f := _fixture(); var o: RegenteEncounterOrchestrator = f.o
+	o.start(0); o._next_laser_pattern = o.LaserPattern.BOW; assert_true(o._begin_laser_cycle())
+	var slots_before := []; for slot in o._electric_slots: slots_before.append(slot.offset)
+	o._advance_laser_cycle(0.8); var origin := o._laser_beams[0].fixed_origin
+	o._advance_laser_cycle(0.8); assert_eq(o._laser_beams.size(), 1)
+	for i in 12: assert_eq(o._electric_slots[i].offset, slots_before[i])
+	assert_eq(o._laser_beams[0].fixed_origin, origin)
+	o._advance_laser_cycle(1.5 + 0.8 + 0.8); assert_eq(o._laser_cycle, o.LaserCycle.INACTIVE)
+	o.stop(); await get_tree().process_frame
+	assert_eq(o._laser_beams.size(), 0)
+	assert_eq(o.LASER_TRANSITION_SECONDS, 0.8)
+	assert_eq(o.LASER_TELEGRAPH_SECONDS, 0.8)
+	assert_eq(o.LASER_FIRE_SECONDS, 1.5)
+	assert_eq(o.LASER_RECOVERY_SECONDS, 0.8)
+
+func test_laser_requires_all_slots_and_returns_to_electric_after_bow() -> void:
+	var f := _fixture(); var o: RegenteEncounterOrchestrator = f.o
+	o.start(0); o._electric_slots[3].occupied = false; o._next_laser_pattern = o.LaserPattern.BOW
+	assert_false(o._begin_laser_cycle()); o._electric_slots[3].occupied = true
+	assert_true(o._begin_laser_cycle()); o._advance_laser_cycle(4.0)
+	assert_eq(o._laser_cycle, o.LaserCycle.INACTIVE)
+	assert_eq(o._next_laser_pattern, o.LaserPattern.SHIELD)
+	assert_true(o._combat_loop_active)
+
 func test_stop_resolution_and_abort_remove_all_beams_without_orphans() -> void:
 	var f := _fixture(); var o: RegenteEncounterOrchestrator = f.o
 	o.start(0); assert_eq(o._laser_beams.size(), 12)
