@@ -34,6 +34,20 @@ func configure(origin: Vector2, amount: int, source: Node, tags: Array[StringNam
 	collision_mask = mask
 	return true
 
+## Configures this logical beam as a finite world-space segment.  This keeps
+## collision, damage ownership and local hit dedupe identical to long beams.
+func configure_segment(origin: Vector2, endpoint: Vector2) -> bool:
+	var segment := endpoint - origin
+	if segment.length_squared() <= 0.0001:
+		return false
+	fixed_origin = origin
+	global_position = origin
+	beam_length_px = segment.length()
+	global_rotation = segment.angle()
+	_tracking_frozen = true
+	tracking_target = null
+	return true
+
 func set_tracking_target(target: Node2D) -> void:
 	tracking_target = target
 

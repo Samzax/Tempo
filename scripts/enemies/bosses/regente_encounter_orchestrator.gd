@@ -18,7 +18,8 @@ enum State { INTRO, SETTLE, READY, ATTACK_HANDOFF, DEFEATED, VICTORY }
 enum CombatCycle { COOLDOWN, TELEGRAPH, ATTACK_PULSE, SETTLE }
 enum ExplosiveCycle { INACTIVE, TRANSITION, TRACKING, LOCKED, DETONATION, BANK_INTERVAL, RECONSTITUTE }
 enum LaserCycle { INACTIVE, TRANSITION, TELEGRAPH, FIRING, RECOVERY }
-enum LaserPattern { SHIELD, BOW, WINGS }
+enum LaserPattern { SHIELD, BOW, WINGS, RIFT }
+enum RiftPhase { INACTIVE, ZIPPER, FLUSH, FINAL }
 
 # Provisional first-slice timings. These are implementation placeholders, not
 # final combat tuning.
@@ -57,6 +58,10 @@ const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 @export_range(0.01, 50.0, 0.01) var LASER_TURN_RATE_RADIANS := 5.5
 @export_range(0.01, 10.0, 0.01) var LASER_WINGS_BANK_TELEGRAPH_SECONDS := 0.8
 @export_range(0.01, 10.0, 0.01) var LASER_WINGS_BANK_FIRE_SECONDS := 1.0
+@export_range(0.01, 10.0, 0.01) var LASER_RIFT_ZIPPER_STEP_SECONDS := 0.16
+@export_range(0.0, 10.0, 0.01) var LASER_RIFT_ZIPPER_HOLD_SECONDS := 0.04
+@export_range(0.0, 1.0, 0.01) var LASER_RIFT_FLUSH_SECONDS := 0.01
+@export_range(0.01, 10.0, 0.01) var LASER_RIFT_FINAL_SECONDS := 1.2
 const LASER_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 const LASER_SHIELD_OFFSETS: Array[Vector2] = [Vector2(-108, -132), Vector2(-119, -108), Vector2(-126, -84), Vector2(-130, -60), Vector2(-132, -36), Vector2(-133, -12), Vector2(133, -132), Vector2(132, -108), Vector2(130, -84), Vector2(126, -60), Vector2(119, -36), Vector2(108, -12)]
 ## Sete drones formam o crescente (0..6) e cinco o chevron (7..11).
@@ -66,6 +71,10 @@ const LASER_BOW_EMITTER_INDEX := 9
 const LASER_WINGS_BANK_A: Array[int] = [0, 1, 6, 7]
 const LASER_WINGS_BANK_B: Array[int] = [2, 3, 8, 9]
 const LASER_WINGS_BANK_F: Array[int] = [4, 5, 10, 11]
+## Fenda Orgânica: curva 0..6, borda quebrada 7..11.  Slot 6 is the apex.
+const LASER_RIFT_OFFSETS: Array[Vector2] = [Vector2(-130, -50), Vector2(-90, -110), Vector2(-20, -145), Vector2(60, -135), Vector2(115, -90), Vector2(140, -25), Vector2(135, 45), Vector2(-80, -30), Vector2(-35, 10), Vector2(15, 40), Vector2(65, 55), Vector2(100, 75)]
+const LASER_RIFT_ZIPPER_LINKS: Array[Vector2i] = [Vector2i(0, 1), Vector2i(1, 2), Vector2i(2, 3), Vector2i(3, 4), Vector2i(4, 5), Vector2i(5, 6)]
+const LASER_RIFT_FINAL_LINKS: Array[Vector2i] = [Vector2i(0, 7), Vector2i(7, 8), Vector2i(8, 9)]
 
 var state: State = State.INTRO
 var _enemy_container: Node
@@ -98,6 +107,8 @@ var _laser_beams: Array[LaserBeam2D] = []
 var _laser_pattern: LaserPattern = LaserPattern.SHIELD
 var _next_laser_pattern: LaserPattern = LaserPattern.SHIELD
 var _laser_bank_index := 0
+var _rift_phase: RiftPhase = RiftPhase.INACTIVE
+var _rift_zipper_index := 0
 
 func set_enemy_container(container: Node) -> void:
 	_enemy_container = container
@@ -547,8 +558,8 @@ func _finish_explosive_cycle() -> void:
 	_explosive_transition_just_started = false
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
-	# Combined-loop order is deterministic: Shield, then Bow, with an electric
-	# lap between attacks. No RNG or phase gate participates in this slice.
+	# Combined-loop order is deterministic: Shield, Bow, Wings, then Rift, with
+	# an electric lap between attacks. No RNG or phase gate participates here.
 	if not _begin_laser_cycle():
 		_start_electric_combat_loop()
 
@@ -590,11 +601,21 @@ func _laser_cycle_duration() -> float:
 	match _laser_cycle:
 		LaserCycle.TRANSITION: return LASER_TRANSITION_SECONDS
 		LaserCycle.TELEGRAPH: return LASER_WINGS_BANK_TELEGRAPH_SECONDS if _laser_pattern == LaserPattern.WINGS else LASER_TELEGRAPH_SECONDS
-		LaserCycle.FIRING: return LASER_WINGS_BANK_FIRE_SECONDS if _laser_pattern == LaserPattern.WINGS else LASER_FIRE_SECONDS
+		LaserCycle.FIRING:
+			if _laser_pattern == LaserPattern.WINGS: return LASER_WINGS_BANK_FIRE_SECONDS
+			if _laser_pattern == LaserPattern.RIFT:
+				if _rift_phase == RiftPhase.ZIPPER: return LASER_RIFT_ZIPPER_STEP_SECONDS + LASER_RIFT_ZIPPER_HOLD_SECONDS
+				if _rift_phase == RiftPhase.FLUSH: return LASER_RIFT_FLUSH_SECONDS
+				if _rift_phase == RiftPhase.FINAL: return LASER_RIFT_FINAL_SECONDS
+			return LASER_FIRE_SECONDS
 		LaserCycle.RECOVERY: return LASER_RECOVERY_SECONDS
 	return 0.0
 
 func _start_laser_telegraph() -> void:
+	if _laser_pattern == LaserPattern.RIFT:
+		# RIFT telegraph intentionally has no damage beams.
+		_laser_cycle = LaserCycle.TELEGRAPH
+		return
 	for beam in _active_laser_beams():
 		if not is_instance_valid(beam) or not beam.start_telegraph():
 			_abort_laser_cycle()
@@ -602,6 +623,9 @@ func _start_laser_telegraph() -> void:
 	_laser_cycle = LaserCycle.TELEGRAPH
 
 func _start_laser_firing() -> void:
+	if _laser_pattern == LaserPattern.RIFT:
+		_start_rift_zipper()
+		return
 	for beam in _active_laser_beams():
 		if not is_instance_valid(beam):
 			_abort_laser_cycle()
@@ -616,6 +640,9 @@ func _start_laser_firing() -> void:
 	_laser_cycle = LaserCycle.FIRING
 
 func _stop_laser_firing() -> void:
+	if _laser_pattern == LaserPattern.RIFT:
+		_advance_rift_firing()
+		return
 	for beam in _active_laser_beams():
 		if is_instance_valid(beam): beam.stop()
 	if _laser_pattern == LaserPattern.WINGS and _laser_bank_index < 2:
@@ -628,7 +655,9 @@ func _finish_laser_cycle() -> void:
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
 	_laser_bank_index = 0
-	_next_laser_pattern = LaserPattern.BOW if _laser_pattern == LaserPattern.SHIELD else LaserPattern.SHIELD
+	_rift_phase = RiftPhase.INACTIVE
+	_rift_zipper_index = 0
+	_next_laser_pattern = _scheduled_laser_pattern_after(_laser_pattern)
 	_restore_explosive_slot_positions()
 	_settle_all_electric_slots()
 	if is_instance_valid(_core): _core.set_encounter_movement_locked(false)
@@ -640,8 +669,21 @@ func _abort_laser_cycle() -> void:
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
 	_laser_bank_index = 0
+	_rift_phase = RiftPhase.INACTIVE
+	_rift_zipper_index = 0
 	if is_instance_valid(_core): _core.set_encounter_movement_locked(false)
 	if not _torn_down: _start_electric_combat_loop()
+
+## The automatic cadence deliberately includes every laser pattern before the
+## encounter returns to an electric lap. Keeping this as one scheduler makes
+## RIFT reachable without test-only mutation of _next_laser_pattern.
+func _scheduled_laser_pattern_after(pattern: LaserPattern) -> LaserPattern:
+	match pattern:
+		LaserPattern.SHIELD: return LaserPattern.BOW
+		LaserPattern.BOW: return LaserPattern.WINGS
+		LaserPattern.WINGS: return LaserPattern.RIFT
+		LaserPattern.RIFT: return LaserPattern.SHIELD
+	return LaserPattern.SHIELD
 
 func _set_laser_shield_positions() -> void:
 	_set_laser_positions(LASER_SHIELD_OFFSETS)
@@ -662,10 +704,14 @@ func _laser_offsets_for(pattern: LaserPattern) -> Array[Vector2]:
 		return LASER_BOW_OFFSETS
 	if pattern == LaserPattern.WINGS:
 		return WING_OFFSETS
+	if pattern == LaserPattern.RIFT:
+		return LASER_RIFT_OFFSETS
 	return LASER_SHIELD_OFFSETS
 
 func _laser_emitter_indices_for(pattern: LaserPattern) -> Array[int]:
 	var indices: Array[int] = []
+	if pattern == LaserPattern.RIFT:
+		return indices
 	if pattern == LaserPattern.BOW:
 		indices.append(LASER_BOW_EMITTER_INDEX)
 		return indices
@@ -679,11 +725,11 @@ func _laser_emitter_indices_for(pattern: LaserPattern) -> Array[int]:
 
 func _laser_damage_tags_for(pattern: LaserPattern) -> Array[StringName]:
 	var tags: Array[StringName] = [&"laser"]
-	tags.append(&"bow" if pattern == LaserPattern.BOW else (&"wings" if pattern == LaserPattern.WINGS else &"shield"))
+	tags.append(&"bow" if pattern == LaserPattern.BOW else (&"wings" if pattern == LaserPattern.WINGS else (&"rift" if pattern == LaserPattern.RIFT else &"shield")))
 	return tags
 
 func _set_laser_tracking_target() -> void:
-	if _laser_pattern == LaserPattern.WINGS and _laser_cycle == LaserCycle.FIRING:
+	if (_laser_pattern == LaserPattern.WINGS or _laser_pattern == LaserPattern.RIFT) and _laser_cycle == LaserCycle.FIRING:
 		return
 	var target := _player_target_node()
 	for beam in _laser_beams:
@@ -697,6 +743,73 @@ func _active_laser_beams() -> Array[LaserBeam2D]:
 		if index >= 0 and index < _laser_beams.size():
 			active.append(_laser_beams[index])
 	return active
+
+func _start_rift_zipper() -> void:
+	_rift_phase = RiftPhase.ZIPPER
+	_rift_zipper_index = 0
+	_activate_rift_links([LASER_RIFT_ZIPPER_LINKS[0], LASER_RIFT_ZIPPER_LINKS[1]])
+	_laser_cycle = LaserCycle.FIRING
+
+func _advance_rift_firing() -> void:
+	if _rift_phase == RiftPhase.ZIPPER:
+		if _rift_zipper_index < LASER_RIFT_ZIPPER_LINKS.size() - 2:
+			_rift_zipper_index += 1
+			_activate_rift_links([LASER_RIFT_ZIPPER_LINKS[_rift_zipper_index], LASER_RIFT_ZIPPER_LINKS[_rift_zipper_index + 1]])
+			return
+		# Flush is deliberately observable: no zipper beam survives into FINAL.
+		_release_laser_beams()
+		_rift_phase = RiftPhase.FLUSH
+		return
+	if _rift_phase == RiftPhase.FLUSH:
+		_start_rift_final()
+		return
+	if _rift_phase == RiftPhase.FINAL:
+		_release_laser_beams()
+		_rift_phase = RiftPhase.INACTIVE
+		_laser_cycle = LaserCycle.RECOVERY
+
+func _activate_rift_links(links: Array[Vector2i]) -> void:
+	_release_laser_beams()
+	for link in links:
+		var beam := _new_rift_beam()
+		if beam == null or not beam.configure_segment(_rift_slot_position(link.x), _rift_slot_position(link.y)) or not beam.start_telegraph() or not beam.start_firing():
+			_abort_laser_cycle()
+			return
+
+func _start_rift_final() -> void:
+	_release_laser_beams()
+	for link in LASER_RIFT_FINAL_LINKS:
+		var segment_beam := _new_rift_beam()
+		if segment_beam == null or not segment_beam.configure_segment(_rift_slot_position(link.x), _rift_slot_position(link.y)) or not segment_beam.start_telegraph() or not segment_beam.start_firing():
+			_abort_laser_cycle()
+			return
+	var tangent_beam := _new_rift_beam()
+	if tangent_beam == null:
+		_abort_laser_cycle()
+		return
+	var apex := _rift_slot_position(6)
+	var tangent := apex + (_rift_slot_position(6) - _rift_slot_position(5)).normalized() * tangent_beam.beam_length_px
+	if not tangent_beam.configure_segment(apex, tangent) or not tangent_beam.start_telegraph() or not tangent_beam.start_firing():
+		_abort_laser_cycle()
+		return
+	_rift_phase = RiftPhase.FINAL
+
+func _new_rift_beam() -> LaserBeam2D:
+	var beam := LASER_BEAM_2D.new() as LaserBeam2D
+	add_child(beam)
+	beam.beam_width_px = LASER_BEAM_WIDTH_PX
+	beam.hit_tick_seconds = LASER_HIT_TICK_SECONDS
+	beam.turn_rate_radians = LASER_TURN_RATE_RADIANS
+	beam.configure(Vector2.ZERO, LASER_DAMAGE_HEALTH_UNITS, _core, _laser_damage_tags_for(LaserPattern.RIFT), LASER_COLLISION_MASK)
+	_laser_beams.append(beam)
+	return beam
+
+func _rift_slot_position(index: int) -> Vector2:
+	return _core.global_position + LASER_RIFT_OFFSETS[index]
+
+## Observation hook: RIFT exposes its phase and finite link count for tests.
+func rift_runtime_snapshot() -> Dictionary:
+	return {"phase": _rift_phase, "zipper_index": _rift_zipper_index, "active_beam_count": _laser_beams.size()}
 
 ## Observation hook: the active WINGS bank is always one disjoint group of four.
 func _laser_wings_bank_indices() -> Array[int]:
@@ -724,7 +837,7 @@ func laser_runtime_snapshot() -> Dictionary:
 	for beam in _laser_beams:
 		if is_instance_valid(beam):
 			beams.append(beam.runtime_snapshot())
-	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "pattern": _laser_pattern, "next_pattern": _next_laser_pattern, "bank_index": _laser_bank_index, "active_emitter_indices": _laser_wings_bank_indices() if _laser_pattern == LaserPattern.WINGS else _laser_emitter_indices_for(_laser_pattern), "beams": beams}
+	return {"cycle": _laser_cycle, "elapsed": _laser_elapsed, "pattern": _laser_pattern, "next_pattern": _next_laser_pattern, "bank_index": _laser_bank_index, "rift_phase": _rift_phase, "rift_zipper_index": _rift_zipper_index, "active_emitter_indices": _laser_wings_bank_indices() if _laser_pattern == LaserPattern.WINGS else _laser_emitter_indices_for(_laser_pattern), "beams": beams}
 
 func _try_replace_electric_drone() -> bool:
 	if _core.electric_drone_ids().size() >= WING_OFFSETS.size(): return false
@@ -751,6 +864,8 @@ func _clear_electric_lifecycle() -> void:
 	_laser_cycle = LaserCycle.INACTIVE
 	_laser_elapsed = 0.0
 	_laser_bank_index = 0
+	_rift_phase = RiftPhase.INACTIVE
+	_rift_zipper_index = 0
 	_laser_pattern = LaserPattern.SHIELD
 	_next_laser_pattern = LaserPattern.SHIELD
 	_release_explosive_cocoons()
