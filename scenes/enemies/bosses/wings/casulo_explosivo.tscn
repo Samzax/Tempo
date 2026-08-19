@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/wings/casulo_explosivo.gd" id="1_logic"]
+[ext_resource type="Script" path="res://scripts/enemies/bosses/wings/casulo_explosivo_visual.gd" id="2_visual"]
+
+[node name="CasuloExplosivo" type="Node2D"]
+script = ExtResource("1_logic")
+
+[node name="Visual" type="Sprite2D" parent="."]
+texture_filter = 1
+script = ExtResource("2_visual")

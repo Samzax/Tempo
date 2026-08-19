@@ -161,9 +161,11 @@ func test_removed_edge_frees_shape_and_recreating_key_has_no_stale_or_orphan_sha
 	area.sync_edges(edge, positions)
 	var old_shape := area._shapes["1:2"] as CollisionShape2D
 	area.sync_edges([], positions)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
 	assert_false(area._shapes.has("1:2"))
+	assert_true(is_instance_valid(old_shape))
+	assert_true(old_shape.is_queued_for_deletion())
+	assert_eq(area.get_child_count(), 1)
+	await get_tree().physics_frame
 	assert_false(is_instance_valid(old_shape))
 	assert_eq(area.get_child_count(), 0)
 	area.sync_edges(edge, positions)
