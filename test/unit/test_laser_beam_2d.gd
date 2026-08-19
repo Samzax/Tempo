@@ -97,4 +97,8 @@ func test_stop_and_cleanup_clear_state() -> void:
 	beam.start_telegraph(); beam.start_firing(); beam.stop()
 	assert_eq(beam.state, LASER.State.INACTIVE)
 	beam.cleanup()
+	assert_eq(beam.state, LASER.State.INACTIVE)
 	assert_null(beam.tracking_target)
+	assert_null(beam.damage_source)
+	assert_true(beam.damage_tags.is_empty())
+	assert_eq(beam.runtime_snapshot(), {"state": LASER.State.INACTIVE, "origin": Vector2.ZERO, "rotation": 0.0, "hit_targets": 0})

@@ -1,0 +1,46 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/wings/laser_beam_2d.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fx/lasers/regente/regente-laser-telegraph.png" id="2_telegraph"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fx/lasers/regente/regente-laser-beam-active.png" id="3_active"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fx/lasers/regente/regente-laser-emitter.png" id="4_emitter"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fx/lasers/regente/regente-laser-impact.png" id="5_impact"]
+[ext_resource type="Shader" path="res://shaders/fx/regente_laser_beam_pixel.gdshader" id="6_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_laser_beam"]
+resource_local_to_scene = true
+shader = ExtResource("6_shader")
+
+[node name="LaserBeam2D" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Telegraph" type="Sprite2D" parent="."]
+visible = false
+texture_filter = 1
+texture_repeat = 0
+texture = ExtResource("2_telegraph")
+centered = false
+offset = Vector2(0, -2)
+
+[node name="ActiveBeam" type="Sprite2D" parent="."]
+visible = false
+texture_filter = 1
+texture_repeat = 1
+material = SubResource("ShaderMaterial_laser_beam")
+texture = ExtResource("3_active")
+centered = false
+offset = Vector2(0, -5)
+region_enabled = true
+region_rect = Rect2(0, 0, 900, 10)
+
+[node name="Emitter" type="Sprite2D" parent="."]
+visible = false
+texture_filter = 1
+texture_repeat = 0
+texture = ExtResource("4_emitter")
+
+[node name="Impact" type="Sprite2D" parent="."]
+visible = false
+texture_filter = 1
+texture_repeat = 0
+texture = ExtResource("5_impact")

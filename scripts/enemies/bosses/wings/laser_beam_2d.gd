@@ -23,6 +23,11 @@ var _tracking_frozen := false
 var _fire_elapsed := 0.0
 var _last_hit_by_target: Dictionary = {}
 
+@onready var _telegraph_visual := get_node_or_null("Telegraph") as Sprite2D
+@onready var _active_beam_visual := get_node_or_null("ActiveBeam") as Sprite2D
+@onready var _emitter_visual := get_node_or_null("Emitter") as Sprite2D
+@onready var _impact_visual := get_node_or_null("Impact") as Sprite2D
+
 func configure(origin: Vector2, amount: int, source: Node, tags: Array[StringName], mask := 6) -> bool:
 	if amount < 0:
 		return false
@@ -32,6 +37,7 @@ func configure(origin: Vector2, amount: int, source: Node, tags: Array[StringNam
 	damage_source = source
 	damage_tags = tags.duplicate()
 	collision_mask = mask
+	_sync_visuals()
 	return true
 
 ## Configures this logical beam as a finite world-space segment.  This keeps
@@ -46,6 +52,7 @@ func configure_segment(origin: Vector2, endpoint: Vector2) -> bool:
 	global_rotation = segment.angle()
 	_tracking_frozen = true
 	tracking_target = null
+	_sync_visuals()
 	return true
 
 func set_tracking_target(target: Node2D) -> void:
@@ -60,6 +67,7 @@ func start_telegraph() -> bool:
 	_tracking_frozen = false
 	state = State.TELEGRAPH
 	_update_tracking(0.0)
+	_sync_visuals()
 	return true
 
 func start_firing() -> bool:
@@ -68,20 +76,63 @@ func start_firing() -> bool:
 	state = State.FIRING
 	_fire_elapsed = 0.0
 	_last_hit_by_target.clear()
+	_sync_visuals()
 	return true
 
 func stop() -> void:
 	state = State.INACTIVE
 	_fire_elapsed = 0.0
 	_last_hit_by_target.clear()
+	_sync_visuals()
 
 func cleanup() -> void:
 	stop()
 	_tracking_frozen = false
 	tracking_target = null
+	damage_source = null
+	damage_tags.clear()
+	_sync_visuals()
 
 func runtime_snapshot() -> Dictionary:
 	return {"state": state, "origin": fixed_origin, "rotation": global_rotation, "hit_targets": _last_hit_by_target.size()}
+
+## Presentation-only observation.  Kept separate so the logical snapshot
+## remains stable for consumers that compare its exact shape.
+func visual_runtime_snapshot() -> Dictionary:
+	return {
+		"has_visuals": _telegraph_visual != null or _active_beam_visual != null or _emitter_visual != null or _impact_visual != null,
+		"telegraph_visible": _is_visual_visible(_telegraph_visual),
+		"active_beam_visible": _is_visual_visible(_active_beam_visual),
+		"emitter_visible": _is_visual_visible(_emitter_visual),
+		"impact_visible": _is_visual_visible(_impact_visual),
+		"beam_length_px": beam_length_px,
+	}
+
+func _ready() -> void:
+	_sync_visuals()
+
+func _process(_delta: float) -> void:
+	_sync_visuals()
+
+func _sync_visuals() -> void:
+	var visual_length := maxf(0.0, beam_length_px)
+	if _telegraph_visual != null:
+		_telegraph_visual.position = Vector2.ZERO
+		_telegraph_visual.scale = Vector2(visual_length / 16.0, 1.0)
+		_telegraph_visual.visible = state == State.TELEGRAPH
+	if _active_beam_visual != null:
+		_active_beam_visual.position = Vector2.ZERO
+		_active_beam_visual.region_rect = Rect2(0.0, 0.0, visual_length, 10.0)
+		_active_beam_visual.visible = state == State.FIRING
+	if _emitter_visual != null:
+		_emitter_visual.position = Vector2.ZERO
+		_emitter_visual.visible = state == State.TELEGRAPH or state == State.FIRING
+	if _impact_visual != null:
+		_impact_visual.position = Vector2(visual_length, 0.0)
+		_impact_visual.visible = state == State.FIRING
+
+func _is_visual_visible(visual: CanvasItem) -> bool:
+	return visual != null and visual.visible
 
 func _physics_process(delta: float) -> void:
 	if state == State.INACTIVE:
