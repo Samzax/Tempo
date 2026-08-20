@@ -4,9 +4,9 @@ extends Node
 ## RoomController ja consome; combate e ataques pertencem a blocos posteriores.
 
 const REGENTE_SCENE := preload("res://scenes/enemies/bosses/regente_dos_ecos.tscn")
-const CASULO_EXPLOSIVO := preload("res://scripts/enemies/bosses/wings/casulo_explosivo.gd")
+const CASULO_EXPLOSIVO := preload("res://scenes/enemies/bosses/wings/casulo_explosivo.tscn")
 const FORMACAO_ASAS_CONTROLLER := preload("res://scripts/enemies/bosses/wings/formacao_asas_controller.gd")
-const LASER_BEAM_2D := preload("res://scripts/enemies/bosses/wings/laser_beam_2d.gd")
+const LASER_BEAM_2D := preload("res://scenes/enemies/bosses/wings/laser_beam_2d.tscn")
 
 signal enemy_spawned(enemy: Enemy)
 signal spawns_finished
@@ -250,7 +250,7 @@ func _initialize_explosive_wings() -> void:
 	_release_explosive_cocoons()
 	var cocoons: Array = []
 	for index in range(WING_OFFSETS.size()):
-		var cocoon := CASULO_EXPLOSIVO.new() as CasuloExplosivo
+		var cocoon := CASULO_EXPLOSIVO.instantiate() as CasuloExplosivo
 		add_child(cocoon)
 		_explosive_cocoons.append(cocoon)
 		cocoon.set_slot_id(index + 1)
@@ -269,7 +269,7 @@ func _initialize_laser_beams(pattern := LaserPattern.SHIELD) -> void:
 	var offsets := _laser_offsets_for(pattern)
 	var emitter_indices := _laser_emitter_indices_for(pattern)
 	for index in emitter_indices:
-		var beam := LASER_BEAM_2D.new() as LaserBeam2D
+		var beam := LASER_BEAM_2D.instantiate() as LaserBeam2D
 		add_child(beam)
 		beam.beam_width_px = LASER_BEAM_WIDTH_PX
 		beam.hit_tick_seconds = LASER_HIT_TICK_SECONDS
@@ -962,7 +962,7 @@ func _start_whip_crack() -> void:
 	# Stroke collision ends before the terminal laser exists.
 	_whip_phase = WhipPhase.CRACK
 	_release_laser_beams()
-	var beam := LASER_BEAM_2D.new() as LaserBeam2D
+	var beam := LASER_BEAM_2D.instantiate() as LaserBeam2D
 	add_child(beam)
 	# Register before configuration so every failure path is owned by cleanup.
 	_laser_beams.append(beam)
@@ -1044,7 +1044,7 @@ func _start_rift_final() -> void:
 	_rift_phase = RiftPhase.FINAL
 
 func _new_rift_beam() -> LaserBeam2D:
-	var beam := LASER_BEAM_2D.new() as LaserBeam2D
+	var beam := LASER_BEAM_2D.instantiate() as LaserBeam2D
 	add_child(beam)
 	beam.beam_width_px = LASER_BEAM_WIDTH_PX
 	beam.hit_tick_seconds = LASER_HIT_TICK_SECONDS

@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/bosses/regente_dos_ecos.gd" id="1_regente"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/mask-crown.png" id="5_mask"]
 [ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/arm-kit.png" id="6_arm"]
 [ext_resource type="Texture2D" path="res://assets/sprites/enemies/regente-dos-ecos/conduit-kit.png" id="7_conduit"]
+[ext_resource type="Script" path="res://scripts/enemies/bosses/electric_grid_visual.gd" id="8_electric_visual"]
 
 [sub_resource type="CircleShape2D" id="Circle_regente"]
 radius = 20.0
@@ -20,6 +21,9 @@ crown_axial_offset = -103.0
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
+
+[node name="ElectricGridVisual" type="Node2D" parent="."]
+script = ExtResource("8_electric_visual")
 
 [node name="CoreReactor" type="Sprite2D" parent="."]
 texture_filter = 1
