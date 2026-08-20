@@ -245,24 +245,33 @@ func test_interestelar_shift_stops_engine_trail_on_blink_frame() -> void:
 	effects.add_to_group(&"effects")
 	add_child_autofree(effects)
 	var player := await _player()
+	player.set_physics_process(false)
 	assert_true(player.configure_ship(load("res://resources/ships/interestelar.tres")))
+	_release_inputs()
+	await get_tree().process_frame
+	player._blink_cd = 0.0
+	player._blink_cd_duration = 0.0
 	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(2000.0, 2000.0)))
 	player.global_position = Vector2(1000.0, 1000.0)
 	player.velocity = Vector2(0.0, -220.0)
 	player._update_engine_trail(true)
 	player.global_position += Vector2(40.0, 0.0)
 	player._update_engine_trail(true)
-	assert_true(player._engine_trail_manager._has_last_anchors)
-	var count_before := player._engine_trail_manager.active_segment_count()
+	var trail_manager := player._engine_trail_manager
+	assert_true(trail_manager._has_last_anchors)
+	var count_before := trail_manager.active_segment_count()
 	assert_gt(count_before, 0)
+	var origin := player.global_position
 	Input.action_press(&"aim_right")
 	Input.action_press(&"move_up")
 	Input.action_press(&"blink")
+	assert_true(Input.is_action_just_pressed(&"blink"))
 	player._physics_process(1.0 / 60.0)
 	_release_inputs()
-	await get_tree().process_frame
-	assert_false(player._engine_trail_manager._has_last_anchors)
-	assert_eq(player._engine_trail_manager.active_segment_count(), 0)
+	assert_eq(player.global_position, origin + Vector2.RIGHT * player._stats.get_stat(&"blink_distance"))
+	assert_gt(player._blink_cd, 0.0)
+	assert_false(trail_manager._has_last_anchors)
+	assert_eq(trail_manager.active_segment_count(), 0)
 
 func test_position_is_clamped_to_arena_bounds() -> void:
 	var player: Player = await _player()
