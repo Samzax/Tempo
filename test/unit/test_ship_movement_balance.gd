@@ -90,6 +90,7 @@ func test_max_speed_is_observed_and_blink_distance_is_not_scaled() -> void:
 	assert_eq(result.length(), player._stats.get_stat(&"max_speed"))
 	player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(1000.0, 1000.0)))
 	player.global_position = Vector2(500.0, 500.0)
+	player.velocity = Vector2(48.0, -16.0)
 	assert_true(player.try_blink(Vector2.RIGHT))
 	assert_eq(player.global_position, Vector2(500.0 + player._stats.get_stat(&"blink_distance"), 500.0))
-	assert_eq(player.velocity, Vector2.ZERO)
+	assert_eq(player.velocity, Vector2(48.0, -16.0))

@@ -540,35 +540,38 @@ func _physics_process(delta: float) -> void:
 		rotation = 0.0
 	var movement_direction := _omni_movement_direction() if omni else _aim_vector
 	var is_thrusting := movement_direction != Vector2.ZERO if omni else Input.is_action_pressed("move_up")
-	var blink_consumed := _handle_blink_input()
+	var blink_cooldown_before := _blink_cd
+	_handle_blink_input()
 	_handle_ability_input()
+	var blink_consumed := _blink_cd > blink_cooldown_before
 
 	var was_bruta_charging := _is_bruta_charging()
-	if was_bruta_charging:
+	if blink_consumed:
+		# O blink ja reposicionou a nave. Este quadro nao integra movimento,
+		# resolve contatos ou reduz o knockback, para preservar o vetor exato.
+		_refresh_mouse_aim()
+	elif was_bruta_charging:
 		var charge_collision_generation := get_collision_impact_generation()
 		_update_bruta_charge(delta)
 		if not _is_collision_impact_generation_current(charge_collision_generation):
 			return
 	else:
-		if not blink_consumed:
-			var controlled_velocity := AsteroidsMotion.calculate_velocity(
-				velocity - _collision_knockback_velocity,
+		var controlled_velocity := AsteroidsMotion.calculate_velocity(
+			velocity - _collision_knockback_velocity,
 			movement_direction,
 			is_thrusting,
 			_stats.get_stat(&"acceleration") * 0.60,
 			_stats.get_stat(&"friction") * 0.35,
 			_stats.get_stat(&"max_speed"),
 			delta,
-			)
-			velocity = controlled_velocity + _collision_knockback_velocity
-			move_and_slide()
-			_clamp_to_bounds()
-		else:
-			velocity = _collision_knockback_velocity
+		)
+		velocity = controlled_velocity + _collision_knockback_velocity
+		move_and_slide()
+		_clamp_to_bounds()
 	_refresh_mouse_aim()
 	if not omni:
 		rotation = _aim_vector.angle() + PI / 2.0
-	if not _check_contact(0.0 if was_bruta_charging else delta):
+	if not blink_consumed and not _check_contact(0.0 if was_bruta_charging else delta):
 		return
 	_update_omni_stop_spin(delta, movement_direction if omni else Vector2.ZERO)
 	_update_visual_aim(delta)
@@ -838,7 +841,6 @@ func try_blink(direction: Vector2 = Vector2.ZERO) -> bool:
 	_clear_engine_trail_segments()
 	_resolve_blink_trail_damage(origin, dest)
 	global_position = dest      # teleporte instantâneo
-	velocity = _collision_knockback_velocity # O blink remove a propulsao, nao o impulso externo.
 	_reset_omni_stop_spin()
 	_dispatcher.dispatch(&"on_blink", null, 0)
 	_invuln_timer = maxf(_invuln_timer, _stats.get_stat(&"blink_invuln"))

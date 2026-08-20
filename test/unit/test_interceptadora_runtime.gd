@@ -1,5 +1,7 @@
 extends GutTest
 
+const INPUT_ACTIONS: Array[StringName] = [&"ability_q", &"blink", &"aim_up", &"aim_left", &"aim_down", &"aim_right", &"shoot", &"move_up", &"move_left", &"move_down", &"move_right"]
+
 class DamageTarget extends Node2D:
 	var calls: Array[DamageInfo] = []
 	var ship_to_mutate: ShipDef = null
@@ -20,6 +22,8 @@ var _character: CharacterDef
 const HULL_ANIMATIONS := [&"hard_left", &"soft_left", &"neutral", &"soft_right", &"hard_right"]
 
 func before_each() -> void:
+	_release_inputs()
+	await get_tree().process_frame
 	_root = Node2D.new()
 	add_child(_root)
 	_effects = Node2D.new()
@@ -50,8 +54,13 @@ func before_each() -> void:
 	_player.set_room_bounds(Rect2(Vector2.ZERO, Vector2(240, 180)))
 
 func after_each() -> void:
+	_release_inputs()
 	if is_instance_valid(_root):
 		_root.free()
+
+func _release_inputs() -> void:
+	for action in INPUT_ACTIONS:
+		Input.action_release(action)
 
 func test_aligned_target_is_damaged_once_with_real_damage_info() -> void:
 	_player._resolve_blink_trail_damage(Vector2(100, 100), Vector2(200, 100))
@@ -106,11 +115,45 @@ func test_clamped_endpoint_and_zero_length_trail_are_safe() -> void:
 
 func test_public_try_blink_uses_real_player_and_clamps_to_room() -> void:
 	_player.position = Vector2(120, 90)
+	_player.velocity = Vector2(35, -15)
 	_player._blink_cd = 0.0
 	assert_true(_player.try_blink(Vector2.RIGHT))
 	assert_eq(_player.position, Vector2(230, 90))
-	assert_eq(_player.velocity, Vector2.ZERO)
+	assert_eq(_player.velocity, Vector2(35, -15))
 	assert_true(_player.is_invulnerable())
+
+func test_q_blink_preserves_velocity_and_skips_post_teleport_movement() -> void:
+	var controlled_velocity := Vector2(35.0, -15.0)
+	var collision_knockback := Vector2(-8.0, 5.0)
+	_player.position = Vector2(50.0, 100.0)
+	_player.velocity = controlled_velocity + collision_knockback
+	_player._collision_knockback_velocity = collision_knockback
+	var origin := _player.position
+	Input.action_press(&"aim_right")
+	Input.action_press(&"ability_q")
+	_player._physics_process(1.0 / 60.0)
+	_release_inputs()
+	assert_eq(_player.position, origin + Vector2.RIGHT * _player._stats.get_stat(&"blink_distance"))
+	assert_eq(_player.velocity, controlled_velocity + collision_knockback)
+	assert_eq(_player._collision_knockback_velocity, collision_knockback)
+	assert_eq(_player._blink_cd, _player._blink_cd_duration)
+	assert_eq(_player._blink_cd_duration, _player.blink_cooldown_duration())
+	assert_eq(_player._invuln_timer, _player._stats.get_stat(&"blink_invuln"))
+	var teleported_position := _player.position
+	_player._physics_process(1.0 / 60.0)
+	var expected := AsteroidsMotion.calculate_velocity(controlled_velocity, Vector2.RIGHT, false, _player._stats.get_stat(&"acceleration") * 0.60, _player._stats.get_stat(&"friction") * 0.35, _player._stats.get_stat(&"max_speed"), 1.0 / 60.0) + collision_knockback
+	assert_eq(_player.velocity, expected)
+	var resumed_displacement := _player.position - teleported_position
+	assert_gt(resumed_displacement.length(), 0.0)
+	assert_almost_eq(
+		resumed_displacement.normalized().dot(expected.normalized()),
+		1.0,
+		0.0001,
+	)
+	assert_lt(
+		resumed_displacement.length(),
+		_player._stats.get_stat(&"blink_distance") / 4.0,
+	)
 
 func test_public_try_blink_zero_length_direction_uses_aim_without_input() -> void:
 	_player.position = Vector2(120, 90)

@@ -48,6 +48,7 @@ func _assert_vector_almost_eq(actual: Vector2, expected: Vector2, tolerance: flo
 
 func before_each() -> void:
 	_release_inputs()
+	await get_tree().process_frame
 
 
 func after_each() -> void:
@@ -97,6 +98,7 @@ func test_bruta_shift_input_starts_charge_instead_of_try_blink() -> void:
 	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
 	_assert_vector_almost_eq(player._aim_vector, Vector2.RIGHT)
 	var before := player.global_position
+	Input.action_release(&"blink")
 	Input.action_press(&"blink")
 
 	assert_true(player._handle_blink_input())
@@ -114,12 +116,18 @@ func test_bruta_shift_cooldown_rejects_second_activation() -> void:
 	player._update_aim()
 	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
 	_assert_vector_almost_eq(player._aim_vector, Vector2.RIGHT)
+	Input.action_release(&"blink")
 	Input.action_press(&"blink")
 
 	assert_true(player._handle_blink_input())
-	var windup_before := player._bruta_charge_windup_remaining
+	Input.action_release(&"blink")
+	await get_tree().process_frame
+	var windup_before_retry := player._bruta_charge_windup_remaining
+	var cooldown_before_retry := player._ability_shift_cd
+	Input.action_press(&"blink")
 	assert_false(player._handle_blink_input())
-	assert_eq(player._bruta_charge_windup_remaining, windup_before)
+	assert_eq(player._bruta_charge_windup_remaining, windup_before_retry)
+	assert_eq(player._ability_shift_cd, cooldown_before_retry)
 	assert_gt(player.shift_cooldown_ratio(), 0.0)
 
 func test_bruta_collision_knockback_survives_charge_substeps_and_cancel() -> void:
