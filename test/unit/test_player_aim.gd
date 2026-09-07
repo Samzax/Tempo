@@ -24,6 +24,9 @@ func after_each() -> void:
 
 func _mouse_at(position: Vector2) -> void:
 	get_viewport().warp_mouse(position)
+	var motion := InputEventMouseMotion.new()
+	motion.relative = Vector2(8.0, 0.0)
+	_player._input(motion)
 	await get_tree().process_frame
 
 func test_fire_direction_uses_muzzle_origin_and_differs_from_player_origin() -> void:
@@ -90,7 +93,7 @@ func test_bruta_omni_does_not_receive_visual_aim() -> void:
 
 	assert_almost_eq(_player.visual_root.rotation, 0.37, 0.00001)
 
-func test_active_joystick_owns_aim_and_mouse_returns_after_stick_release() -> void:
+func test_active_joystick_owns_aim_until_meaningful_mouse_input() -> void:
 	await _mouse_at(Vector2(300.0, 200.0))
 	Input.action_press("aim_right", 1.0)
 	var mouse_motion := InputEventMouseMotion.new()
@@ -108,8 +111,15 @@ func test_active_joystick_owns_aim_and_mouse_returns_after_stick_release() -> vo
 	Input.action_release("aim_right")
 	_player._update_aim()
 
-	assert_eq(_player._last_aim_source, Player.AimSource.MOUSE)
+	assert_eq(_player._last_aim_source, Player.AimSource.JOYPAD)
 	assert_false(_player._joypad_aim_was_active)
+	assert_true(_player._aim_vector.is_equal_approx(Vector2.RIGHT))
+	assert_true(_player._fire_direction_from_muzzle().is_equal_approx(Vector2.RIGHT))
+	var intentional_mouse := InputEventMouseMotion.new()
+	intentional_mouse.relative = Vector2(6.0, 0.0)
+	_player._input(intentional_mouse)
+	_player._update_aim()
+	assert_eq(_player._last_aim_source, Player.AimSource.MOUSE)
 	_player._fire()
 	var mouse_bullet := _projectiles.get_child(1)
 	var mouse_direction := (_mouse_at_global() - _player.muzzle.global_position).normalized()

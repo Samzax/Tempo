@@ -538,8 +538,13 @@ func _physics_process(delta: float) -> void:
 		rotation = _aim_vector.angle() + PI / 2.0
 	else:
 		rotation = 0.0
-	var movement_direction := _omni_movement_direction() if omni else _aim_vector
-	var is_thrusting := movement_direction != Vector2.ZERO if omni else Input.is_action_pressed("move_up")
+	var controller_move := InputControls.controller_move_vector()
+	var directional_input := controller_move if controller_move != Vector2.ZERO else (_omni_movement_direction() if omni else Vector2.ZERO)
+	# O teclado conserva a propulsao frontal das naves Asteroids. O controle
+	# oferece movimento direcional sem obrigar a soltar o analogico de mira.
+	var movement_direction := directional_input if omni or controller_move != Vector2.ZERO else _aim_vector
+	var is_thrusting := directional_input != Vector2.ZERO if omni or controller_move != Vector2.ZERO else InputControls.pressed(&"move_up")
+	var thrust_strength := directional_input.length() if directional_input != Vector2.ZERO else 1.0
 	var blink_consumed := _handle_blink_input()
 	_handle_ability_input()
 
@@ -555,7 +560,7 @@ func _physics_process(delta: float) -> void:
 				velocity - _collision_knockback_velocity,
 			movement_direction,
 			is_thrusting,
-			_stats.get_stat(&"acceleration") * 0.60,
+			_stats.get_stat(&"acceleration") * 0.60 * thrust_strength,
 			_stats.get_stat(&"friction") * 0.35,
 			_stats.get_stat(&"max_speed"),
 			delta,
@@ -584,7 +589,7 @@ func _is_omni_ship() -> bool:
 
 ## Usa a mesma convencao de eixos do blink: esquerda, direita, cima, baixo.
 func _omni_movement_direction() -> Vector2:
-	return Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	return InputControls.movement_vector()
 
 ## Faz a Bruta girar na desaceleracao final apos movimento significativo.
 ## O giro vive apenas no VisualRoot para nunca afetar colisao ou orientacao fisica.
@@ -671,24 +676,29 @@ func _reset_visual_aim() -> void:
 
 ## Detecta o mouse antes da interface para preservar a troca de fonte da mira.
 func _input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion:
+	if not InputControls.observe_event(event) or not InputControls.gameplay_allowed():
+		return
+	if event is InputEventMouseMotion and InputControls.meaningful_mouse_motion(event) and InputControls.aim_vector() == Vector2.ZERO:
 		_last_aim_source = AimSource.MOUSE
 
 ## Atualiza a última direção válida de mira conforme a fonte de entrada ativa.
 func _update_aim() -> void:
-	var joypad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
-	var joypad_active := joypad_aim.length() > 0.2
+	if not InputControls.gameplay_allowed():
+		return
+	var joypad_aim := InputControls.aim_vector()
+	var joypad_active := joypad_aim.length_squared() > 0.000001
 	if joypad_active:
 		_last_aim_source = AimSource.JOYPAD
 		_aim_vector = joypad_aim.normalized()
-	else:
-		_last_aim_source = AimSource.MOUSE
+	elif _last_aim_source == AimSource.MOUSE:
 		_refresh_mouse_aim()
+	# Soltar o analogico preserva a ultima direcao; somente movimento real
+	# do mouse pode devolver a ele a propriedade da mira.
 	_joypad_aim_was_active = joypad_active
 
 ## Recalcula a mira do mouse usando a posição final da nave no quadro.
 func _refresh_mouse_aim() -> void:
-	if _last_aim_source == AimSource.MOUSE:
+	if _last_aim_source == AimSource.MOUSE and InputControls.gameplay_allowed():
 		var mouse_aim := get_global_mouse_position() - global_position
 		if mouse_aim.length() >= 0.001:
 			_aim_vector = mouse_aim.normalized()
@@ -943,8 +953,8 @@ func _update_bruta_charge(delta: float) -> void:
 
 func _bruta_charge_desired_direction() -> Vector2:
 	if _bruta_charge_aim_source == AimSource.JOYPAD:
-		var joypad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
-		return joypad_aim.normalized() if joypad_aim.length() > 0.2 else Vector2.ZERO
+		var joypad_aim := InputControls.aim_vector()
+		return joypad_aim.normalized() if joypad_aim.length_squared() > 0.000001 else Vector2.ZERO
 	if _bruta_charge_aim_source == AimSource.MOUSE:
 		var mouse_aim := get_global_mouse_position() - global_position
 		return mouse_aim.normalized() if mouse_aim.length_squared() > 0.001 else Vector2.ZERO
@@ -1007,7 +1017,7 @@ func _bruta_charge_target_radius(target: Node2D) -> float:
 
 ## Ativa as habilidades equipadas quando seus slots estao prontos.
 func _handle_blink_input() -> bool:
-	if not Input.is_action_just_pressed("blink"):
+	if not InputControls.just_pressed(&"blink"):
 		return false
 	if _ability_shift != null:
 		if _ability_shift_cd > 0.0:
@@ -1027,13 +1037,13 @@ func _handle_blink_input() -> bool:
 	return try_blink()
 
 func _handle_ability_input() -> void:
-	if Input.is_action_just_pressed("ability_q") and _ability_q != null and _ability_q_cd <= 0.0:
+	if InputControls.just_pressed(&"ability_q") and _ability_q != null and _ability_q_cd <= 0.0:
 		if _ability_q.try_activate(self):
 			var q_cooldown := _ability_q.get_cooldown(self)
 			_ability_q_cd = q_cooldown
 			_ability_q_cd_duration = q_cooldown
 			EventBus.ability_used.emit(&"ability_q")
-	if Input.is_action_just_pressed("ability_e") and _ability_e != null and _ability_e_cd <= 0.0:
+	if InputControls.just_pressed(&"ability_e") and _ability_e != null and _ability_e_cd <= 0.0:
 		if _ability_e.try_activate(self):
 			var e_cooldown := _ability_e.get_cooldown(self)
 			_ability_e_cd = e_cooldown
@@ -1283,7 +1293,7 @@ func _uses_interceptor_blink_trail() -> bool:
 
 ## Dispara enquanto Espaço estiver pressionado, respeitando a cadência.
 func _handle_fire(delta: float) -> void:
-	if _fire_cooldown <= 0.0 and Input.is_action_pressed("shoot"):
+	if _fire_cooldown <= 0.0 and InputControls.pressed(&"shoot"):
 		_fire()
 		_fire_cooldown = 1.0 / _stats.get_stat(&"fire_rate")
 
@@ -1312,7 +1322,7 @@ func _on_hull_animation_finished() -> void:
 		sprite.play(&"neutral")
 
 func get_fire_direction_from(origin: Vector2) -> Vector2:
-	if not _joypad_aim_was_active:
+	if _last_aim_source == AimSource.MOUSE:
 		var mouse_direction := get_global_mouse_position() - origin
 		if mouse_direction.is_finite() and mouse_direction.length_squared() > 0.000001:
 			return mouse_direction.normalized()
@@ -1353,3 +1363,10 @@ func _select_aim_target(tier: int) -> Vector2:
 		best_angle = angle_difference
 		best_direction = enemy_direction
 	return best_direction
+
+## Limpa apenas a entrada ao iniciar outra run; nao altera habilidades ou estatisticas.
+func reset_input_state() -> void:
+	_aim_vector = Vector2.UP
+	_last_aim_source = AimSource.MOUSE if InputControls.prompt_family == ControlBindings.KEYBOARD else AimSource.NONE
+	_joypad_aim_was_active = false
+	InputControls.suppress_held()
