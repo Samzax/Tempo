@@ -44,6 +44,7 @@ func _select_option_id(option: OptionButton, selected_id: StringName) -> bool:
 func _map_key() -> InputEventKey:
 	var event := InputEventKey.new()
 	event.keycode = KEY_M
+	event.physical_keycode = KEY_M
 	event.pressed = true
 	event.echo = false
 	return event
@@ -64,7 +65,7 @@ func test_boot_shows_menu_and_focuses_new_game() -> void:
 	assert_eq(menu.get_viewport().gui_get_focus_owner(), menu.get_node("MenuContainer/StartButton"))
 	assert_eq(menu.get_node("MenuContainer/StartButton").text, "Começar novo jogo")
 
-func test_controls_panel_has_exact_requested_instructions() -> void:
+func test_controls_panel_exposes_live_bindings_and_recovery_instructions() -> void:
 	var menu := await _menu()
 	var controls_button := menu.get_node("MenuContainer/ControlsButton") as Button
 	controls_button.emit_signal("pressed")
@@ -72,9 +73,11 @@ func test_controls_panel_has_exact_requested_instructions() -> void:
 
 	assert_true(menu.get_node("ControlsPanel").visible)
 	assert_false(menu.get_node("MenuContainer").visible)
-	assert_eq(menu.get_node("ControlsPanel/Panel/MarginContainer/Content/Instructions").text,
-		"Mover: WASD\nAtirar: Espaço\nHabilidades: Q/E\nBlink: Shift")
-	assert_eq(menu.get_viewport().gui_get_focus_owner(), menu.get_node("ControlsPanel/Panel/MarginContainer/Content/CloseButton"))
+	var panel := menu.get_node("ControlsPanel") as ControlsPanel
+	assert_eq(panel._buttons.size(), ControlBindings.ACTIONS.size())
+	assert_string_contains(panel.get_node("Panel/MarginContainer/Content/Instructions").text, "Aplicar salva")
+	assert_string_contains(panel._buttons[&"shoot"].text, InputControls.prompt(&"shoot", ControlBindings.KEYBOARD))
+	assert_eq(menu.get_viewport().gui_get_focus_owner(), menu.get_node("ControlsPanel/Panel/MarginContainer/Content/Actions/CloseButton"))
 
 func test_back_closes_controls_and_returns_focus_to_controls_button() -> void:
 	var menu := await _menu()
@@ -82,7 +85,7 @@ func test_back_closes_controls_and_returns_focus_to_controls_button() -> void:
 	controls_button.emit_signal("pressed")
 	await get_tree().process_frame
 
-	(menu.get_node("ControlsPanel/Panel/MarginContainer/Content/CloseButton") as Button).emit_signal("pressed")
+	(menu.get_node("ControlsPanel/Panel/MarginContainer/Content/Actions/CloseButton") as Button).emit_signal("pressed")
 	await get_tree().process_frame
 
 	assert_false(menu.get_node("ControlsPanel").visible)

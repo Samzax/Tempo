@@ -114,44 +114,36 @@ func _unhandled_input(event: InputEvent) -> void:
 	_handle_navigation_input(event)
 
 func _handle_navigation_input(event: InputEvent) -> void:
-	if not is_visible_in_tree() or not event.is_pressed() or event.is_echo():
+	if not is_visible_in_tree() or not InputControls.observe_event(event) or event.is_echo():
 		return
-	if event is InputEventJoypadButton:
-		match event.button_index:
-			JOY_BUTTON_DPAD_UP:
-				_step_character(-1)
-			JOY_BUTTON_DPAD_DOWN:
-				_step_character(1)
-			JOY_BUTTON_DPAD_LEFT:
-				_step_ship(-1)
-			JOY_BUTTON_DPAD_RIGHT:
-				_step_ship(1)
-			JOY_BUTTON_A:
-				_confirm_selection()
-			_:
-				return
-		get_viewport().set_input_as_handled()
-		return
-	if event.is_action_pressed(&"ui_cancel"):
+	if InputControls.ui_pressed(event, &"ui_cancel"):
 		back_requested.emit()
-		get_viewport().set_input_as_handled()
-		return
-	if event is InputEventKey:
-		if event.keycode == KEY_E or event.keycode == KEY_S:
+	elif InputControls.navigation_pressed(event, &"ui_up"):
+		_step_character(-1)
+	elif InputControls.navigation_pressed(event, &"ui_down"):
+		_step_character(1)
+	elif InputControls.navigation_pressed(event, &"ui_left"):
+		_step_ship(-1)
+	elif InputControls.navigation_pressed(event, &"ui_right"):
+		_step_ship(1)
+	elif InputControls.ui_pressed(event, &"ui_accept"):
+		_confirm_selection()
+	elif event is InputEventKey and event.pressed:
+		# Atalhos legados de selecao, sem alterar os bindings de combate.
+		var key := event.physical_keycode if event.physical_keycode != 0 else event.keycode
+		if key == KEY_E or key == KEY_S:
 			_step_character(1)
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_W:
+		elif key == KEY_W:
 			_step_character(-1)
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_Q or event.keycode == KEY_A:
+		elif key == KEY_Q or key == KEY_A:
 			_step_ship(-1)
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_D:
+		elif key == KEY_D:
 			_step_ship(1)
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
-			_confirm_selection()
-			get_viewport().set_input_as_handled()
+		else:
+			return
+	else:
+		return
+	InputControls.consume_ui_event(event)
 
 func _handle_navigation_mouse(event: InputEventMouseButton) -> bool:
 	if event.button_index != MOUSE_BUTTON_LEFT:

@@ -290,7 +290,7 @@ func _on_node_selected(node_id: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _has_started or run_state == null or _room_active or sector == null or _hyperspace.visible:
 		return
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M:
+	if InputControls.ui_pressed(event, &"map_toggle"):
 		if _awaiting_boss_advance:
 			_present_boss_advance(sector.get_node(run_state.current_node_id))
 		else:

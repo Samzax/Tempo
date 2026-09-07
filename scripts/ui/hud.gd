@@ -46,6 +46,8 @@ class AbilitySlotIcon:
 		_key_label.add_theme_font_size_override("font_size", 9)
 		_key_label.add_theme_color_override("font_color", KEY_TEXT)
 		_key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_key_label.size = Vector2(SLOT_SIZE - 6.0, 12.0)
+		_key_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		add_child(_key_label)
 
 	func configure(slot: Dictionary) -> void:
@@ -57,6 +59,7 @@ class AbilitySlotIcon:
 		use_charge_indicator = ability_id == &"bruta_investida"
 		if _key_label != null:
 			_key_label.text = str(slot.get("key", ""))
+			tooltip_text = str(slot.get("binding_full", _key_label.text))
 		queue_redraw()
 
 	func _draw() -> void:
@@ -118,6 +121,7 @@ var _gs: Node = null
 var _over := false
 
 func _ready() -> void:
+	InputControls.prompts_changed.connect(_on_input_prompts_changed)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -191,7 +195,11 @@ func _refresh_ability_slots() -> void:
 		return
 	var slots: Array = _player.call(&"get_ability_hud_slots")
 	for index in mini(slots.size(), _ability_slots.size()):
-		_ability_slots[index].configure(slots[index])
+		var display_slot: Dictionary = slots[index].duplicate()
+		var action: StringName = [&"ability_q", &"ability_e", &"blink"][index]
+		display_slot["key"] = InputControls.prompt(action, -1, true)
+		display_slot["binding_full"] = InputControls.prompt(action)
+		_ability_slots[index].configure(display_slot)
 
 func _bind_player(next_player: Node) -> void:
 	if next_player == _player and is_instance_valid(_player):
@@ -228,18 +236,29 @@ func _rebuild_pips(max_health: int) -> void:
 
 func _trigger_over() -> void:
 	_over = true
-	_game_over.text = "FIM DE JOGO\nEnter para reiniciar"
+	_game_over.text = "FIM DE JOGO\n%s para reiniciar" % InputControls.prompt(&"ui_accept")
+	InputControls.set_modal(self, true)
 	_game_over.show()
 	get_tree().paused = true
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _over and event.is_action_pressed("ui_accept"):
+	if _over and InputControls.ui_pressed(event, &"ui_accept"):
+		InputControls.consume_ui_event(event)
 		_restart()
 
 func _restart() -> void:
+	InputControls.set_modal(self, false)
 	_over = false
 	get_tree().paused = false
 	if _gs != null:
 		_gs.score = 0
 		_gs.player_lives = 3
 	get_tree().reload_current_scene()
+
+func _on_input_prompts_changed() -> void:
+	_refresh_ability_slots()
+	if _over and is_instance_valid(_game_over):
+		_game_over.text = "FIM DE JOGO\n%s para reiniciar" % InputControls.prompt(&"ui_accept")
+
+func _exit_tree() -> void:
+	InputControls.set_modal(self, false)

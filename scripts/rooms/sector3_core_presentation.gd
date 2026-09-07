@@ -58,6 +58,7 @@ func configure(chest: RewardChest, player: Node2D, completed_on_entry: bool = fa
 	_completed_on_entry = completed_on_entry
 
 func _ready() -> void:
+	InputControls.prompts_changed.connect(_refresh_prompt)
 	_build_planes()
 	_build_core()
 	_restore_completed_entry()
@@ -130,10 +131,10 @@ func _refresh_prompt() -> void:
 	if not is_instance_valid(_prompt):
 		return
 	if _state == State.ACTIVATABLE:
-		_prompt.text = "ATIVAR  [Enter]"
+		_prompt.text = "ATIVAR  [%s]" % InputControls.prompt(&"interact")
 		_prompt.visible = _is_player_nearby()
 	elif _state == State.OFFER_PENDING and _is_player_nearby() and not _is_offer_ui_visible():
-		_prompt.text = "OFERTA  [Enter]"
+		_prompt.text = "OFERTA  [%s]" % InputControls.prompt(&"interact")
 		_prompt.show()
 	else:
 		_prompt.hide()
@@ -178,7 +179,7 @@ func activate() -> void:
 func _input(event: InputEvent) -> void:
 	if (_state != State.ACTIVATABLE and _state != State.OFFER_PENDING) or not _is_player_nearby():
 		return
-	if event.is_action_pressed(&"interact") or (event is InputEventKey and event.pressed and not event.echo and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER)):
+	if InputControls.interaction_pressed(event):
 		if _state == State.ACTIVATABLE:
 			_begin_channel()
 		elif is_instance_valid(_chest):

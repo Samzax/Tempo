@@ -18,22 +18,38 @@ var _rebuild_offer: RewardOffer
 var _rebuild_generation := -1
 var _terminal_invalidated_generation := -1
 var _can_refuse := false
+var _navigation_buttons: Array[Button] = []
+var _navigation_index := 0
+var _confirm_armed := false
+var _offer_open_frame := -1
+var _previous_focus: WeakRef
+var _close_button: Button
+var _navigation_hint: Label
 
 func _enter_tree() -> void:
 	_ensure_echoes_connection()
 
 func _ready() -> void:
+	visibility_changed.connect(_on_input_visibility_changed)
+	InputControls.prompts_changed.connect(_on_input_prompts_changed)
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	hide()
 
 func _exit_tree() -> void:
+	InputControls.set_reward_context(self, false)
 	if GameState.temporal_echoes_changed.is_connected(_on_temporal_echoes_changed):
 		GameState.temporal_echoes_changed.disconnect(_on_temporal_echoes_changed)
 
 func open_offer(offer: RewardOffer, player: Node, allow_refuse: bool = false) -> void:
 	if _choosing or _refreshing:
 		return
+	if not visible:
+		var focus := get_viewport().gui_get_focus_owner()
+		_previous_focus = weakref(focus) if focus != null else null
+	_confirm_armed = false
+	_offer_open_frame = Engine.get_process_frames()
+	_navigation_index = 0
 	_offer = offer
 	_player = player
 	_can_refuse = allow_refuse
@@ -47,6 +63,7 @@ func _build(allow_rebuild: bool = true, fail_closed: bool = false) -> void:
 	for child in get_children():
 		child.queue_free()
 	_buttons.clear()
+	_navigation_buttons.clear()
 	var shade := ColorRect.new()
 	shade.color = Color(0.01, 0.02, 0.06, 0.86)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -71,15 +88,24 @@ func _build(allow_rebuild: bool = true, fail_closed: bool = false) -> void:
 		button.pressed.connect(_choose.bind(index))
 		panel.add_child(button)
 		_buttons.append(button)
+		_register_navigation_button(button)
 	var close := Button.new()
-	close.text = "Fechar  [Esc]"
+	close.text = "Fechar  [%s]" % InputControls.prompt(&"ui_cancel")
+	_close_button = close
 	close.pressed.connect(hide)
 	panel.add_child(close)
+	_register_navigation_button(close)
 	if _can_refuse:
 		var refuse := Button.new()
 		refuse.text = "RECUSAR"
 		refuse.pressed.connect(_refuse)
 		panel.add_child(refuse)
+		_register_navigation_button(refuse)
+	_navigation_hint = Label.new()
+	_navigation_hint.add_theme_font_size_override("font_size", 10)
+	panel.add_child(_navigation_hint)
+	_refresh_navigation_hint()
+	call_deferred(&"_restore_choice_focus")
 	if fail_closed:
 		_terminal_invalidated_generation = _ui_generation
 		for button in _buttons:
@@ -189,11 +215,11 @@ func _refresh(allow_followup: bool = true, allow_rebuild: bool = true) -> void:
 				break
 			if index >= snap_options.size():
 				(button as Button).disabled = true
-				(button as Button).text = "%d. ITEM INVÁLIDO  (INDISPONÍVEL)" % [index + 1]
+				(button as Button).text = "%s. ITEM INVÁLIDO  (INDISPONÍVEL)" % [_choice_prefix(index)]
 				continue
 			if item == null:
 				(button as Button).disabled = true
-				(button as Button).text = "%d. ITEM INVÁLIDO  (INDISPONÍVEL)" % [index + 1]
+				(button as Button).text = "%s. ITEM INVÁLIDO  (INDISPONÍVEL)" % [_choice_prefix(index)]
 				continue
 			if not _is_live_object(item):
 				needs_rebuild = true
@@ -228,7 +254,7 @@ func _refresh(allow_followup: bool = true, allow_rebuild: bool = true) -> void:
 			elif not available:
 				suffix = "  (LIMITE ATINGIDO)"
 			(button as Button).disabled = not available
-			(button as Button).text = "%d. %s\n%s%s" % [index + 1, row.display_name, row.description, suffix]
+			(button as Button).text = "%s. %s\n%s%s" % [_choice_prefix(index), row.display_name, row.description, suffix]
 	if player_invalidated:
 		if not _is_live_object(_player):
 			_player = null
@@ -236,7 +262,7 @@ func _refresh(allow_followup: bool = true, allow_rebuild: bool = true) -> void:
 			var button: Variant = snap_buttons[row.index]
 			if _is_valid_button(button, row.index, snap_generation):
 				(button as Button).disabled = true
-				(button as Button).text = "%d. %s\n%s  (INDISPONÍVEL)" % [row.index + 1, row.display_name, row.description]
+				(button as Button).text = "%s. %s\n%s  (INDISPONÍVEL)" % [_choice_prefix(row.index), row.display_name, row.description]
 	var state_mutated := false
 	if _is_live_object(snap_offer):
 		state_mutated = _offer != snap_offer or _player != snap_player or (snap_offer.claimed != snap_claimed or snap_offer.paid_with_temporal_echoes != snap_paid or snap_offer.options != snap_options or snap_offer.option_costs != snap_costs) or GameState.temporal_echoes != snap_echoes
@@ -253,6 +279,7 @@ func _refresh(allow_followup: bool = true, allow_rebuild: bool = true) -> void:
 		_queue_deferred_refresh()
 	elif not allow_followup:
 		_refresh_pending = false
+	call_deferred(&"_restore_choice_focus")
 
 func _queue_deferred_refresh() -> void:
 	if _refresh_deferred_queued or not is_inside_tree() or not _is_live_object(_offer) or not visible:
@@ -379,19 +406,104 @@ func _on_temporal_echoes_changed(_amount: int, _total: int) -> void:
 	elif not _choosing:
 		_refresh()
 
+func _input(event: InputEvent) -> void:
+	_handle_choice_input(event)
+
 func _unhandled_input(event: InputEvent) -> void:
-	if not visible:
+	_handle_choice_input(event)
+
+func _process(_delta: float) -> void:
+	if visible and not _confirm_armed and Engine.get_process_frames() > _offer_open_frame:
+		_confirm_armed = not Input.is_action_pressed(&"reward_confirm") and not Input.is_action_pressed(&"interact")
+
+func _handle_choice_input(event: InputEvent) -> void:
+	if not visible or not InputControls.observe_event(event) or event.is_echo():
 		return
-	if event.is_action_pressed(&"ui_cancel"):
+	if event is InputEventJoypadMotion:
+		# Nao deixa o GUI usar o analogico de movimento para mudar a escolha.
+		# O estado global de Input continua acessivel ao jogador durante o combate.
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventMouseButton and event.pressed:
+		for button in _navigation_buttons:
+			if _usable_navigation_button(button) and button.get_global_rect().has_point(event.position):
+				InputControls.block_gameplay_event(event)
+				return
+	if InputControls.ui_pressed(event, &"ui_cancel"):
 		hide()
-		get_viewport().set_input_as_handled()
+		InputControls.consume_ui_event(event)
 		return
-	if event.is_action_pressed(&"loot_choice_1"):
-		_choose(0)
+	if InputControls.navigation_pressed(event, &"ui_up") or InputControls.navigation_pressed(event, &"ui_left"):
+		_step_choice(-1)
+		InputControls.consume_ui_event(event)
+		return
+	if InputControls.navigation_pressed(event, &"ui_down") or InputControls.navigation_pressed(event, &"ui_right"):
+		_step_choice(1)
+		InputControls.consume_ui_event(event)
+		return
+	if InputControls.ui_pressed(event, &"reward_confirm"):
+		if _confirm_armed and _navigation_index >= 0 and _navigation_index < _navigation_buttons.size():
+			var button := _navigation_buttons[_navigation_index]
+			if _usable_navigation_button(button):
+				button.pressed.emit()
+		InputControls.consume_ui_event(event)
+		return
+	for index in 3:
+		if InputControls.ui_pressed(event, StringName("loot_choice_%d" % (index + 1))):
+			_choose(index)
+			InputControls.consume_ui_event(event)
+			return
+	# Espaco continua atirando, mas nunca compra pela aceitacao implicita do GUI.
+	if event.is_action(&"ui_accept"):
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"loot_choice_2"):
-		_choose(1)
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"loot_choice_3"):
-		_choose(2)
-		get_viewport().set_input_as_handled()
+
+func _register_navigation_button(button: Button) -> void:
+	var index := _navigation_buttons.size()
+	_navigation_buttons.append(button)
+	button.focus_entered.connect(_on_choice_focused.bind(index))
+
+func _on_choice_focused(index: int) -> void:
+	_navigation_index = index
+
+func _usable_navigation_button(button: Button) -> bool:
+	return is_instance_valid(button) and not button.is_queued_for_deletion() and button.is_visible_in_tree() and not button.disabled
+
+func _restore_choice_focus() -> void:
+	if not visible or _navigation_buttons.is_empty():
+		return
+	_navigation_index = clampi(_navigation_index, 0, _navigation_buttons.size() - 1)
+	if not _usable_navigation_button(_navigation_buttons[_navigation_index]):
+		_step_choice(1)
+		return
+	_navigation_buttons[_navigation_index].grab_focus()
+
+func _step_choice(direction: int) -> void:
+	for offset in range(1, _navigation_buttons.size() + 1):
+		var index := posmod(_navigation_index + direction * offset, _navigation_buttons.size())
+		if _usable_navigation_button(_navigation_buttons[index]):
+			_navigation_index = index
+			_navigation_buttons[index].grab_focus()
+			return
+
+func _choice_prefix(index: int) -> String:
+	if InputControls.prompt_family == ControlBindings.CONTROLLER or index >= 3:
+		return str(index + 1)
+	return InputControls.prompt(StringName("loot_choice_%d" % (index + 1)))
+
+func _refresh_navigation_hint() -> void:
+	if is_instance_valid(_close_button):
+		_close_button.text = "Fechar  [%s]" % InputControls.prompt(&"ui_cancel")
+	if is_instance_valid(_navigation_hint):
+		_navigation_hint.text = "D-pad / setas: escolher · %s: confirmar · combate continua" % InputControls.prompt(&"reward_confirm")
+
+func _on_input_prompts_changed() -> void:
+	if visible:
+		_refresh_navigation_hint()
+		_refresh()
+
+func _on_input_visibility_changed() -> void:
+	InputControls.set_reward_context(self, visible)
+	if not visible and _previous_focus != null:
+		var focus: Variant = _previous_focus.get_ref()
+		if focus is Control and is_instance_valid(focus) and focus.is_visible_in_tree() and not is_ancestor_of(focus):
+			focus.grab_focus()

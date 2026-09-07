@@ -10,8 +10,7 @@ signal start_game_requested(ship_id: StringName, character_id: StringName)
 @onready var _character_panel: CharacterSelectionPanel = $CharacterSelectionPanel
 @onready var _ship_panel: ShipSelectionPanel = $ShipSelectionPanel
 @onready var _simultaneous_panel: SimultaneousSelectionPanel = $SimultaneousSelectionPanel
-@onready var _controls_panel: Control = $ControlsPanel
-@onready var _close_button: Button = $ControlsPanel/Panel/MarginContainer/Content/CloseButton
+@onready var _controls_panel: ControlsPanel = $ControlsPanel
 
 enum MenuState { MAIN, CHARACTER, SHIP, CONTROLS, SIMULTANEOUS }
 
@@ -21,7 +20,7 @@ var _state := MenuState.MAIN
 func _ready() -> void:
 	_start_button.pressed.connect(_on_start_button_pressed)
 	_controls_button.pressed.connect(_open_controls)
-	_close_button.pressed.connect(_close_controls)
+	_controls_panel.close_requested.connect(_close_controls)
 	_character_panel.continue_requested.connect(_on_character_continue_requested)
 	_character_panel.back_requested.connect(_on_character_back_requested)
 	_ship_panel.continue_requested.connect(_on_ship_continue_requested)
@@ -37,8 +36,8 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible or _state != MenuState.CONTROLS:
 		return
-	if event.is_action_pressed(&"ui_cancel"):
-		_close_controls()
+	if InputControls.ui_pressed(event, &"ui_cancel"):
+		_controls_panel.request_close()
 		get_viewport().set_input_as_handled()
 
 func _on_start_button_pressed() -> void:
@@ -98,6 +97,8 @@ func _on_ship_back_requested() -> void:
 	_character_panel.grab_initial_focus()
 
 func reset_for_new_run() -> void:
+	if _controls_panel.visible:
+		_controls_panel.force_close()
 	_start_requested = false
 	_state = MenuState.MAIN
 	_controls_panel.hide()
@@ -113,9 +114,8 @@ func _open_controls() -> void:
 	if _state != MenuState.MAIN:
 		return
 	_menu_container.hide()
-	_controls_panel.show()
 	_state = MenuState.CONTROLS
-	_close_button.grab_focus()
+	_controls_panel.open()
 
 func _close_controls() -> void:
 	if _state != MenuState.CONTROLS:

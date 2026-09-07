@@ -31,6 +31,7 @@ const INTERACTION_RADIUS := 42.0
 const CLICK_RADIUS := 16.0
 
 func _ready() -> void:
+	InputControls.prompts_changed.connect(queue_redraw)
 	_room_controller = get_node_or_null(room_controller_path) as RoomController
 	if _player == null:
 		_player = get_node_or_null(player_path)
@@ -69,16 +70,18 @@ func player_node() -> Node2D:
 	return _player as Node2D
 
 func _input(event: InputEvent) -> void:
+	if not InputControls.observe_event(event) or not InputControls.gameplay_allowed(&"interact"):
+		return
 	if _core_managed:
 		return
 	if not _available or not _is_player_nearby():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and _is_chest_click(event.position):
 		open_offer()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"interact"):
+		InputControls.consume_ui_event(event)
+	elif InputControls.interaction_pressed(event):
 		open_offer()
-		get_viewport().set_input_as_handled()
+		InputControls.consume_ui_event(event)
 
 func _is_player_nearby() -> bool:
 	var player_body := _player as Node2D
@@ -281,4 +284,4 @@ func _draw() -> void:
 	draw_rect(Rect2(-14, -9, 28, 18), Color(0.03, 0.06, 0.1, 0.95), true)
 	draw_rect(Rect2(-12, -7, 24, 14), color, true)
 	draw_line(Vector2(-12, 0), Vector2(12, 0), Color(0.9, 0.95, 0.7), 1.0)
-	draw_string(ThemeDB.fallback_font, Vector2(-25, 25), "BAU  [Enter]", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.85, 1, 0.8))
+	draw_string(ThemeDB.fallback_font, Vector2(-25, 25), "BAU  [%s]" % InputControls.prompt(&"interact"), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.85, 1, 0.8))
