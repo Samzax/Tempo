@@ -56,6 +56,15 @@ func _capture_defaults() -> void:
 		_defaults[action] = entries
 	for action in UI_ACTIONS:
 		_ui_defaults[action] = InputMap.action_get_events(action).duplicate(true)
+	# Confirmar e voltar precisam funcionar mesmo sem defaults de controle do motor.
+	for action in [&"ui_accept", &"ui_cancel"]:
+		var button: int = JOY_BUTTON_A if action == &"ui_accept" else JOY_BUTTON_B
+		var has_button := false
+		for event in _ui_defaults[action]:
+			if event is InputEventJoypadButton and event.button_index == button:
+				has_button = true
+		if not has_button:
+			_ui_defaults[action].append(BINDINGS.to_event(BINDINGS.button(button)))
 
 func _apply_bindings() -> void:
 	var device := active_device if active_device >= 0 else NO_DEVICE
@@ -135,7 +144,7 @@ func observe_event(event: InputEvent) -> bool:
 		if meaningful_mouse_motion(event):
 			_set_prompt_family(BINDINGS.KEYBOARD)
 	elif event is InputEventKey:
-		var code := event.physical_keycode if event.physical_keycode != 0 else event.keycode
+		var code: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
 		_keys_down[code] = event.pressed
 		if _key_rearm.has(code):
 			if event.pressed:
@@ -298,7 +307,7 @@ func _event_waits_for_release(event: InputEvent) -> bool:
 	if event is InputEventJoypadButton:
 		return _button_rearm.has(event.button_index)
 	if event is InputEventKey:
-		var code := event.physical_keycode if event.physical_keycode != 0 else event.keycode
+		var code: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
 		return _key_rearm.has(code)
 	if event is InputEventMouseButton:
 		return _mouse_rearm.has(event.button_index)

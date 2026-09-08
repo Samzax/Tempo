@@ -130,7 +130,7 @@ func _handle_navigation_input(event: InputEvent) -> void:
 		_confirm_selection()
 	elif event is InputEventKey and event.pressed:
 		# Atalhos legados de selecao, sem alterar os bindings de combate.
-		var key := event.physical_keycode if event.physical_keycode != 0 else event.keycode
+		var key: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
 		if key == KEY_E or key == KEY_S:
 			_step_character(1)
 		elif key == KEY_W:

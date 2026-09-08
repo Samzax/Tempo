@@ -59,7 +59,7 @@ static func valid(binding: Variant) -> bool:
 
 static func from_event(event: InputEvent) -> Dictionary:
 	if event is InputEventKey:
-		var code := event.physical_keycode if event.physical_keycode != 0 else event.keycode
+		var code: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
 		if event.echo or (event.alt_pressed and code != KEY_ALT) or (event.ctrl_pressed and code != KEY_CTRL) or (event.meta_pressed and code != KEY_META) or (event.shift_pressed and code != KEY_SHIFT):
 			return {}
 		return key(code)
