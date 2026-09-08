@@ -6,8 +6,10 @@ class FakeDirector extends Node:
 	signal enemy_spawned(enemy: Enemy)
 	signal spawns_finished
 	signal spawns_failed(reason: String)
+	var received_spawn_limit := -1
 
-	func start(_spawn_limit: int) -> bool:
+	func start(spawn_limit: int) -> bool:
+		received_spawn_limit = spawn_limit
 		return true
 
 func _runtime() -> RoomRuntime:
@@ -95,10 +97,12 @@ func test_debris_does_not_block_clear_and_controller_emits_each_completion_signa
 	room_root.add_child(director)
 	var controller := RoomController.new()
 	controller.room_def = RoomDef.new()
+	controller.room_def.finite_spawn_count = 0
 	controller.director_path = ^"../Director"
 	room_root.add_child(controller)
 	watch_signals(controller)
 	await get_tree().process_frame
+	assert_eq(director.received_spawn_limit, 0)
 	var debris := preload("res://scenes/world/debris.tscn").instantiate()
 	room_root.add_child(debris)
 	director.spawns_finished.emit()
@@ -156,10 +160,12 @@ func test_tree_exit_resolves_registered_enemy_once() -> void:
 	room_root.add_child(director)
 	var controller := RoomController.new()
 	controller.room_def = RoomDef.new()
+	controller.room_def.finite_spawn_count = 1
 	controller.director_path = ^"../Director"
 	room_root.add_child(controller)
 	watch_signals(controller)
 	await get_tree().process_frame
+	assert_eq(director.received_spawn_limit, 1)
 
 	var enemy := ENEMY_SCENE.instantiate() as Enemy
 	room_root.add_child(enemy)
@@ -180,10 +186,12 @@ func test_resolved_then_tree_exit_is_idempotent_and_clears_once() -> void:
 	room_root.add_child(director)
 	var controller := RoomController.new()
 	controller.room_def = RoomDef.new()
+	controller.room_def.finite_spawn_count = 1
 	controller.director_path = ^"../Director"
 	room_root.add_child(controller)
 	watch_signals(controller)
 	await get_tree().process_frame
+	assert_eq(director.received_spawn_limit, 1)
 
 	var enemy := ENEMY_SCENE.instantiate() as Enemy
 	room_root.add_child(enemy)
@@ -334,8 +342,8 @@ func test_room_controller_registers_warning_fx_at_agenda_point_for_contract_dura
 	controller.room_def = room_def
 	controller.director_path = ^"../Director"
 	room_root.add_child(controller)
+	director.set_physics_process(false)
 	await get_tree().process_frame
-
 	var elapsed: Array[float] = [0.0]
 	var warning_times: Array[float] = []
 	var warning_indices: Array[int] = []

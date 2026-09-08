@@ -12,6 +12,7 @@ const RISK_POOL := preload("res://resources/loot/risk_pool.tres")
 const ENGINEER_DEPLOYABLE := preload("res://scenes/deployables/engineer_deployable.tscn")
 const ENGINEER_DEPLOYABLE_LIMIT := 3
 const REGENTE_PREVIEW := preload("res://scenes/enemies/bosses/regente_dos_ecos.tscn")
+const N0_N1_PLAYER := preload("res://scripts/backgrounds/n0_n1_v27_player.gd")
 const REGENTE_PREVIEW_META := &"sandbox_regente_preview"
 
 @export var player_path: NodePath
@@ -167,6 +168,9 @@ func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAUL
 		if current_character == null or current_character.id != character_id:
 			_player.call(&"configure_character", character_id)
 	_has_started = true
+	# N0N1V27Player is a persistent viewport CanvasLayer.  Reset it only for a
+	# fresh run before Node 0 is entered; N0 -> N1 is a visual continuation.
+	_reset_n0_background_for_new_run()
 	GameState.reset_for_new_run()
 	RunManager.start_run(seed_value)
 	run_state = RunState.new()
@@ -181,6 +185,8 @@ func start_new_run(seed_value: int, character_id: StringName = RunManager.DEFAUL
 func reset_run() -> void:
 	_dispose_active_room()
 	_hyperspace.hide()
+	_hide_n0_n1_background()
+	_restore_legacy_viewport_geometry()
 	run_state = null
 	sector = null
 	_room_active = false
@@ -203,11 +209,14 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	var controller := room.get_node("RoomController") as RoomController
 	var chest := room.get_node("RewardChest") as RewardChest
 	var room_def := _room_def_for(node_def, is_revisit)
+	_cleanup_n0_n1_background_for(room_def)
 	var room_bounds := room_def.get_bounds()
 	controller.room_def = room_def
 	if room_def.transition_profile == &"sector3_upper_transition":
 		controller.configure_sector3_completed_on_entry(run_state.is_completed(run_state.sector_index, node_id))
 		chest.configure_core_managed()
+	elif room_def.transition_profile == &"n0_opening_transition":
+		chest.configure_transition_managed()
 	_configure_room_geometry(room, room_bounds)
 	chest.configure(_player, run_state.sector_index, node_id, 0, 0, _pool_for(node_def), run_state.get_offer(run_state.sector_index, node_id, 0, 0), node_def.node_type == SectorNode.NodeType.TREASURE, node_def.node_type == SectorNode.NodeType.RISK)
 	chest.position = Vector2(room_def.size.x * 0.5, room_def.size.y - 52.0)
@@ -222,7 +231,25 @@ func _enter_node(node_id: int, is_revisit: bool = false) -> void:
 	_active_room = room
 	_player.global_position = room_bounds.get_center()
 
+func _reset_n0_background_for_new_run() -> void:
+	var background := N0_N1_PLAYER.ensure_for_viewport(get_viewport())
+	background.reset_for_new_run()
+
+## The CanvasLayer is intentionally shared by N0 and its N1 continuation.
+## Hide it as soon as another profile is entered so it cannot bleed into later
+## rooms while remaining available for the next fresh N0 run.
+func _cleanup_n0_n1_background_for(room_def: RoomDef) -> void:
+	if room_def.transition_profile == &"n0_opening_transition" or room_def.encounter_profile == &"upper":
+		return
+	_hide_n0_n1_background()
+
+func _hide_n0_n1_background() -> void:
+	var background := get_viewport().get_node_or_null("N0N1V27Player") as N0N1V27Player
+	if background != null:
+		background.suspend_for_inactive_profile()
+
 func _configure_room_geometry(room: Node, bounds: Rect2) -> void:
+	_configure_viewport_geometry(bounds)
 	_player.call(&"set_room_bounds", bounds)
 	_camera.limit_left = int(bounds.position.x)
 	_camera.limit_top = int(bounds.position.y)
@@ -232,6 +259,19 @@ func _configure_room_geometry(room: Node, bounds: Rect2) -> void:
 	var director := room.get_node_or_null("Directors/SpawnDirector")
 	if director != null and director.has_method(&"set_room_bounds"):
 		director.call(&"set_room_bounds", bounds)
+
+## N0 and its upper N1 continuation use their RoomDef's 1280x720 geometry.
+## All other profiles retain the RoomDef default 720x405 viewport geometry.
+func _configure_viewport_geometry(bounds: Rect2) -> void:
+	var window := get_window()
+	var target_size := Vector2i(bounds.size)
+	if window.content_scale_size != target_size:
+		window.content_scale_size = target_size
+	if window.size != target_size:
+		window.size = target_size
+
+func _restore_legacy_viewport_geometry() -> void:
+	_configure_viewport_geometry(Rect2(Vector2.ZERO, Vector2(720, 405)))
 
 func _on_room_cleared(node_def: SectorNode, room_generation: int) -> void:
 	if room_generation != _room_generation or not _room_active:
@@ -267,7 +307,7 @@ func _should_auto_advance_transition(room_generation: int) -> bool:
 	if not is_instance_valid(_active_room):
 		return false
 	var controller := _active_room.get_node_or_null("RoomController") as RoomController
-	return controller != null and controller.room_def != null and controller.room_def.transition_profile == &"sector3_upper_transition"
+	return controller != null and controller.room_def != null and controller.room_def.transition_profile in [&"sector3_upper_transition", &"n0_opening_transition"]
 
 func _on_sector3_offer_resolved(offer: RewardOffer, _refused: bool, controller: RoomController, room_generation: int) -> void:
 	if room_generation != _room_generation or not _room_active or not is_instance_valid(controller):
@@ -431,6 +471,10 @@ func _room_def_for(node_def: SectorNode, is_revisit: bool = false) -> RoomDef:
 	def.encounter_profile = node_def.encounter_profile
 	def.environment_profile = node_def.environment_profile
 	def.transition_profile = node_def.transition_profile
+	# The N0/N1 transition is the sole full-resolution room family.  Ordinary
+	# profiles retain RoomDef's legacy 720x405 bounds.
+	if def.transition_profile == &"n0_opening_transition" or def.encounter_profile == &"upper":
+		def.size = Vector2(1280, 720)
 	if is_revisit:
 		def.finite_spawn_count = 0
 	elif node_def.node_type == SectorNode.NodeType.RISK:

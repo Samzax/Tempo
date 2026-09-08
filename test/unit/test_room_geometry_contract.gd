@@ -4,10 +4,12 @@ const ENEMY_SCENE := preload("res://scenes/enemies/enemy.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const SPAWN_DIRECTOR := preload("res://scripts/directors/spawn_director.gd")
 const SESSION_SCRIPT := preload("res://scripts/run/session.gd")
+const GENERATOR := preload("res://scripts/run/sector_generator.gd")
 const MAIN_SCENE := preload("res://scenes/main/main.tscn")
 
 const ARENA := Rect2(Vector2.ZERO, Vector2(720, 405))
 const VIEWPORT_SIZE := Vector2(720, 405)
+const N0_N1_ARENA := Rect2(Vector2.ZERO, Vector2(1280, 720))
 
 func test_project_display_contract_uses_logical_viewport_and_integer_canvas_stretch() -> void:
 	assert_eq(ProjectSettings.get_setting("display/window/size/viewport_width"), 720)
@@ -86,20 +88,33 @@ func test_session_start_new_run_configures_real_room_geometry() -> void:
 	var chest := room.get_node("RewardChest") as RewardChest
 	var director := room.get_node("Directors/SpawnDirector") as Node
 
-	assert_eq(controller.room_def.size, Vector2(720, 405))
-	assert_eq(chest.position, Vector2(360, 353))
-	assert_eq(director.get("_room_bounds"), ARENA)
+	assert_eq(controller.room_def.size, Vector2(1280, 720))
+	assert_eq(chest.position, Vector2(640, 668))
+	assert_eq(director.get("_room_bounds"), N0_N1_ARENA)
 
 	var player := main.get_node("World/Player") as Player
 	var camera := main.get_node("World/Camera2D") as Camera2D
-	assert_eq(player.get("_room_bounds"), ARENA)
+	assert_eq(player.get("_room_bounds"), N0_N1_ARENA)
 	assert_eq(camera.limit_left, 0)
 	assert_eq(camera.limit_top, 0)
-	assert_eq(camera.limit_right, 720)
-	assert_eq(camera.limit_bottom, 405)
-	assert_eq(camera.global_position, ARENA.get_center())
+	assert_eq(camera.limit_right, 1280)
+	assert_eq(camera.limit_bottom, 720)
+	assert_eq(camera.global_position, N0_N1_ARENA.get_center())
 	assert_eq(camera.zoom, Vector2.ONE)
-	assert_eq(camera.get_viewport_rect().size, VIEWPORT_SIZE)
+	assert_eq(camera.get_viewport_rect().size, Vector2(1280, 720))
+
+func test_session_room_profiles_scope_1280_to_n0_n1_and_restore_legacy_bounds() -> void:
+	var main := MAIN_SCENE.instantiate()
+	add_child_autofree(main)
+	await get_tree().process_frame
+	var session := main.get_node("Session") as Session
+	var sector: Variant = GENERATOR.generate(1, 0)
+	assert_eq(session._room_def_for(sector.get_node(0)).size, Vector2(1280, 720))
+	assert_eq(session._room_def_for(sector.get_node(1)).size, Vector2(1280, 720))
+	assert_eq(session._room_def_for(sector.get_node(3)).size, Vector2(720, 405))
+	session._configure_viewport_geometry(N0_N1_ARENA)
+	session._configure_viewport_geometry(ARENA)
+	assert_eq(main.get_viewport().size, Vector2i(720, 405))
 
 func test_session_never_follows_player_from_start_or_physics_cycle() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/run/session.gd")
