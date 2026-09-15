@@ -260,15 +260,14 @@ func _configure_room_geometry(room: Node, bounds: Rect2) -> void:
 	if director != null and director.has_method(&"set_room_bounds"):
 		director.call(&"set_room_bounds", bounds)
 
-## N0 and its upper N1 continuation use their RoomDef's 1280x720 geometry.
-## All other profiles retain the RoomDef default 720x405 viewport geometry.
+## N0 e sua continuacao N1 upper usam a geometria 1280x720 de seu RoomDef.
+## Todos os outros perfis mantem a geometria de viewport padrao 720x405 do RoomDef.
+## A sessao e dona apenas do tamanho logico; o tamanho fisico da janela pertence ao ajuste de video escolhido pelo jogador.
 func _configure_viewport_geometry(bounds: Rect2) -> void:
 	var window := get_window()
 	var target_size := Vector2i(bounds.size)
 	if window.content_scale_size != target_size:
 		window.content_scale_size = target_size
-	if window.size != target_size:
-		window.size = target_size
 
 func _restore_legacy_viewport_geometry() -> void:
 	_configure_viewport_geometry(Rect2(Vector2.ZERO, Vector2(720, 405)))

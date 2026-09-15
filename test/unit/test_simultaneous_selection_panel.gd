@@ -42,6 +42,7 @@ func test_scene_has_valid_initial_pair_and_six_four_metric_layout() -> void:
 			assert_true((segment as ColorRect).color in [Color("69f6d9"), Color("203044")])
 
 func test_stats_rows_and_segments_are_contained_in_480x270_viewport() -> void:
+	var original_size: Vector2i = get_viewport().size
 	get_viewport().size = Vector2i(480, 270)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -68,6 +69,9 @@ func test_stats_rows_and_segments_are_contained_in_480x270_viewport() -> void:
 		for segment_node in segments.get_children():
 			var segment := segment_node as Control
 			assert_true(stats_rect.encloses(Rect2(segment.global_position, segment.size)))
+	get_viewport().size = original_size
+	await get_tree().process_frame
+	await get_tree().process_frame
 
 func test_explicit_zero_base_value_is_present_and_scores_at_least_one() -> void:
 	var ship := ShipDef.new()
@@ -529,16 +533,18 @@ func _on_continue_requested(_ship_id: StringName, _character_id: StringName) -> 
 
 func _send_mouse_motion(position: Vector2) -> void:
 	var event := InputEventMouseMotion.new()
-	event.position = position
-	event.global_position = position
+	var target_position := get_viewport().get_final_transform() * position
+	event.position = target_position
+	event.global_position = target_position
 	Input.parse_input_event(event)
 
 func _send_mouse_button(button: MouseButton, pressed: bool, position: Vector2) -> void:
 	var event := InputEventMouseButton.new()
 	event.button_index = button
 	event.pressed = pressed
-	event.position = position
-	event.global_position = position
+	var target_position := get_viewport().get_final_transform() * position
+	event.position = target_position
+	event.global_position = target_position
 	Input.parse_input_event(event)
 	if button == MOUSE_BUTTON_LEFT:
 		if pressed and not _pressed_mouse_buttons.has(button):

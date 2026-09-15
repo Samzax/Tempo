@@ -1,0 +1,114 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/video_panel.gd" id="1_video"]
+
+[node name="VideoPanel" type="Control"]
+visible = false
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 12
+script = ExtResource("1_video")
+
+[node name="Shade" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.015, 0.025, 0.07, 0.94)
+mouse_filter = 0
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -312.0
+offset_top = -188.0
+offset_right = 312.0
+offset_bottom = 188.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="Content" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="Label" parent="Panel/MarginContainer/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "VÍDEO"
+horizontal_alignment = 1
+
+[node name="Instructions" type="Label" parent="Panel/MarginContainer/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Enter / botão sul confirma; Esc / botão leste volta. D-pad / analógico esquerdo navega.\nAplicar salva; Voltar descarta mudanças não salvas."
+
+[node name="ResolutionRow" type="HBoxContainer" parent="Panel/MarginContainer/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ResolutionLabel" type="Label" parent="Panel/MarginContainer/Content/ResolutionRow"]
+layout_mode = 2
+text = "Resolução"
+
+[node name="Resolution" type="OptionButton" parent="Panel/MarginContainer/Content/ResolutionRow"]
+custom_minimum_size = Vector2(240, 26)
+layout_mode = 2
+
+[node name="ModeRow" type="HBoxContainer" parent="Panel/MarginContainer/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ModeLabel" type="Label" parent="Panel/MarginContainer/Content/ModeRow"]
+layout_mode = 2
+text = "Modo"
+
+[node name="Mode" type="OptionButton" parent="Panel/MarginContainer/Content/ModeRow"]
+custom_minimum_size = Vector2(190, 26)
+layout_mode = 2
+item_count = 2
+selected = 0
+popup/item_0/text = "Janela"
+popup/item_0/id = 0
+popup/item_1/text = "Tela cheia"
+popup/item_1/id = 1
+
+[node name="Status" type="Label" parent="Panel/MarginContainer/Content"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 2
+
+[node name="Actions" type="HBoxContainer" parent="Panel/MarginContainer/Content"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 8
+
+[node name="Reset" type="Button" parent="Panel/MarginContainer/Content/Actions"]
+layout_mode = 2
+text = "Restaurar padrão"
+
+[node name="Apply" type="Button" parent="Panel/MarginContainer/Content/Actions"]
+layout_mode = 2
+text = "Aplicar"
+
+[node name="CloseButton" type="Button" parent="Panel/MarginContainer/Content/Actions"]
+layout_mode = 2
+text = "Voltar"

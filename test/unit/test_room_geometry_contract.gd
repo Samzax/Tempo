@@ -11,13 +11,15 @@ const ARENA := Rect2(Vector2.ZERO, Vector2(720, 405))
 const VIEWPORT_SIZE := Vector2(720, 405)
 const N0_N1_ARENA := Rect2(Vector2.ZERO, Vector2(1280, 720))
 
-func test_project_display_contract_uses_logical_viewport_and_integer_canvas_stretch() -> void:
+func test_project_display_contract_uses_logical_viewport_and_fractional_canvas_stretch() -> void:
 	assert_eq(ProjectSettings.get_setting("display/window/size/viewport_width"), 720)
 	assert_eq(ProjectSettings.get_setting("display/window/size/viewport_height"), 405)
 	assert_eq(ProjectSettings.get_setting("display/window/size/window_width_override"), 1440)
 	assert_eq(ProjectSettings.get_setting("display/window/size/window_height_override"), 810)
 	assert_eq(ProjectSettings.get_setting("display/window/stretch/mode"), "canvas_items")
-	assert_eq(ProjectSettings.get_setting("display/window/stretch/scale_mode"), "integer")
+	assert_eq(ProjectSettings.get_setting("display/window/stretch/scale_mode"), "fractional")
+	assert_eq(ProjectSettings.get_setting("display/window/stretch/aspect", "keep"), "keep")
+	assert_true(ProjectSettings.has_setting("autoload/VideoSettings"))
 
 func test_room_default_and_configured_size_expose_center_and_bounds() -> void:
 	var room := RoomDef.new()
@@ -112,9 +114,11 @@ func test_session_room_profiles_scope_1280_to_n0_n1_and_restore_legacy_bounds() 
 	assert_eq(session._room_def_for(sector.get_node(0)).size, Vector2(1280, 720))
 	assert_eq(session._room_def_for(sector.get_node(1)).size, Vector2(1280, 720))
 	assert_eq(session._room_def_for(sector.get_node(3)).size, Vector2(720, 405))
+	var window_size_before := main.get_window().size
 	session._configure_viewport_geometry(N0_N1_ARENA)
 	session._configure_viewport_geometry(ARENA)
-	assert_eq(main.get_viewport().size, Vector2i(720, 405))
+	assert_eq(main.get_window().content_scale_size, Vector2i(720, 405))
+	assert_eq(main.get_window().size, window_size_before)
 
 func test_session_never_follows_player_from_start_or_physics_cycle() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/run/session.gd")

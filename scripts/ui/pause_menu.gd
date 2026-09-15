@@ -7,6 +7,8 @@ signal back_to_title_requested
 @onready var _continue_button: Button = $Panel/ContinueButton
 @onready var _controls_panel: ControlsPanel = $ControlsPanel
 @onready var _controls_button: Button = $Panel/ControlsButton
+@onready var _video_button: Button = $Panel/VideoButton
+@onready var _video_panel: VideoPanel = $VideoPanel
 @onready var _back_to_title_button: Button = $Panel/BackToTitleButton
 
 var _tree_was_paused := false
@@ -17,7 +19,9 @@ func _ready() -> void:
 	_continue_button.pressed.connect(_request_resume)
 	_back_to_title_button.pressed.connect(_request_back_to_title)
 	_controls_button.pressed.connect(_open_controls)
+	_video_button.pressed.connect(_open_video)
 	_controls_panel.close_requested.connect(_close_controls)
+	_video_panel.close_requested.connect(_close_video)
 	hide()
 
 func open() -> void:
@@ -37,6 +41,8 @@ func open() -> void:
 func close() -> void:
 	if _controls_panel.visible:
 		_controls_panel.force_close()
+	if _video_panel.visible:
+		_video_panel.force_close()
 	InputControls.set_modal(self, false)
 	hide()
 	get_tree().paused = _tree_was_paused
@@ -44,7 +50,7 @@ func close() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.echo:
 		return
-	if not visible or _controls_panel.visible or not (InputControls.ui_pressed(event, &"ui_cancel") or InputControls.ui_pressed(event, &"pause")):
+	if not visible or _controls_panel.visible or _video_panel.visible or not (InputControls.ui_pressed(event, &"ui_cancel") or InputControls.ui_pressed(event, &"pause")):
 		return
 	_request_resume()
 	get_viewport().set_input_as_handled()
@@ -86,3 +92,11 @@ func _open_controls() -> void:
 func _close_controls() -> void:
 	$Panel.show()
 	_controls_button.grab_focus()
+
+func _open_video() -> void:
+	$Panel.hide()
+	_video_panel.open()
+
+func _close_video() -> void:
+	$Panel.show()
+	_video_button.grab_focus()

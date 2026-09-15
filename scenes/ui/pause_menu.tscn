@@ -1,8 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="1_pause_menu"]
-
 [ext_resource type="PackedScene" path="res://scenes/ui/controls_panel.tscn" id="2_controls"]
+[ext_resource type="PackedScene" path="res://scenes/ui/video_panel.tscn" id="3_video"]
 
 [node name="PauseMenu" type="CanvasLayer"]
 layer = 5
@@ -56,4 +56,12 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Controles"
 
+[node name="VideoButton" type="Button" parent="Panel"]
+custom_minimum_size = Vector2(240, 34)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Vídeo"
+
 [node name="ControlsPanel" parent="." instance=ExtResource("2_controls")]
+
+[node name="VideoPanel" parent="." instance=ExtResource("3_video")]

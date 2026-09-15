@@ -1,11 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_main_menu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/character_selection_panel.tscn" id="2_character_selection"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ship_selection_panel.tscn" id="3_ship_selection"]
 [ext_resource type="PackedScene" path="res://scenes/ui/simultaneous_selection_panel.tscn" id="4_simultaneous_selection"]
-
 [ext_resource type="PackedScene" path="res://scenes/ui/controls_panel.tscn" id="5_controls"]
+[ext_resource type="PackedScene" path="res://scenes/ui/video_panel.tscn" id="6_video"]
 
 [node name="MainMenu" type="CanvasLayer"]
 layer = 10
@@ -45,6 +45,7 @@ custom_minimum_size = Vector2(210, 34)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Começar novo jogo"
+focus_neighbor_top = NodePath("../VideoButton")
 focus_neighbor_bottom = NodePath("../ControlsButton")
 
 [node name="ControlsButton" type="Button" parent="MenuContainer"]
@@ -53,6 +54,15 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Controles"
 focus_neighbor_top = NodePath("../StartButton")
+focus_neighbor_bottom = NodePath("../VideoButton")
+
+[node name="VideoButton" type="Button" parent="MenuContainer"]
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Vídeo"
+focus_neighbor_top = NodePath("../ControlsButton")
+focus_neighbor_bottom = NodePath("../StartButton")
 
 [node name="CharacterSelectionPanel" parent="." instance=ExtResource("2_character_selection")]
 anchors_preset = 8
@@ -94,3 +104,5 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="ControlsPanel" parent="." instance=ExtResource("5_controls")]
+
+[node name="VideoPanel" parent="." instance=ExtResource("6_video")]

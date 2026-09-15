@@ -104,9 +104,11 @@ func test_proof_viewport_is_true_1280x720_and_player_keeps_bounded_residency_con
 	add_child_autofree(main)
 	await get_tree().process_frame
 	var session := main.get_node("Session") as Session
+	var window_size_before := main.get_window().size
 	session.start_new_run(12345)
 	await get_tree().process_frame
-	assert_eq(get_viewport().size, Vector2i(1280, 720))
+	assert_eq(main.get_window().content_scale_size, Vector2i(1280, 720))
+	assert_eq(main.get_window().size, window_size_before)
 	var player_script := load("res://scripts/backgrounds/n0_n1_v27_player.gd")
 	assert_eq(player_script.FRAME_COUNT, 989)
 	assert_eq(player_script.MAX_NATIVE_FRAME_CACHE, 4)
