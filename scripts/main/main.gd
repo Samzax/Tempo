@@ -14,6 +14,8 @@ extends Node2D
 var _gameplay_started := false
 
 func _ready() -> void:
+	InputControls.set_modal(self, true)
+	InputControls.safety_pause_requested.connect(_on_input_safety_pause)
 	_world.process_mode = Node.PROCESS_MODE_DISABLED
 	_world.hide()
 	_hud.hide()
@@ -25,7 +27,7 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.echo:
 		return
-	if not _gameplay_started or _pause_menu.visible or not event.is_action_pressed(&"ui_cancel"):
+	if not _gameplay_started or _pause_menu.visible or not (InputControls.ui_pressed(event, &"pause") or InputControls.ui_pressed(event, &"ui_cancel")):
 		return
 	# Os overlays existentes consomem cancelamento antes da pausa; estes guards
 	# tambem preservam a prioridade quando a chamada e exercitada diretamente.
@@ -47,6 +49,7 @@ func _on_start_game_requested(ship_id: StringName, character_id: StringName) -> 
 	_reset_player_for_new_run(player)
 	GameState.reset_for_new_run()
 	_gameplay_started = true
+	InputControls.set_modal(self, false)
 	_world.show()
 	_world.process_mode = Node.PROCESS_MODE_INHERIT
 	_hud.show()
@@ -64,6 +67,7 @@ func _on_pause_back_to_title_requested() -> void:
 	_clear_runtime_children($World/Projectiles)
 	_clear_runtime_children($World/Effects)
 	_gameplay_started = false
+	InputControls.set_modal(self, true)
 	_world.process_mode = Node.PROCESS_MODE_DISABLED
 	_world.hide()
 	_hud.hide()
@@ -77,6 +81,7 @@ func _clear_runtime_children(container: Node) -> void:
 		child.queue_free()
 
 func _reset_player_for_new_run(player: Player) -> void:
+	player.reset_input_state()
 	player.show()
 	player.set_physics_process(true)
 	player.velocity = Vector2.ZERO
@@ -89,7 +94,16 @@ func _reset_player_for_new_run(player: Player) -> void:
 		player.set(property, 0.0)
 
 func _reset_hud_for_new_run() -> void:
+	InputControls.set_modal(_hud, false)
 	_hud.set(&"_over", false)
 	var game_over: Variant = _hud.get(&"_game_over")
 	if game_over is CanvasItem:
 		game_over.hide()
+
+func _on_input_safety_pause(reason: String) -> void:
+	if _gameplay_started and not _pause_menu.visible and not get_tree().paused:
+		_pause_menu.open()
+		_pause_menu.set_status(reason)
+
+func _exit_tree() -> void:
+	InputControls.set_modal(self, false)

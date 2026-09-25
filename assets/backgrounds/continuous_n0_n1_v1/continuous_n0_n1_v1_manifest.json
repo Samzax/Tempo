@@ -1,0 +1,16 @@
+{
+  "source": "approved V27 transparent raw planet frames plus existing V27 space field",
+  "frame_count": 989,
+  "planet_dimensions": [
+    640,
+    360
+  ],
+  "planet_mode": "RGBA",
+  "space_field_dimensions": [
+    1928,
+    1197
+  ],
+  "sampling": "nearest",
+  "sha256_first": "6cb0f53f75380471f86f150ffd7a6b7bf2d931fcab9ed7ece5e8bdc171c55b2c",
+  "sha256_last": "4bc0782214b9e73d161df38ee84a3ee51e60afd11b693d6bb4895832b195dd9f"
+}

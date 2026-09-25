@@ -83,11 +83,8 @@ func configure_upper_waves() -> void:
 	encounter_profile = &"upper"
 	wave_specs = get_upper_waves()
 	cull_policy = CullPolicy.DESPAWN_ALL_BORDERS
-	initial_debris = [
-		{"position": Vector2(180.0, 132.0), "size_class": 0, "drift_velocity": Vector2(12.0, 5.0)},
-		{"position": Vector2(390.0, 246.0), "size_class": 1, "drift_velocity": Vector2(-10.0, 8.0)},
-		{"position": Vector2(590.0, 154.0), "size_class": 0, "drift_velocity": Vector2(-7.0, -6.0)},
-	]
+	# The N0/N1 continuous presentation is star-and-planet only.
+	initial_debris.clear()
 
 func configure_sector3_upper_waves() -> void:
 	encounter_profile = &"sector3_upper"

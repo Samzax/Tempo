@@ -31,10 +31,13 @@ const TELEPORT_FX := preload("res://scenes/effects/teleport_fx.tscn")
 const DEBRIS_SCENE := preload("res://scenes/world/debris.tscn")
 const ENVIRONMENT_PRESENTATION := preload("res://scripts/rooms/environment_presentation.gd")
 const SECTOR3_CORE_PRESENTATION := preload("res://scripts/rooms/sector3_core_presentation.gd")
+const N0_OPENING_PRESENTATION := preload("res://scripts/rooms/n0_opening_transition_presentation.gd")
+const N1_OPENING_PRESENTATION := preload("res://scripts/rooms/n1_opening_continuation_presentation.gd")
 const REGENTE_ENCOUNTER_ORCHESTRATOR := preload("res://scripts/enemies/bosses/regente_encounter_orchestrator.gd")
 
 var _sector3_core: Sector3CorePresentation
 var _sector3_completed_on_entry := false
+var _n0_opening: N0OpeningTransitionPresentation
 
 func _ready() -> void:
 	add_to_group(&"room_controller")
@@ -62,12 +65,17 @@ func _ready() -> void:
 		_director.call(&"configure_encounter", self, room_def.get_bounds())
 	_apply_environment_presentation()
 	_apply_sector3_core()
+	_apply_n0_n1_presentations()
 	_start_room_observation()
 	_director.connect(&"enemy_spawned", _on_enemy_spawned)
 	_director.connect(&"spawns_finished", _on_spawns_finished)
 	_director.connect(&"spawns_failed", _on_spawns_failed)
 	if _director.has_signal(&"spawn_warning_started"):
 		_director.connect(&"spawn_warning_started", _on_spawn_warning_started)
+	var expected_count := room_def.finite_spawn_count
+	if room_def.has_waves() and _director.has_method(&"build_spawn_agenda"):
+		expected_count = (_director.call(&"build_spawn_agenda", room_def.wave_specs) as Array).size()
+	runtime.configure_expected_spawn_count(expected_count)
 	runtime.start()
 	# RoomController entra na arvore enquanto Room ainda esta anexando filhos;
 	# o container irmao precisa ser criado no proximo idle.
@@ -112,7 +120,10 @@ func _spawn_initial_debris() -> void:
 		container.add_child(debris)
 
 func _apply_environment_presentation() -> void:
-	if room_def.environment_profile == &"default" or _room_root == null:
+	# N1 owns the full-resolution continuation presentation.  Its former
+	# EnvironmentPresentation would add the legacy 720x405 upper-space sprite
+	# over that composition; other room profiles retain their environment path.
+	if _uses_n1_opening_continuation() or room_def.environment_profile == &"default" or _room_root == null:
 		return
 	var host := _room_root.get_node_or_null("Environment")
 	if host == null:
@@ -140,6 +151,23 @@ func _apply_sector3_core() -> void:
 	_sector3_core.configure(chest, player, _sector3_completed_on_entry)
 	_sector3_core.sequence_completed.connect(_complete_room)
 	_room_root.call_deferred(&"add_child", _sector3_core)
+
+func _apply_n0_n1_presentations() -> void:
+	if _room_root == null:
+		return
+	if room_def.transition_profile == &"n0_opening_transition":
+		_n0_opening = N0_OPENING_PRESENTATION.new()
+		_n0_opening.name = &"N0OpeningTransitionPresentation"
+		_n0_opening.configure(runtime)
+		_n0_opening.sequence_completed.connect(_complete_room)
+		_room_root.call_deferred(&"add_child", _n0_opening)
+	elif _uses_n1_opening_continuation():
+		var n1 := N1_OPENING_PRESENTATION.new()
+		n1.name = &"N1OpeningContinuationPresentation"
+		_room_root.call_deferred(&"add_child", n1)
+
+func _uses_n1_opening_continuation() -> bool:
+	return room_def != null and room_def.encounter_profile == &"upper"
 
 ## A Session conhece a conclusao persistida antes de esta Room entrar na arvore.
 ## O nucleo usa somente esse fato para restaurar a apresentacao na revisita.
@@ -332,11 +360,15 @@ func _on_combat_cleared() -> void:
 	# sem antecipar room_completed nem a recompensa.
 	if room_def.transition_profile == &"sector3_upper_transition":
 		_clear_runtime_enemy_projectiles()
+	if room_def.transition_profile == &"n0_opening_transition":
+		_clear_runtime_enemy_projectiles()
 	combat_cleared.emit()
 	# Track A preserva a conclusao e recompensa legadas; Track B podera reter
 	# room_completed para um profile de transicao proprio.
 	if room_def.transition_profile == &"default":
 		_complete_room()
+	elif _n0_opening != null:
+		_n0_opening.combat_cleared()
 	elif _sector3_core != null:
 		_sector3_core.activate()
 

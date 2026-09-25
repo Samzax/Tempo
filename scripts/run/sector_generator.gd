@@ -9,6 +9,7 @@ static func generate(run_seed: int, sector_index: int) -> SectorDef:
 	sector.sector_index = sector_index
 	var start := _make_node(0, 0, 0, SectorNode.NodeType.OPENING)
 	start.encounter_profile = &"phase_one"
+	start.transition_profile = &"n0_opening_transition"
 	var upper := _make_node(1, 1, 0, SectorNode.NodeType.COMBAT)
 	upper.encounter_profile = &"upper"
 	upper.environment_profile = &"upper_background_human_s2"

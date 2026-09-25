@@ -14,6 +14,8 @@ var _sector_advance_available := false
 var _completes_run := false
 
 func _ready() -> void:
+	visibility_changed.connect(_on_input_visibility_changed)
+	InputControls.prompts_changed.connect(queue_redraw)
 	# CanvasLayer is not a Control parent, so full-rect anchors alone do not
 	# establish a usable GUI rect. Keep this aligned to the fixed 480x270 map.
 	position = Vector2.ZERO
@@ -102,11 +104,11 @@ func _draw() -> void:
 		draw_circle(pos, 9.0, color)
 		var label := _label_for_node_type(node.node_type)
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-25, 25), label, HORIZONTAL_ALIGNMENT_CENTER, 50, 8, Color.WHITE)
-	var footer := "Clique ou Enter para viajar · Esc fecha · M reabre"
+	var footer := "%s: viajar · %s: fechar · %s: mapa" % [InputControls.prompt(&"ui_accept"), InputControls.prompt(&"ui_cancel"), InputControls.prompt(&"map_toggle")]
 	if _selectable.is_empty() and _has_completed_boss():
 		footer = "EXECUÇÃO CONCLUÍDA"
 	if _sector_advance_available:
-		footer = "Enter: %s | Esc fecha | M reabre" % ("CONCLUIR EXECUCAO" if _completes_run else "AVANCAR SETOR")
+		footer = "%s: %s · %s: fechar" % [InputControls.prompt(&"ui_accept"), "CONCLUIR EXECUCAO" if _completes_run else "AVANCAR SETOR", InputControls.prompt(&"ui_cancel")]
 	draw_string(ThemeDB.fallback_font, Vector2(18, 252), footer, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.72, 0.84))
 
 func _has_completed_boss() -> bool:
@@ -118,26 +120,25 @@ func _has_completed_boss() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_visible_in_tree():
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ESCAPE:
-			hide()
-			get_viewport().set_input_as_handled()
-			return
-	if event.is_action_pressed(&"ui_left") or event.is_action_pressed(&"ui_up"):
+	if InputControls.ui_pressed(event, &"ui_cancel") or InputControls.ui_pressed(event, &"map_toggle"):
+		hide()
+		InputControls.consume_ui_event(event)
+		return
+	if InputControls.navigation_pressed(event, &"ui_left") or InputControls.navigation_pressed(event, &"ui_up"):
 		_cursor = posmod(_cursor - 1, maxi(1, _selectable.size()))
 		queue_redraw()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"ui_right") or event.is_action_pressed(&"ui_down"):
+		InputControls.consume_ui_event(event)
+	elif InputControls.navigation_pressed(event, &"ui_right") or InputControls.navigation_pressed(event, &"ui_down"):
 		_cursor = posmod(_cursor + 1, maxi(1, _selectable.size()))
 		queue_redraw()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"ui_accept"):
+		InputControls.consume_ui_event(event)
+	elif InputControls.ui_pressed(event, &"ui_accept"):
 		if _sector_advance_available:
 			_sector_advance_available = false
 			sector_advance_requested.emit()
 		elif _cursor < _selectable.size():
 			_try_select(_selectable[_cursor])
-		get_viewport().set_input_as_handled()
+		InputControls.consume_ui_event(event)
 
 func _gui_input(event: InputEvent) -> void:
 	if not visible or not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
@@ -151,3 +152,9 @@ func _gui_input(event: InputEvent) -> void:
 func _try_select(node_id: int) -> void:
 	if _can_select and _selectable.has(node_id):
 		node_selected.emit(node_id)
+
+func _on_input_visibility_changed() -> void:
+	InputControls.set_modal(self, is_visible_in_tree())
+
+func _exit_tree() -> void:
+	InputControls.set_modal(self, false)

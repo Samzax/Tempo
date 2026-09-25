@@ -41,7 +41,7 @@ func grab_initial_focus() -> void:
 		_back_button.grab_focus()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_visible_in_tree() or not event.is_action_pressed(&"ui_cancel"):
+	if not is_visible_in_tree() or not InputControls.ui_pressed(event, &"ui_cancel"):
 		return
 	back_requested.emit()
 	get_viewport().set_input_as_handled()

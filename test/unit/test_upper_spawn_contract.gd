@@ -77,16 +77,13 @@ func test_upper_profile_uses_one_point_one_second_cadence() -> void:
 	var waves: Array[RoomDef.WaveSpec] = ROOM_DEF.new().get_upper_waves()
 	assert_eq(waves[0].cadence, 1.1)
 
-func test_upper_profile_has_three_deterministic_in_bounds_debris() -> void:
+func test_upper_profile_has_no_initial_debris() -> void:
 	var room_def := ROOM_DEF.new()
 	room_def.configure_upper_waves()
 	room_def.environment_profile = &"upper_background_human_s2"
-	assert_eq(room_def.initial_debris.size(), 3)
-	for spec in room_def.initial_debris:
-		assert_true(room_def.get_bounds().has_point(spec.position))
-	assert_eq(room_def.initial_debris[0].position, Vector2(180.0, 132.0))
+	assert_true(room_def.initial_debris.is_empty())
 
-func test_upper_room_spawns_only_the_configured_debris() -> void:
+func test_upper_room_spawns_no_initial_debris() -> void:
 	var room_def := ROOM_DEF.new()
 	room_def.configure_upper_waves()
 	room_def.environment_profile = &"upper_background_human_s2"
@@ -96,10 +93,7 @@ func test_upper_room_spawns_only_the_configured_debris() -> void:
 	await get_tree().process_frame
 	var debris_container := room.get_node_or_null("Debris")
 	assert_not_null(debris_container)
-	assert_eq(debris_container.get_child_count(), 3)
-	for debris in debris_container.get_children():
-		assert_true(room_def.get_bounds().has_point(debris.global_position))
-		assert_eq(debris.drift_velocity, room_def.initial_debris[debris_container.get_children().find(debris)].drift_velocity)
+	assert_eq(debris_container.get_child_count(), 0)
 	assert_eq(room.get_node("Directors/SpawnDirector")._container, room.get_node("Enemies"))
 	assert_eq(room.get_node("Directors/SpawnDirector")._local_container, room.get_node("Enemies"))
 	var presentation := room.get_node_or_null("Environment/EnvironmentPresentation") as EnvironmentPresentation

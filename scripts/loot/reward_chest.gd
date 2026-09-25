@@ -26,11 +26,13 @@ var _activating := false
 var _activation_serial := 0
 var _active_activation_token := 0
 var _core_managed := false
+var _transition_managed := false
 
 const INTERACTION_RADIUS := 42.0
 const CLICK_RADIUS := 16.0
 
 func _ready() -> void:
+	InputControls.prompts_changed.connect(queue_redraw)
 	_room_controller = get_node_or_null(room_controller_path) as RoomController
 	if _player == null:
 		_player = get_node_or_null(player_path)
@@ -38,10 +40,10 @@ func _ready() -> void:
 		push_error("RewardChest requires a RoomController.")
 		return
 	_restore_pending_offer_if_possible()
-	if not _core_managed:
+	if not _core_managed and not _transition_managed:
 		_room_controller.room_cleared.connect(_unlock)
 	# Uma sala sem spawns pode ser limpa durante o _ready do controlador.
-	if not _core_managed and _room_controller.runtime != null and _room_controller.runtime.is_cleared():
+	if not _core_managed and not _transition_managed and _room_controller.runtime != null and _room_controller.runtime.is_cleared():
 		_unlock.call_deferred()
 	queue_redraw()
 
@@ -54,6 +56,9 @@ func _unlock() -> void:
 ## O nucleo usa exatamente a mesma RewardOffer, mas controla quando ela fica visivel.
 func configure_core_managed() -> void:
 	_core_managed = true
+
+func configure_transition_managed() -> void:
+	_transition_managed = true
 
 func unlock_for_core() -> void:
 	if not _core_managed:
@@ -69,16 +74,18 @@ func player_node() -> Node2D:
 	return _player as Node2D
 
 func _input(event: InputEvent) -> void:
-	if _core_managed:
+	if not InputControls.observe_event(event) or not InputControls.gameplay_allowed(&"interact"):
+		return
+	if _core_managed or _transition_managed:
 		return
 	if not _available or not _is_player_nearby():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and _is_chest_click(event.position):
 		open_offer()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"interact"):
+		InputControls.consume_ui_event(event)
+	elif InputControls.interaction_pressed(event):
 		open_offer()
-		get_viewport().set_input_as_handled()
+		InputControls.consume_ui_event(event)
 
 func _is_player_nearby() -> bool:
 	var player_body := _player as Node2D
@@ -91,7 +98,7 @@ func _is_chest_click(viewport_position: Vector2) -> bool:
 func open_offer() -> void:
 	if _activating or not _available or not _has_live_runtime() or not _is_live(_player):
 		return
-	var offer := _room_controller.runtime.reward_offer
+	var offer: RewardOffer = _room_controller.runtime.reward_offer
 	if _risk_mode:
 		_open_risk_offer(offer)
 		return
@@ -139,7 +146,7 @@ func _open_risk_offer(offer: Variant) -> void:
 	if offer == null:
 		_activate_risk_offer()
 		return
-	var snapshot_controller := _room_controller
+	var snapshot_controller: RoomController = _room_controller
 	var snapshot_runtime: Variant = snapshot_controller.runtime if _is_live(snapshot_controller) else null
 	var snapshot_player: Variant = _player
 	var snapshot_pool: Variant = pool
@@ -162,7 +169,7 @@ func _activate_risk_offer() -> void:
 		return
 	# Eligibility can invoke user code, so hold the lock before taking any external path.
 	var token := _begin_activation()
-	var snapshot_controller := _room_controller
+	var snapshot_controller: RoomController = _room_controller
 	var snapshot_runtime: Variant = snapshot_controller.runtime if _is_live(snapshot_controller) else null
 	var snapshot_player: Variant = _player
 	var snapshot_pool: Variant = pool
@@ -274,11 +281,11 @@ func _is_live(value: Variant) -> bool:
 	return true
 
 func _draw() -> void:
-	if not _available or _core_managed:
+	if not _available or _core_managed or _transition_managed:
 		return
-	var claimed := _room_controller != null and _room_controller.runtime != null and _room_controller.runtime.reward_offer != null and _room_controller.runtime.reward_offer.claimed
+	var claimed: bool = _room_controller != null and _room_controller.runtime != null and _room_controller.runtime.reward_offer != null and _room_controller.runtime.reward_offer.claimed
 	var color := Color(0.32, 0.72, 0.42) if not claimed else Color(0.28, 0.32, 0.38)
 	draw_rect(Rect2(-14, -9, 28, 18), Color(0.03, 0.06, 0.1, 0.95), true)
 	draw_rect(Rect2(-12, -7, 24, 14), color, true)
 	draw_line(Vector2(-12, 0), Vector2(12, 0), Color(0.9, 0.95, 0.7), 1.0)
-	draw_string(ThemeDB.fallback_font, Vector2(-25, 25), "BAU  [Enter]", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.85, 1, 0.8))
+	draw_string(ThemeDB.fallback_font, Vector2(-25, 25), "BAU  [%s]" % InputControls.prompt(&"interact"), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.85, 1, 0.8))
