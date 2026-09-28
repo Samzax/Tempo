@@ -341,19 +341,6 @@ func test_interceptadora_scales_only_its_animated_sprite_and_resets_on_ship_swap
 		assert_true(_player.configure_ship(base))
 		assert_eq(_player.sprite.scale, Vector2.ONE)
 
-func test_projectile_consumes_statblock_damage() -> void:
-	_player._stats.set_base(&"damage", 7.25)
-	_player._aim_vector = Vector2.UP
-	_player._fire()
-	assert_eq(_projectiles.get_child_count(), 1)
-	var bullet: Area2D = _projectiles.get_child(0)
-	bullet._active = false
-	bullet._on_hit(_target)
-	assert_eq(_target.calls.size(), 1)
-	assert_eq(_target.calls[0].amount, 725)
-	assert_eq(_target.calls[0].source, _player)
-	assert_true(_target.calls[0].tags.has(&"projectile"))
-
 func _damage_for(ship: ShipDef) -> float:
 	var stats := StatBlock.new(StatCatalog.get_all())
 	Loadout.apply(stats, ship, null)

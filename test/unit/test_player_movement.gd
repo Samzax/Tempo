@@ -57,11 +57,16 @@ func _release_inputs() -> void:
 	for action in INPUT_ACTIONS:
 		Input.action_release(action)
 
+var _focus_before := true
+
 func before_each() -> void:
 	_release_inputs()
+	_focus_before = InputControls.application_focused
+	InputControls.application_focused = true
 
 func after_each() -> void:
 	_release_inputs()
+	InputControls.application_focused = _focus_before
 
 func test_heading_points_sprite_nose_and_muzzle_remains_aligned() -> void:
 	var player: Player = await _player()
@@ -186,6 +191,41 @@ func test_bruta_shift_starts_continuous_charge_instead_of_blink() -> void:
 	assert_true(player._handle_blink_input())
 	assert_true(player._is_bruta_charging())
 	assert_eq(player._bruta_charge_direction, Vector2.RIGHT)
+
+func test_bruta_shift_cooldown_rejects_second_activation() -> void:
+	var player: Player = await _blink_player(BRUTA_SHIP)
+	player._aim_vector = Vector2.RIGHT
+	player._last_aim_source = Player.AimSource.NONE
+	Input.action_press(&"blink")
+
+	assert_true(player._handle_blink_input())
+	assert_true(player._is_bruta_charging())
+	assert_gt(player._ability_shift_cd, 0.0)
+	player._cancel_bruta_charge()
+	var cooldown_before_retry := player._ability_shift_cd
+	Input.action_release(&"blink")
+	Input.action_press(&"blink")
+
+	assert_true(InputControls.just_pressed(&"blink"))
+	assert_false(player._handle_blink_input())
+	assert_false(player._is_bruta_charging())
+	assert_eq(player._ability_shift_cd, cooldown_before_retry)
+
+func test_bruta_charge_captures_mouse_aim_source_at_start() -> void:
+	var player: Player = await _blink_player(BRUTA_SHIP)
+	player.global_position = Vector2(100.0, 100.0)
+	player._aim_vector = Vector2.DOWN
+	var motion := InputEventMouseMotion.new()
+	motion.relative = Vector2(8.0, 0.0)
+	var was_focused := InputControls.application_focused
+	InputControls.application_focused = true
+	player._input(motion)
+
+	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
+	assert_true(player.start_bruta_charge())
+	assert_eq(player._bruta_charge_aim_source, Player.AimSource.MOUSE)
+	assert_true(player._is_bruta_charging())
+	InputControls.application_focused = was_focused
 
 func test_bruta_try_blink_is_rejected_without_movement_or_cooldown() -> void:
 	var player: Player = await _blink_player(BRUTA_SHIP)

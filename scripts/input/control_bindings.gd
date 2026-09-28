@@ -104,7 +104,7 @@ static func radial(raw: Vector2, deadzone: float) -> Vector2:
 		return Vector2.ZERO
 	var length := raw.length()
 	var threshold := clampf(deadzone, MIN_DEADZONE, MAX_DEADZONE)
-	if length <= threshold:
+	if length <= threshold + 0.000001:
 		return Vector2.ZERO
 	return raw / length * minf(1.0, (length - threshold) / (1.0 - threshold))
 

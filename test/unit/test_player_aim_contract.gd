@@ -34,3 +34,18 @@ func test_fire_uses_aim_vector_for_all_aim_tiers_even_with_enemy_in_legacy_cone(
 		var bullet := _projectiles.get_child(_projectiles.get_child_count() - 1)
 		assert_true(bullet._active)
 		assert_true(bullet._velocity.normalized().is_equal_approx(Vector2.RIGHT))
+
+func test_fire_direction_falls_back_to_aim_vector_when_mouse_coincides_with_muzzle() -> void:
+	_player._last_aim_source = Player.AimSource.MOUSE
+	var cursor := _player.get_global_mouse_position()
+	_player.global_position = cursor - (_player.muzzle.global_position - _player.global_position)
+	_player._aim_vector = Vector2.LEFT
+	var muzzle_gap := cursor - _player.muzzle.global_position
+
+	assert_lt(muzzle_gap.length_squared(), 0.000001)
+	assert_true(_player._fire_direction_from_muzzle().is_equal_approx(Vector2.LEFT))
+	_player._fire()
+
+	assert_eq(_projectiles.get_child_count(), 1)
+	var bullet := _projectiles.get_child(_projectiles.get_child_count() - 1)
+	assert_true(bullet._velocity.normalized().is_equal_approx(Vector2.LEFT))

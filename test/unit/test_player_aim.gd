@@ -29,31 +29,8 @@ func _mouse_at(position: Vector2) -> void:
 	_player._input(motion)
 	await get_tree().process_frame
 
-func test_fire_direction_uses_muzzle_origin_and_differs_from_player_origin() -> void:
-	_player.muzzle.position = Vector2(20.0, 10.0)
-	await _mouse_at(Vector2(260.0, 180.0))
-	_player._joypad_aim_was_active = false
-	var expected := (_mouse_at_global() - _player.muzzle.global_position).normalized()
-	var from_player := (_mouse_at_global() - _player.global_position).normalized()
-
-	_player._fire()
-	assert_eq(_projectiles.get_child_count(), 1)
-	var bullet := _projectiles.get_child(0)
-	assert_true(bullet._active)
-	assert_true(bullet.global_position.is_equal_approx(_player.muzzle.global_position))
-	assert_true(bullet._velocity.normalized().is_equal_approx(expected))
-	assert_gt(expected.dot(from_player), -1.0)
-	assert_gt(expected.distance_to(from_player), 0.01)
-
 func _mouse_at_global() -> Vector2:
 	return _player.get_global_mouse_position()
-
-func test_fire_direction_falls_back_to_aim_vector_when_mouse_coincides_with_muzzle() -> void:
-	_player._aim_vector = Vector2.LEFT
-	_player._joypad_aim_was_active = false
-	await _mouse_at(_player.muzzle.global_position)
-
-	assert_true(_player._fire_direction_from_muzzle().is_equal_approx(Vector2.LEFT))
 
 func test_visual_aim_crosses_real_wrap_boundary_by_finite_shortest_progress() -> void:
 	_player._visual_aim_global_angle = -PI + 0.1

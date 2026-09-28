@@ -1,5 +1,12 @@
 extends GutTest
 
+class DamageRecorder extends Node:
+	var received: DamageInfo
+
+	func take_damage(info: DamageInfo) -> int:
+		received = info
+		return 0
+
 var _root: Node2D
 var _projectiles: Node2D
 var _player: Player
@@ -44,6 +51,21 @@ func test_valid_fire_creates_bullet_and_starts_fire_with_current_bullet_contract
 	assert_eq(bullet.lifetime, 2.0)
 	assert_eq(bullet.damage, 18.0)
 	assert_eq(_player.sprite.animation, &"fire")
+
+func test_fired_bullet_hit_reports_player_source_and_projectile_tag() -> void:
+	_player._aim_vector = Vector2.UP
+	_player._fire()
+	assert_eq(_projectiles.get_child_count(), 1)
+	var bullet := _projectiles.get_child(0)
+	assert_true(bullet._active)
+	assert_eq(bullet._shooter, _player)
+	var target := DamageRecorder.new()
+	add_child_autofree(target)
+	bullet._on_hit(target)
+
+	assert_not_null(target.received)
+	assert_eq(target.received.source, _player)
+	assert_true(target.received.tags.has(&"projectile"))
 
 func test_invalid_fire_does_not_create_bullet_or_start_fire() -> void:
 	_player._aim_vector = Vector2.UP

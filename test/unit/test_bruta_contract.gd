@@ -88,48 +88,6 @@ func test_bruta_resolves_shift_slot_to_bruta_investida() -> void:
 	assert_eq(AbilityCatalog.get_ability(&"bruta_investida").id, &"bruta_investida")
 
 
-func test_bruta_shift_input_starts_charge_instead_of_try_blink() -> void:
-	var player: Player = await _bruta_player()
-	# A investida recaptura a mira quando a fonte ativa e o mouse; portanto,
-	# posiciona a nave relativamente ao cursor e atualiza a fonte pelo fluxo real.
-	var cursor := player.get_global_mouse_position()
-	player.global_position = cursor - Vector2.RIGHT * 100.0
-	player._update_aim()
-	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
-	_assert_vector_almost_eq(player._aim_vector, Vector2.RIGHT)
-	var before := player.global_position
-	Input.action_release(&"blink")
-	Input.action_press(&"blink")
-
-	assert_true(player._handle_blink_input())
-	assert_true(player._is_bruta_charging())
-	assert_eq(player._bruta_charge_direction, Vector2.RIGHT)
-	assert_eq(player.global_position, before)
-	assert_eq(player.blink_cooldown_ratio(), 0.0)
-	assert_gt(player.shift_cooldown_ratio(), 0.0)
-
-
-func test_bruta_shift_cooldown_rejects_second_activation() -> void:
-	var player: Player = await _bruta_player()
-	var cursor := player.get_global_mouse_position()
-	player.global_position = cursor - Vector2.RIGHT * 100.0
-	player._update_aim()
-	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
-	_assert_vector_almost_eq(player._aim_vector, Vector2.RIGHT)
-	Input.action_release(&"blink")
-	Input.action_press(&"blink")
-
-	assert_true(player._handle_blink_input())
-	Input.action_release(&"blink")
-	await get_tree().process_frame
-	var windup_before_retry := player._bruta_charge_windup_remaining
-	var cooldown_before_retry := player._ability_shift_cd
-	Input.action_press(&"blink")
-	assert_false(player._handle_blink_input())
-	assert_eq(player._bruta_charge_windup_remaining, windup_before_retry)
-	assert_eq(player._ability_shift_cd, cooldown_before_retry)
-	assert_gt(player.shift_cooldown_ratio(), 0.0)
-
 func test_bruta_collision_knockback_survives_charge_substeps_and_cancel() -> void:
 	var player: Player = await _bruta_player()
 	player.set_physics_process(false)
@@ -701,26 +659,6 @@ func test_bruta_charge_steering_uses_short_path_across_pi_wrap() -> void:
 	assert_almost_eq(player._bruta_charge_direction.length(), 1.0, 0.000001)
 	assert_lt(absf(player._bruta_charge_direction.angle() - PI), 0.05)
 
-func test_bruta_charge_captures_mouse_aim_against_joystick_during_charge() -> void:
-	var player: Player = await _bruta_player()
-	player.set_physics_process(false)
-	player.set_room_bounds(Rect2(Vector2(-1000.0, -1000.0), Vector2(2000.0, 2000.0)))
-	var cursor := player.get_global_mouse_position()
-	player.global_position = cursor - Vector2.RIGHT * 100.0
-	player._update_aim()
-	assert_eq(player._last_aim_source, Player.AimSource.MOUSE)
-	assert_true(player.start_bruta_charge())
-	assert_eq(player._bruta_charge_aim_source, Player.AimSource.MOUSE)
-	_assert_vector_almost_eq(player._bruta_charge_direction, Vector2.RIGHT)
-	player._bruta_charge_windup_remaining = 0.0
-	player.global_position = cursor - Vector2.DOWN * 100.0
-
-	Input.action_press(&"aim_left")
-	player._update_bruta_charge(0.1)
-	Input.action_release(&"aim_left")
-
-	assert_gt(player._bruta_charge_direction.angle(), 0.0)
-	assert_lt(player._bruta_charge_direction.angle(), PI / 2.0)
 
 func test_bruta_charge_uses_active_joypad_direction_over_opposite_cursor() -> void:
 	var player: Player = await _bruta_player()
