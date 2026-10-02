@@ -3,7 +3,7 @@ extends Node
 ## Novos sinais são adicionados conforme os sistemas surgem.
 
 @warning_ignore("unused_signal")
-signal player_hit(info: DamageInfo)
+signal player_hit(player: Node, info: DamageInfo)
 @warning_ignore("unused_signal")
 signal enemy_died(enemy: Node, fatal_info: DamageInfo)
 @warning_ignore("unused_signal")

@@ -1084,7 +1084,7 @@ func take_damage(info: DamageInfo) -> int:
 	return health.apply_damage(info)
 
 func _on_health_damaged(info: DamageInfo, _actual_drop: int) -> void:
-	EventBus.player_hit.emit(info)
+	EventBus.player_hit.emit(self, info)
 	_dispatcher.dispatch(&"on_damaged", info, 0)
 
 func _on_enemy_died(_enemy: Node, fatal_info: DamageInfo) -> void:
