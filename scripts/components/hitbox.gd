@@ -40,11 +40,12 @@ func build_damage_info(origin: DamageInfo = null, at_position: Vector2 = Vector2
 
 ## Entrega o dano em um alvo unico. Nao remove o alvo da cena.
 func deliver(target: Node, info: DamageInfo) -> int:
-	if target == null or info == null:
+	if target == null or not is_instance_valid(target) or info == null:
 		return 0
 	var actual := 0
 	if target.has_method(&"take_damage"):
-		actual = int(target.call(&"take_damage", info))
+		var reported: Variant = target.call(&"take_damage", info)
+		actual = int(reported) if reported is int else 0
 	elif target.get(&"health") is HealthComponent:
 		actual = (target.get(&"health") as HealthComponent).apply_damage(info)
 	else:
@@ -56,20 +57,42 @@ func deliver(target: Node, info: DamageInfo) -> int:
 func strike(target: Node, origin: DamageInfo = null, at_position: Vector2 = Vector2.INF) -> int:
 	return deliver(target, build_damage_info(origin, at_position))
 
+## Chave de dedupe por entidade: a area receptora vale como a entidade dona.
+func _dedupe_key(target: Node) -> int:
+	if target.has_method(&"get_entity"):
+		var entity: Variant = target.call(&"get_entity")
+		if entity is Node and is_instance_valid(entity):
+			return (entity as Node).get_instance_id()
+	return target.get_instance_id()
+
 ## Entrega uma vez em cada corpo sobreposto aceito por target_group.
-func strike_overlapping_bodies() -> int:
+func strike_overlapping_bodies(origin: DamageInfo = null) -> int:
 	var total := 0
+	var delivered: Dictionary = {}
 	for body in get_overlapping_bodies():
+		if not is_instance_valid(body):
+			continue
 		if target_group != &"" and not body.is_in_group(target_group):
 			continue
-		total += deliver(body, build_damage_info(null, Vector2.INF))
+		var key := _dedupe_key(body)
+		if delivered.has(key):
+			continue
+		delivered[key] = true
+		total += deliver(body, build_damage_info(origin, Vector2.INF))
 	return total
 
 ## Entrega uma vez em cada area sobreposta aceita por target_group.
-func strike_overlapping_areas() -> int:
+func strike_overlapping_areas(origin: DamageInfo = null) -> int:
 	var total := 0
+	var delivered: Dictionary = {}
 	for area in get_overlapping_areas():
+		if not is_instance_valid(area):
+			continue
 		if target_group != &"" and not area.is_in_group(target_group):
 			continue
-		total += deliver(area, build_damage_info(null, Vector2.INF))
+		var key := _dedupe_key(area)
+		if delivered.has(key):
+			continue
+		delivered[key] = true
+		total += deliver(area, build_damage_info(origin, Vector2.INF))
 	return total

@@ -11,7 +11,7 @@ enum State { INACTIVE, TELEGRAPH, FIRING }
 @export_range(1.0, 256.0, 1.0) var beam_width_px := 16.0
 @export_range(0.01, 50.0, 0.01) var turn_rate_radians := 5.5
 @export_range(0.01, 10.0, 0.01) var hit_tick_seconds := 0.25
-@export var collision_mask := 6 # player (2) | enemy (3)
+@export var collision_mask := CollisionLayers.PLAYER | CollisionLayers.ENEMY # player (2) | enemy (3)
 
 var state: State = State.INACTIVE
 var damage_amount := 25
@@ -28,7 +28,7 @@ var _last_hit_by_target: Dictionary = {}
 @onready var _emitter_visual := get_node_or_null("Emitter") as Sprite2D
 @onready var _impact_visual := get_node_or_null("Impact") as Sprite2D
 
-func configure(origin: Vector2, amount: int, source: Node, tags: Array[StringName], mask := 6) -> bool:
+func configure(origin: Vector2, amount: int, source: Node, tags: Array[StringName], mask := CollisionLayers.PLAYER | CollisionLayers.ENEMY) -> bool:
 	if amount < 0:
 		return false
 	fixed_origin = origin

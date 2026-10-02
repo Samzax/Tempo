@@ -21,6 +21,10 @@ func get_entity() -> Node:
 		_entity = get_node_or_null(entity_path)
 	else:
 		_entity = get_parent()
+	if _entity == self:
+		# Uma hurtbox nao e a propria entidade: evita recursao em take_damage.
+		_entity = null
+		return null
 	return _entity if is_instance_valid(_entity) else null
 
 ## Componente de vida da entidade, quando existir.
@@ -56,7 +60,8 @@ func take_damage(info: DamageInfo) -> int:
 	if receiver == null:
 		return 0
 	if receiver.has_method(&"take_damage"):
-		return int(receiver.call(&"take_damage", info))
+		var reported: Variant = receiver.call(&"take_damage", info)
+		return int(reported) if reported is int else 0
 	var health := get_health()
 	if health != null:
 		return health.apply_damage(info)
@@ -66,8 +71,16 @@ func take_damage(info: DamageInfo) -> int:
 ## source conforme o contrato de engineer_deployable.gd:236-241.
 func build_incoming_area_info(area: Area2D, fallback_amount: int, extra_tags: Array[StringName] = []) -> DamageInfo:
 	var info := DamageInfo.new()
-	info.amount = int(area.call(&"get_damage_units")) if area.has_method(&"get_damage_units") else fallback_amount
-	info.source = area.get(&"_source") as Node
+	info.amount = fallback_amount
+	info.source = null
+	if area != null and is_instance_valid(area):
+		if area.has_method(&"get_damage_units"):
+			var reported: Variant = area.call(&"get_damage_units")
+			if reported is int:
+				info.amount = int(reported)
+		var source: Variant = area.get(&"_source")
+		if source is Node:
+			info.source = source as Node
 	info.position = global_position
 	info.tags = extra_tags.duplicate()
 	info.trigger_depth = 0

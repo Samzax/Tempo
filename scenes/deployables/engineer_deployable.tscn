@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/deployables/engineer_deployable.gd" id="1_deployable"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/deployables/engineer_trap_a_body.png" id="4_trap_sprite"]
 [ext_resource type="Texture2D" path="res://assets/sprites/deployables/engineer_overclock_station_c_body.png" id="5_station_sprite"]
 [ext_resource type="Texture2D" path="res://assets/sprites/deployables/engineer_station_aura_fx.png" id="6_aura_sprite"]
+[ext_resource type="Script" path="res://scripts/components/hurtbox.gd" id="7_hurtbox"]
 
 [sub_resource type="CircleShape2D" id="Circle_influence"]
 radius = 18.0
@@ -60,6 +61,7 @@ collision_layer = 32
 collision_mask = 20
 monitoring = false
 monitorable = false
+script = ExtResource("7_hurtbox")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
 shape = SubResource("Circle_hurtbox")

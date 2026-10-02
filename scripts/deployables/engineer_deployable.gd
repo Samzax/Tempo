@@ -180,11 +180,11 @@ func _owner_room_bounds() -> Rect2:
 
 func _apply_kind() -> void:
 	# Inimigos ocupam a camada 4; jogadores ocupam a camada 2.
-	influence.collision_mask = 2 if kind == Kind.OVERCLOCK_STATION else 4
+	influence.collision_mask = CollisionLayers.PLAYER if kind == Kind.OVERCLOCK_STATION else CollisionLayers.ENEMY
 	hurtbox.monitoring = kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION
 	hurtbox.monitorable = kind == Kind.DRONE or kind == Kind.OVERCLOCK_STATION
 	# Camada 3 (inimigos) para contato e camada 5 (projeteis inimigos) para dano a distancia.
-	hurtbox.collision_mask = 20
+	hurtbox.collision_mask = CollisionLayers.ENEMY | CollisionLayers.ENEMY_BULLET
 	drone_sprite.visible = kind == Kind.DRONE
 	trap_sprite.visible = kind == Kind.TRAP
 	station_sprite.visible = kind == Kind.OVERCLOCK_STATION

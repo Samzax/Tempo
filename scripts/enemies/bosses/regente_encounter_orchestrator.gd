@@ -44,7 +44,7 @@ const EXPLOSIVE_LOCKED_SECONDS := 0.45
 const EXPLOSIVE_DETONATION_SECONDS := 0.15
 const EXPLOSIVE_BANK_INTERVAL_SECONDS := 0.35
 const EXPLOSIVE_RECONSTITUTE_SECONDS := 0.8
-const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
+const EXPLOSIVE_COLLISION_MASK := CollisionLayers.PLAYER | CollisionLayers.ENEMY # layers player (2) | enemy (3)
 
 ## Os padrões laser compartilham o mesmo componente
 ## autoritativo de dano. Os offsets ficam manuais para ajuste fino de design.
@@ -73,7 +73,7 @@ const EXPLOSIVE_COLLISION_MASK := 6 # layers player (2) | enemy (3)
 @export_range(-20.0, 20.0, 0.01) var LASER_HALO_ALPHA_RADIANS := 0.0
 @export_range(0.01, 10.0, 0.01) var LASER_HALO_TELEGRAPH_SECONDS := 0.80
 @export_range(0.01, 10.0, 0.01) var LASER_HALO_FIRE_SECONDS := 1.50
-const LASER_COLLISION_MASK := 6 # layers player (2) | enemy (3)
+const LASER_COLLISION_MASK := CollisionLayers.PLAYER | CollisionLayers.ENEMY # layers player (2) | enemy (3)
 const LASER_SHIELD_OFFSETS: Array[Vector2] = [Vector2(-108, -132), Vector2(-119, -108), Vector2(-126, -84), Vector2(-130, -60), Vector2(-132, -36), Vector2(-133, -12), Vector2(133, -132), Vector2(132, -108), Vector2(130, -84), Vector2(126, -60), Vector2(119, -36), Vector2(108, -12)]
 ## Sete drones formam o crescente (0..6) e cinco o chevron (7..11).
 ## O ápice frontal do chevron, índice zero-based 9, é o único emissor.

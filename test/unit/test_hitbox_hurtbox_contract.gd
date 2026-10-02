@@ -26,17 +26,57 @@ class PlainAreaStub extends Area2D:
 
 class EnemyBodyStub extends CharacterBody2D:
 	var hits: int = 0
+	var received: Array = []
 
 	func take_damage(info: DamageInfo) -> int:
 		hits += 1
+		received.append(info)
 		return info.amount
 
 class DamageableAreaStub extends Area2D:
 	var hits: int = 0
+	var received: Array = []
 
 	func take_damage(info: DamageInfo) -> int:
 		hits += 1
+		received.append(info)
 		return info.amount
+
+class VoidDamageStub extends Node:
+	var calls: Array = []
+
+	func take_damage(info: DamageInfo) -> void:
+		calls.append(info)
+
+class FloatDamageStub extends Node:
+	var calls: Array = []
+
+	func take_damage(info: DamageInfo) -> float:
+		calls.append(info)
+		return 12.0
+
+class OddAreaStub extends Area2D:
+	var _source: Variant = 7
+
+	func get_damage_units() -> float:
+		return 42.0
+
+class FreeingBodyStub extends CharacterBody2D:
+	var hits: int = 0
+	var target: Node
+
+	func take_damage(info: DamageInfo) -> int:
+		hits += 1
+		if target != null and is_instance_valid(target):
+			target.free()
+		return info.amount
+
+class EntityNodeStub extends Node2D:
+	var calls: Array = []
+
+	func take_damage(info: DamageInfo) -> int:
+		calls.append(info)
+		return 7
 
 func _health_owner(maximum_hp: float = 5.0) -> HealthOwnerStub:
 	var owner := HealthOwnerStub.new()
@@ -430,3 +470,227 @@ func test_take_damage_without_any_receiver_capability_returns_zero() -> void:
 	assert_false(holder.has_method(&"take_damage"))
 	assert_null(hurtbox.get_health())
 	assert_eq(hurtbox.take_damage(info), 0)
+
+func test_deliver_counts_zero_when_entity_take_damage_returns_void() -> void:
+	var stub: VoidDamageStub = autofree(VoidDamageStub.new())
+	var hitbox := Hitbox.new()
+	add_child_autofree(hitbox)
+	var info := _damage(9)
+	watch_signals(hitbox)
+
+	assert_eq(hitbox.deliver(stub, info), 0)
+	assert_eq(stub.calls.size(), 1)
+	assert_eq(stub.calls[0], info)
+	assert_signal_emitted_with_parameters(hitbox, &"damage_delivered", [stub, info, 0])
+
+func test_deliver_counts_zero_when_entity_take_damage_returns_non_int() -> void:
+	var stub: FloatDamageStub = autofree(FloatDamageStub.new())
+	var hitbox := Hitbox.new()
+	add_child_autofree(hitbox)
+	var info := _damage(9)
+	watch_signals(hitbox)
+
+	assert_eq(hitbox.deliver(stub, info), 0)
+	assert_eq(stub.calls.size(), 1)
+	assert_signal_emitted_with_parameters(hitbox, &"damage_delivered", [stub, info, 0])
+
+func test_hurtbox_take_damage_counts_zero_when_entity_returns_void() -> void:
+	var stub: VoidDamageStub = autofree(VoidDamageStub.new())
+	var hurtbox := Hurtbox.new()
+	stub.add_child(hurtbox)
+	var info := _damage(4)
+
+	assert_not_null(hurtbox.get_entity())
+	assert_eq(hurtbox.take_damage(info), 0)
+	assert_eq(stub.calls.size(), 1)
+	assert_eq(stub.calls[0], info)
+
+func test_build_incoming_area_info_with_null_area_uses_fallback() -> void:
+	var hurtbox := Hurtbox.new()
+	hurtbox.position = Vector2(3.0, 5.0)
+	add_child_autofree(hurtbox)
+	await get_tree().process_frame
+
+	var info := hurtbox.build_incoming_area_info(null, 7)
+	assert_eq(info.amount, 7)
+	assert_null(info.source)
+	assert_eq(info.position, hurtbox.global_position)
+	assert_eq(info.position, Vector2(3.0, 5.0))
+	assert_eq(info.tags.size(), 0)
+	assert_eq(info.trigger_depth, 0)
+
+func test_build_incoming_area_info_rejects_non_int_units_and_non_node_source() -> void:
+	var hurtbox := Hurtbox.new()
+	hurtbox.position = Vector2(7.0, 9.0)
+	add_child_autofree(hurtbox)
+	var odd := OddAreaStub.new()
+	add_child_autofree(odd)
+	await get_tree().process_frame
+
+	var info := hurtbox.build_incoming_area_info(odd, 5)
+	assert_eq(info.amount, 5)
+	assert_null(info.source)
+	assert_eq(info.position, hurtbox.global_position)
+	assert_eq(info.tags.size(), 0)
+	assert_eq(info.trigger_depth, 0)
+
+func test_strike_overlapping_bodies_skips_target_freed_during_delivery() -> void:
+	var hitbox := Hitbox.new()
+	hitbox.collision_layer = CollisionLayers.PLAYER_BULLET
+	hitbox.collision_mask = CollisionLayers.ENEMY
+	hitbox.amount = 6
+	hitbox.add_child(_circle_shape(60.0))
+	add_child_autofree(hitbox)
+
+	var freer := FreeingBodyStub.new()
+	freer.collision_layer = CollisionLayers.ENEMY
+	freer.collision_mask = 0
+	freer.position = Vector2(-10.0, 0.0)
+	freer.add_child(_circle_shape(5.0))
+	add_child_autofree(freer)
+	await get_tree().physics_frame
+
+	var victim := EnemyBodyStub.new()
+	victim.collision_layer = CollisionLayers.ENEMY
+	victim.collision_mask = 0
+	victim.position = Vector2(10.0, 0.0)
+	victim.add_child(_circle_shape(5.0))
+	add_child_autofree(victim)
+	freer.target = victim
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	assert_eq(hitbox.get_overlapping_bodies().size(), 2)
+	var total := hitbox.strike_overlapping_bodies()
+	assert_eq(freer.hits, 1)
+	assert_false(is_instance_valid(victim))
+	assert_eq(total, 6)
+
+func test_strike_overlapping_bodies_propagates_origin_depth() -> void:
+	var hitbox := Hitbox.new()
+	hitbox.collision_layer = CollisionLayers.PLAYER_BULLET
+	hitbox.collision_mask = CollisionLayers.ENEMY
+	hitbox.amount = 5
+	hitbox.chain_depth = 4
+	hitbox.add_child(_circle_shape(30.0))
+	add_child_autofree(hitbox)
+
+	var body := EnemyBodyStub.new()
+	body.collision_layer = CollisionLayers.ENEMY
+	body.collision_mask = 0
+	body.position = Vector2(5.0, 0.0)
+	body.add_child(_circle_shape(5.0))
+	add_child_autofree(body)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	var origin := DamageInfo.new()
+	origin.trigger_depth = 2
+	var total := hitbox.strike_overlapping_bodies(origin)
+
+	assert_eq(body.hits, 1)
+	assert_eq(total, 5)
+	assert_eq(body.received.size(), 1)
+	assert_eq((body.received[0] as DamageInfo).amount, 5)
+	assert_eq((body.received[0] as DamageInfo).trigger_depth, 3)
+
+func test_two_hurtboxes_on_same_entity_deliver_once() -> void:
+	var first_entity := EntityNodeStub.new()
+	first_entity.position = Vector2.ZERO
+	add_child_autofree(first_entity)
+	var first_a := Hurtbox.new()
+	first_a.position = Vector2(-4.0, 0.0)
+	first_a.collision_layer = CollisionLayers.ENEMY
+	first_a.add_child(_circle_shape(6.0))
+	first_entity.add_child(first_a)
+	var first_b := Hurtbox.new()
+	first_b.position = Vector2(4.0, 0.0)
+	first_b.collision_layer = CollisionLayers.ENEMY
+	first_b.add_child(_circle_shape(6.0))
+	first_entity.add_child(first_b)
+
+	var second_entity := EntityNodeStub.new()
+	second_entity.position = Vector2(0.0, 20.0)
+	add_child_autofree(second_entity)
+	var second_a := Hurtbox.new()
+	second_a.collision_layer = CollisionLayers.ENEMY
+	second_a.add_child(_circle_shape(6.0))
+	second_entity.add_child(second_a)
+
+	var hitbox := Hitbox.new()
+	hitbox.collision_layer = CollisionLayers.PLAYER_BULLET
+	hitbox.collision_mask = CollisionLayers.ENEMY
+	hitbox.amount = 7
+	hitbox.add_child(_circle_shape(40.0))
+	add_child_autofree(hitbox)
+
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_eq(hitbox.get_overlapping_areas().size(), 3)
+	watch_signals(hitbox)
+
+	var total := hitbox.strike_overlapping_areas()
+
+	assert_eq(first_entity.calls.size(), 1)
+	assert_eq(second_entity.calls.size(), 1)
+	assert_eq(total, 14)
+	assert_eq(get_signal_emit_count(hitbox, &"damage_delivered"), 2)
+
+func test_self_referencing_entity_path_resolves_to_null() -> void:
+	var holder := Node.new()
+	add_child_autofree(holder)
+	var hurtbox := Hurtbox.new()
+	holder.add_child(hurtbox)
+	hurtbox.entity_path = NodePath(".")
+
+	assert_null(hurtbox.get_entity())
+	assert_null(hurtbox.entity)
+	assert_null(hurtbox.get_health())
+	assert_eq(hurtbox.take_damage(_damage(5)), 0)
+
+func test_strike_overlapping_areas_propagates_origin_depth() -> void:
+	var hitbox := Hitbox.new()
+	hitbox.collision_layer = CollisionLayers.PLAYER_BULLET
+	hitbox.collision_mask = CollisionLayers.ENEMY
+	hitbox.amount = 5
+	hitbox.chain_depth = 4
+	hitbox.add_child(_circle_shape(30.0))
+	add_child_autofree(hitbox)
+
+	var area := DamageableAreaStub.new()
+	area.collision_layer = CollisionLayers.ENEMY
+	area.collision_mask = 0
+	area.position = Vector2(5.0, 0.0)
+	area.add_child(_circle_shape(5.0))
+	add_child_autofree(area)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	assert_eq(hitbox.get_overlapping_areas().size(), 1)
+
+	# Sem origem vale chain_depth (4).
+	var plain_total := hitbox.strike_overlapping_areas()
+	assert_eq(area.hits, 1)
+	assert_eq(plain_total, 5)
+	assert_eq((area.received[0] as DamageInfo).trigger_depth, 4)
+
+	# Com origem vale origin.trigger_depth + 1 (2 + 1).
+	var origin := DamageInfo.new()
+	origin.trigger_depth = 2
+	var total := hitbox.strike_overlapping_areas(origin)
+
+	assert_eq(area.hits, 2)
+	assert_eq(total, 5)
+	assert_eq((area.received[1] as DamageInfo).amount, 5)
+	assert_eq((area.received[1] as DamageInfo).trigger_depth, 3)
+
+func test_hurtbox_take_damage_counts_zero_when_entity_returns_float() -> void:
+	var stub: FloatDamageStub = autofree(FloatDamageStub.new())
+	var hurtbox := Hurtbox.new()
+	stub.add_child(hurtbox)
+	var info := _damage(4)
+
+	assert_not_null(hurtbox.get_entity())
+	assert_eq(hurtbox.take_damage(info), 0)
+	assert_eq(stub.calls.size(), 1)
+	assert_eq(stub.calls[0], info)

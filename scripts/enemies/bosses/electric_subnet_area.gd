@@ -17,7 +17,7 @@ var _target_ids: Dictionary = {}
 
 func _ready() -> void:
 	collision_layer = 0
-	collision_mask = 6 # Player (2) and enemy (4) layers from the gameplay scenes.
+	collision_mask = CollisionLayers.PLAYER | CollisionLayers.ENEMY # Player (2) and enemy (4) layers from the gameplay scenes.
 	monitoring = true
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
