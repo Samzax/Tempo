@@ -147,7 +147,10 @@ func _integrate_physics_motion(active_delta: float, frame_delta: float) -> void:
 	if frame_delta > 0.0 and active_delta > 0.0 and active_delta < frame_delta:
 		velocity *= active_delta / frame_delta
 	_apply_collision_knockback(frame_delta)
+	ContactRicochet.prepare(self)
 	_integrate_motion()
+	ContactRicochet.restore_after_slide(self)
+	ContactRicochet.resolve(self)
 
 func _integrate_motion() -> void:
 	move_and_slide()

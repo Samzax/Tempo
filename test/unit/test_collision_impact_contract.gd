@@ -258,7 +258,7 @@ func test_real_kamikaze_dash_expiry_scales_dash_velocity_and_real_motion() -> vo
 	for kamikaze in [enemy, full_dash]:
 		kamikaze.set_physics_process(false)
 		kamikaze.set_room_cull_policy(RoomDef.CullPolicy.NONE)
-		kamikaze.global_position = Vector2.ZERO
+		kamikaze.global_position = Vector2.ZERO if kamikaze == enemy else Vector2(0.0, -600.0)
 		kamikaze.dash_direction = Vector2.RIGHT
 		kamikaze.dash_duration = 0.55
 		kamikaze._enter_state(KamikazeFraturado.AttackState.DASH)

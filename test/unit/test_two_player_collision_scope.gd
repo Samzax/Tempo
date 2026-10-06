@@ -13,6 +13,7 @@ const PER_BODY_GROUP_TEST_STRING := "is_in_group(\"player\")"
 
 const GUARDED_SOURCES: Array[String] = [
 	"res://scripts/combat/collision_impact_resolver.gd",
+	"res://scripts/combat/contact_ricochet.gd",
 	"res://scripts/world/debris.gd",
 	"res://scripts/projectiles/enemy_projectile.gd",
 	"res://scripts/projectiles/bullet.gd",

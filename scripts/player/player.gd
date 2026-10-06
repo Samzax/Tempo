@@ -25,6 +25,9 @@ const BRUTA_CHARGE_TURN_RATE := 4.1887902047863905
 const BRUTA_CHARGE_STEERING_STEP := 1.0 / 240.0
 const BRUTA_CHARGE_STUN_DURATION := 0.75
 const COLLISION_KNOCKBACK_DECELERATION := 900.0
+## Folga entre o corpo fisico e a hurtbox de contato. Garante que a leitura de
+## sobreposicao veja a aproximacao antes de o move_and_slide travar o corpo.
+const HURTBOX_CONTACT_MARGIN := 1.0
 ## Índices correspondem aos degraus de aim_tier; dentro do cone, a trava é total.
 const AIM_CONE_ANGLES := [0.0, PI / 36.0, PI / 12.0, PI / 6.0]
 const NEUTRAL_ABILITY_ICON_TINT := Color(0.933333, 0.945098, 0.964706, 1.0) # #EEF1F6
@@ -93,6 +96,7 @@ var _bruta_charge_direction := Vector2.ZERO
 var _bruta_charge_windup_remaining := 0.0
 var _bruta_charge_remaining := 0.0
 var _bruta_charge_hit_targets: Dictionary = {}
+var _bruta_charge_ricochet_targets: Dictionary = {}
 var _bruta_charge_aim_source: AimSource = AimSource.NONE
 ## Cada inicio/cancelamento invalida imediatamente qualquer subpasso reentrante.
 var _bruta_charge_generation := 0
@@ -407,8 +411,11 @@ func _configure_ship_geometry() -> void:
 	if ship == null:
 		return
 	var radius := ship.hurtbox_radius
+	var body_support := radius
+	if ship.collision_shape_type != "circle" and _base_body_shape is CapsuleShape2D:
+		body_support = maxf(radius, (_base_body_shape as CapsuleShape2D).height * 0.5)
 	var hurt_shape := CircleShape2D.new()
-	hurt_shape.radius = radius
+	hurt_shape.radius = maxf(radius, body_support + HURTBOX_CONTACT_MARGIN)
 	hurtbox_collision.shape = hurt_shape
 	if ship.collision_shape_type == "circle":
 		var body_shape := CircleShape2D.new()
@@ -571,13 +578,16 @@ func _physics_process(delta: float) -> void:
 			delta,
 		)
 		velocity = controlled_velocity + _collision_knockback_velocity
+		ContactRicochet.prepare(self)
 		move_and_slide()
+		ContactRicochet.restore_after_slide(self)
 		_clamp_to_bounds()
 	_refresh_mouse_aim()
 	if not omni:
 		rotation = _aim_vector.angle() + PI / 2.0
 	if not blink_consumed and not _check_contact(0.0 if was_bruta_charging else delta):
 		return
+	ContactRicochet.resolve(self)
 	_update_omni_stop_spin(delta, movement_direction if omni else Vector2.ZERO)
 	_update_visual_aim(delta)
 	_update_bank(movement_direction if omni else Vector2.ZERO)
@@ -879,6 +889,7 @@ func start_bruta_charge() -> bool:
 	_bruta_charge_windup_remaining = BRUTA_CHARGE_WINDUP
 	_bruta_charge_remaining = BRUTA_CHARGE_DURATION
 	_bruta_charge_hit_targets.clear()
+	_bruta_charge_ricochet_targets.clear()
 	velocity = _collision_knockback_velocity
 	_reset_omni_stop_spin()
 	return true
@@ -932,8 +943,13 @@ func _update_bruta_charge(delta: float) -> void:
 		var intended_end := start + (effective_subpass_velocity + _collision_knockback_velocity) * step_delta
 		var bounded_end := _clamped_charge_position(intended_end)
 		var hit_wall := bounded_end != intended_end
+		var subpass_velocity := effective_subpass_velocity + _collision_knockback_velocity
+		# A mascara e fixada por subpasso para nao vazar em nenhum return depois.
+		var saved_mask := collision_mask
+		collision_mask = CollisionLayers.WORLD | CollisionLayers.PLAYER | CollisionLayers.ENEMY
 		var collision := move_and_collide(bounded_end - start)
-		if collision != null:
+		collision_mask = saved_mask
+		if collision != null and not _resolve_bruta_charge_contact(collision, subpass_velocity):
 			hit_wall = true
 		_decay_collision_knockback(step_delta)
 		velocity = effective_subpass_velocity + _collision_knockback_velocity
@@ -975,6 +991,7 @@ func _cancel_bruta_charge() -> void:
 	_bruta_charge_windup_remaining = 0.0
 	_bruta_charge_remaining = 0.0
 	_bruta_charge_hit_targets.clear()
+	_bruta_charge_ricochet_targets.clear()
 	_bruta_charge_aim_source = AimSource.NONE
 	velocity = _collision_knockback_velocity
 
@@ -1016,6 +1033,43 @@ func _bruta_charge_target_radius(target: Node2D) -> float:
 		if collision.shape is CircleShape2D:
 			return (collision.shape as CircleShape2D).radius
 	return 0.0
+
+## Contato fisico durante a investida. Corpos participantes ganham impulso uma
+## unica vez por ciclo de carga e a investida segue; o mundo (StaticBody2D e
+## debris) ainda cancela o deslocamento pelo caminho de hit_wall.
+func _resolve_bruta_charge_contact(collision: KinematicCollision2D, subpass_velocity: Vector2) -> bool:
+	var collider := collision.get_collider()
+	# hit_wall e decidido pela classe D2 e nao pelo estado de fila: um colider
+	# participante continua participante mesmo com queue_free pendente, porque
+	# o cadaver ainda nao e nem mundo nem debris. A carga segue o deslocamento.
+	if not ContactRicochet.is_contact_actor(collider):
+		return false
+	var target := collider as CharacterBody2D
+	# Cadaver fora do calculo de impulso: ja nao pode reagir, entao o toque nao
+	# gera ricochete nem entra no dedupe do ciclo, mas tambem nao cancela.
+	if target.is_queued_for_deletion():
+		return true
+	var normal := collision.get_normal()
+	if not is_finite(normal.x) or not is_finite(normal.y) or normal.length_squared() <= 0.0:
+		return false
+	# A normal do Godot aponta da superficie para o movel; invertemos para o
+	# eixo carregador -> alvo exigido pelo reparto de impulso.
+	var toward_target: Vector2 = normal.normalized() * -1.0
+	var impulse := ContactRicochet.compute_impulse(
+		subpass_velocity,
+		target.velocity,
+		toward_target,
+		get_collision_mass(),
+		ContactRicochet.mass_of(target),
+	)
+	if not impulse[&"applied"]:
+		return true
+	var target_id := target.get_instance_id()
+	if _bruta_charge_ricochet_targets.has(target_id):
+		return true
+	_bruta_charge_ricochet_targets[target_id] = true
+	target.call(&"apply_collision_knockback", impulse[&"db"])
+	return true
 
 ## Ativa as habilidades equipadas quando seus slots estao prontos.
 func _handle_blink_input() -> bool:
@@ -1062,7 +1116,16 @@ func _check_contact(decay_delta: float) -> bool:
 	_decay_collision_knockback(decay_delta)
 	var collision_generation := get_collision_impact_generation()
 	CollisionImpactResolver.resolve_overlaps(self, _collision_impact_pairs)
-	return _is_collision_impact_generation_current(collision_generation)
+	var contact_current := _is_collision_impact_generation_current(collision_generation)
+	if contact_current:
+		# Invariante (b) de D5: o delta adiado entra so depois que a leitura de
+		# contatos ja viu a velocidade pura (v0), sem o impulso ja somado.
+		ContactRicochet.flush_deferred(self)
+	else:
+		# A leitura derrubou o jogador: _on_died zerou canal e velocidade, entao
+		# o delta adiado e descartado em vez de reacender knockback.
+		ContactRicochet.discard_deferred(self)
+	return contact_current
 
 func is_collision_impact_active() -> bool:
 	return _collision_impact_active and _is_player_alive()

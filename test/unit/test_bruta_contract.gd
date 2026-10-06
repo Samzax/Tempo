@@ -150,7 +150,7 @@ func test_bruta_applies_a_10_pixel_circle_to_body_and_hurtbox() -> void:
 	if body_shape != null:
 		assert_almost_eq(body_shape.radius, 10.0, 0.0001)
 	if hurtbox_shape != null:
-		assert_almost_eq(hurtbox_shape.radius, 10.0, 0.0001)
+		assert_almost_eq(hurtbox_shape.radius, 11.0, 0.0001)
 
 
 func test_bruta_uses_standalone_32_by_32_rgba_texture() -> void:

@@ -397,7 +397,7 @@ func test_regente_scene_uses_modular_visuals_with_root_pivots() -> void:
 	assert_false(_scene_property_names(NodePath(".")).has(&"max_health"))
 	assert_false(_scene_property_names(NodePath(".")).has(&"score_value"))
 	assert_eq(boss.collision_layer, 4)
-	assert_eq(boss.collision_mask, 0)
+	assert_eq(boss.collision_mask, CollisionLayers.PLAYER | CollisionLayers.ENEMY)
 	assert_eq(boss.get_node("CollisionShape2D").get_parent(), boss)
 	assert_not_null(boss.get_node("CollisionShape2D").shape)
 	for chain in boss.arm_chains + boss.conduit_chains:

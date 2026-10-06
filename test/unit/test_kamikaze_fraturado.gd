@@ -68,7 +68,7 @@ func test_kamikaze_collision_scale_and_regions_are_preserved() -> void:
 	var collision := enemy.get_node("CollisionShape2D") as CollisionShape2D
 	var shape := collision.shape as CircleShape2D
 	assert_eq(enemy.collision_layer, 4)
-	assert_eq(enemy.collision_mask, 0)
+	assert_eq(enemy.collision_mask, CollisionLayers.PLAYER | CollisionLayers.ENEMY)
 	assert_almost_eq(shape.radius, 10.0, 0.001)
 	assert_eq(enemy.animation_sprite.scale, Vector2(0.25, 0.25))
 	var frames: SpriteFrames = enemy.animation_sprite.sprite_frames

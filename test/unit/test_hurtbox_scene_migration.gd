@@ -63,8 +63,8 @@ func test_player_scene_hurtbox_is_migrated_component_with_authored_collision() -
 	var collision := hurtbox.get_node("CollisionShape2D") as CollisionShape2D
 	assert_not_null(collision)
 	assert_true(collision.shape is CircleShape2D)
-	assert_eq(collision.shape.radius, 8.0)
-	assert_eq(hurtbox.get_shape_radius(), 8.0)
+	assert_eq(collision.shape.radius, 11.0)
+	assert_eq(hurtbox.get_shape_radius(), 11.0)
 
 func test_deployable_scene_migrates_hurtbox_and_keeps_influence_plain() -> void:
 	var deployable := DEPLOYABLE_SCENE.instantiate() as EngineerDeployable
@@ -273,5 +273,5 @@ func test_sector3_ejection_restores_migrated_player_hurtbox() -> void:
 	assert_eq(hurtbox.collision_layer, CollisionLayers.PLAYER)
 	assert_eq(hurtbox.collision_mask, CollisionLayers.ENEMY)
 	assert_eq(player.collision_layer, CollisionLayers.PLAYER)
-	assert_eq(player.collision_mask, CollisionLayers.WORLD)
+	assert_eq(player.collision_mask, CollisionLayers.WORLD | CollisionLayers.PLAYER | CollisionLayers.ENEMY)
 	assert_true(player.is_physics_processing())
