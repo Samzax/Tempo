@@ -48,6 +48,7 @@ func _ready() -> void:
 	health.max_health = HEALTH_UNITS.from_hp(max_health)
 	health.reset()
 	health.died.connect(_on_died)
+	health.damaged.connect(_on_health_damaged)
 	if sprite != null:
 		sprite.modulate = tint
 	_player = get_tree().get_first_node_in_group("player")
@@ -183,6 +184,40 @@ func get_knockback_resistance() -> float:
 func _on_died(fatal_info: DamageInfo) -> void:
 	_resolve_death(fatal_info)
 	queue_free()
+
+func _on_health_damaged(_info: DamageInfo, _actual_drop: int) -> void:
+	queue_redraw()
+
+## Barra de vida do inimigo: visivel somente abaixo do maximo, sem numeros.
+func _draw() -> void:
+	if health == null or health.health <= 0 or health.health >= health.max_health:
+		return
+	var bar := _health_bar_rect()
+	draw_rect(bar.grow(1.0), Color(0.0, 0.0, 0.0, 0.75), true)
+	draw_rect(bar, Color(0.25, 0.25, 0.3, 0.9), true)
+	var ratio := float(health.health) / float(maxi(health.max_health, 1))
+	var filled := bar.size.x * clampf(ratio, 0.0, 1.0)
+	if filled > 0.0:
+		draw_rect(Rect2(bar.position, Vector2(filled, bar.size.y)), Color(1.0, 0.3, 0.35), true)
+
+## Retangulo da barra acima do sprite, na largura propria do inimigo.
+func _health_bar_rect() -> Rect2:
+	var width := 20.0
+	var top := -16.0
+	if sprite != null and is_instance_valid(sprite):
+		var rect := sprite.get_rect()
+		var to_enemy := sprite.transform
+		var corners: Array[Vector2] = [
+			to_enemy * rect.position,
+			to_enemy * Vector2(rect.end.x, rect.position.y),
+			to_enemy * Vector2(rect.position.x, rect.end.y),
+			to_enemy * rect.end,
+		]
+		top = corners[0].y
+		for corner in corners:
+			top = minf(top, corner.y)
+		width = clampf(rect.size.x * 1.2, 16.0, 40.0)
+	return Rect2(-width * 0.5, top - 5.0, width, 3.0)
 
 ## Resolve os efeitos compartilhados da morte. Variacoes que exibem uma animacao
 ## de morte podem chamar isto e adiar a liberacao do no.

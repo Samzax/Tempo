@@ -230,6 +230,10 @@ func _render_hud_slots(slot_configs: Array) -> Image:
 	await get_tree().process_frame
 	hud.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	hud.size = Vector2(180, 100)
+	# O raster dos slots e calibrado sobre o fundo clear; a HealthBar
+	# (layout aprovado, canto superior esquerdo) entra no recorte so quando ha player — fixture isola slots.
+	if "_hp_row" in hud and hud._hp_row != null:
+		hud._hp_row.hide()
 	await get_tree().process_frame
 	for index in mini(slot_configs.size(), hud._ability_slots.size()):
 		var slot: Control = hud._ability_slots[index]

@@ -1,5 +1,4 @@
 extends Control
-const HEALTH_UNITS := preload("res://scripts/components/health_units.gd")
 
 class AbilitySlotIcon:
 	extends Control
@@ -108,14 +107,39 @@ class AbilitySlotIcon:
 		draw_line(icon_rect.position + Vector2(8, 8), icon_rect.end - Vector2(8, 8), INACTIVE_BORDER, 2.0)
 		draw_line(Vector2(icon_rect.end.x - 8, icon_rect.position.y + 8), Vector2(icon_rect.position.x + 8, icon_rect.end.y - 8), INACTIVE_BORDER, 2.0)
 
-## HUD: pontuacao, vidas, vida (pips), habilidades e tela de fim de jogo.
+## Barra de vida do jogador: retangulo cheio continuo com leitura em unidades.
+class HealthBar:
+	extends Control
+
+	const BAR_SIZE := Vector2(64, 8)
+	const FILL_COLOR := Color(1.0, 0.3, 0.35)
+	const EMPTY_COLOR := Color(0.25, 0.25, 0.3)
+	const BORDER_COLOR := Color(0.0, 0.0, 0.0, 0.75)
+
+	var ratio := 1.0
+
+	func _ready() -> void:
+		custom_minimum_size = BAR_SIZE + Vector2(2, 2)
+		size = custom_minimum_size
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, BAR_SIZE + Vector2(2, 2)), BORDER_COLOR)
+		draw_rect(Rect2(Vector2.ONE, BAR_SIZE), EMPTY_COLOR)
+		var filled := BAR_SIZE.x * clampf(ratio, 0.0, 1.0)
+		if filled > 0.0:
+			draw_rect(Rect2(Vector2.ONE, Vector2(filled, BAR_SIZE.y)), FILL_COLOR)
+
+## HUD: pontuacao, vidas, vida (barra com valor), habilidades e tela de fim de jogo.
 var _score: Label
 var _lives: Label
 var _blink_icon: AbilitySlotIcon
 var _ability_slots: Array[AbilitySlotIcon] = []
 var _game_over: Label
-var _pips_row: HBoxContainer
-var _pips: Array[ColorRect] = []
+var _hp_row: HBoxContainer
+var _hp_bar: HealthBar
+var _hp_label: Label
 var _player: Node = null
 var _gs: Node = null
 var _over := false
@@ -138,9 +162,15 @@ func _build() -> void:
 	box.add_child(_score)
 	_lives = _make_label(12, Color(0.85, 0.9, 1.0))
 	box.add_child(_lives)
-	_pips_row = HBoxContainer.new()
-	_pips_row.add_theme_constant_override("separation", 2)
-	box.add_child(_pips_row)
+	_hp_row = HBoxContainer.new()
+	_hp_row.add_theme_constant_override("separation", 4)
+	box.add_child(_hp_row)
+	_hp_bar = HealthBar.new()
+	_hp_row.add_child(_hp_bar)
+	_hp_label = _make_label(10, Color(0.92, 0.95, 1.0))
+	_hp_label.add_theme_constant_override("outline_size", 3)
+	_hp_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_hp_row.add_child(_hp_label)
 
 	var abilities := HBoxContainer.new()
 	abilities.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -183,9 +213,7 @@ func _process(_dt: float) -> void:
 		_score.text = "PONTOS  %d" % _gs.score
 		_lives.text = "VIDAS  %d" % _gs.player_lives
 	if _player != null and is_instance_valid(_player) and _player.health != null and is_instance_valid(_player.health):
-		var hp := floori(HEALTH_UNITS.to_hp(_player.health.health))
-		for i in _pips.size():
-			_pips[i].color = Color(1.0, 0.3, 0.35) if i < hp else Color(0.25, 0.25, 0.3)
+		_refresh_hp_display()
 		_refresh_ability_slots()
 	if not _over and _gs != null and _gs.player_lives <= 0:
 		_trigger_over()
@@ -215,24 +243,21 @@ func _bind_player(next_player: Node) -> void:
 	if not _player.health_capacity_changed.is_connected(_on_player_health_capacity_changed):
 		_player.health_capacity_changed.connect(_on_player_health_capacity_changed)
 	if _player.health != null and is_instance_valid(_player.health):
-		_rebuild_pips(_player.health.max_health)
+		_refresh_hp_display()
 
-func _on_player_health_capacity_changed(max_health: int) -> void:
-	_rebuild_pips(max_health)
+func _on_player_health_capacity_changed(_max_health: int) -> void:
+	_refresh_hp_display()
 
-func _rebuild_pips(max_health: int) -> void:
-	var pip_count := maxi(floori(HEALTH_UNITS.to_hp(max_health)), 0)
-	for child in _pips_row.get_children():
-		_pips_row.remove_child(child)
-		child.queue_free()
-	_pips.clear()
-	var health := floori(HEALTH_UNITS.to_hp(_player.health.health)) if is_instance_valid(_player) and _player.health != null else 0
-	for i in pip_count:
-		var pip := ColorRect.new()
-		pip.custom_minimum_size = Vector2(7, 7)
-		pip.color = Color(1.0, 0.3, 0.35) if i < health else Color(0.25, 0.25, 0.3)
-		_pips_row.add_child(pip)
-		_pips.append(pip)
+func _refresh_hp_display() -> void:
+	if _hp_bar == null or not is_instance_valid(_hp_bar) or _hp_label == null:
+		return
+	if _player == null or not is_instance_valid(_player) or _player.health == null or not is_instance_valid(_player.health):
+		return
+	var current: int = _player.health.health
+	var capacity: int = maxi(_player.health.max_health, 1)
+	_hp_bar.ratio = float(current) / float(capacity)
+	_hp_bar.queue_redraw()
+	_hp_label.text = "%d / %d" % [current, capacity]
 
 func _trigger_over() -> void:
 	_over = true
